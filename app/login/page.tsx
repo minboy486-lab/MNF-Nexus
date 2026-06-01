@@ -11,13 +11,11 @@ export default function LoginPage() {
           MNF HOLDEM
         </p>
         <div className="max-w-md">
-          <h2 className="text-4xl font-bold leading-tight mb-6 tracking-tight">
-            데이터 기반의
-            <br />
-            <span className="text-primary text-glow-primary">프리미엄 포커</span> 운영
-          </h2>
-          <p className="text-on-surface-variant text-lg font-medium">
-            실시간 테이블 동기화와 토너먼트 타이머를 하나의 Nexus 콘솔에서.
+          <p className="text-2xl md:text-3xl font-bold leading-relaxed tracking-tight text-on-surface">
+            <span className="text-primary text-glow-primary">MNF HOLDEM</span>
+            은 전문적인 토너먼트 운영과 데이터 분석을 통해 완벽한 게임 환경을 제공하는{" "}
+            <span className="text-primary text-glow-primary">프리미엄 홀덤펍</span>
+            입니다.
           </p>
         </div>
         <p className="text-on-surface-variant/50 text-[11px] uppercase tracking-[0.25em]">
