@@ -106,7 +106,7 @@ export function CounterClient({ session }: Props) {
             type="button"
             disabled={!session || digits.length < 10}
             onClick={handleLookup}
-            className="flex-1 bg-primary text-on-primary font-bold py-3 rounded-xl disabled:opacity-40"
+            className="btn-primary flex-1 py-3 rounded-xl"
           >
             조회 · 방문 등록
           </button>

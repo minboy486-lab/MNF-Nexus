@@ -33,7 +33,7 @@ export function SessionBanner({ session }: Props) {
         <button
           type="button"
           onClick={handleOpen}
-          className="bg-gradient-to-r from-primary to-primary-container text-on-primary font-bold px-5 py-2.5 rounded-xl text-sm shadow-[0_0_20px_rgba(255,22,240,0.25)] hover:brightness-110 transition-all"
+          className="btn-primary px-5 py-2.5 rounded-xl text-sm"
         >
           영업 시작
         </button>

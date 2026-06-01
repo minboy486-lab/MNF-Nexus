@@ -3,9 +3,12 @@
 :root {
   --background: #05070c;
   --foreground: #e8e6ef;
-  --primary: #ffaced;
-  --primary-container: #ff16f0;
-  --on-primary: #5d0057;
+  /* 딸기우유 핑크 팔레트 */
+  --primary: #f5c4d8;
+  --primary-container: #ffb8cc;
+  --btn-primary-from: #ffd6e8;
+  --btn-primary-to: #ffb6c9;
+  --on-primary: #3f2838;
   --secondary: #d7baff;
   --tertiary: #b0c6ff;
   --surface: #0a0b10;
@@ -18,8 +21,8 @@
   --on-surface-variant: #c4b0c4;
   --outline-variant: #4a3848;
   --error: #ffb4ab;
-  --glow-pink: rgba(255, 22, 240, 0.35);
-  --glow-purple: rgba(112, 0, 255, 0.25);
+  --glow-pink: rgba(255, 182, 201, 0.35);
+  --glow-purple: rgba(112, 0, 255, 0.2);
 }
 
 @theme inline {
@@ -81,7 +84,7 @@ body {
   max-height: 720px;
   top: -15%;
   left: -10%;
-  background: radial-gradient(circle, rgba(255, 22, 240, 0.22) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(255, 182, 201, 0.18) 0%, transparent 70%);
 }
 
 .bg-mesh::after {
@@ -134,10 +137,10 @@ body {
 }
 
 .glass-panel-hover:hover {
-  border-color: rgba(255, 172, 237, 0.25);
+  border-color: rgba(255, 198, 218, 0.25);
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.4),
-    0 0 24px rgba(255, 22, 240, 0.08),
+    0 0 24px rgba(255, 182, 201, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transform: translateY(-1px);
 }
@@ -162,12 +165,12 @@ body {
   100% {
     opacity: 1;
     transform: scale(1);
-    box-shadow: 0 0 10px rgba(255, 172, 237, 0.9), 0 0 20px rgba(255, 22, 240, 0.4);
+    box-shadow: 0 0 10px rgba(255, 198, 218, 0.9), 0 0 20px rgba(255, 182, 201, 0.45);
   }
   50% {
     opacity: 0.45;
     transform: scale(0.88);
-    box-shadow: 0 0 4px rgba(255, 172, 237, 0.3), 0 0 8px rgba(255, 22, 240, 0.15);
+    box-shadow: 0 0 4px rgba(255, 198, 218, 0.35), 0 0 8px rgba(255, 182, 201, 0.2);
   }
 }
 
@@ -195,8 +198,8 @@ body {
 .card-running {
   border-color: rgba(255, 172, 237, 0.45) !important;
   box-shadow:
-    0 0 0 1px rgba(255, 22, 240, 0.12),
-    0 0 28px rgba(255, 22, 240, 0.28),
+    0 0 0 1px rgba(255, 182, 201, 0.15),
+    0 0 28px rgba(255, 182, 201, 0.3),
     0 0 56px rgba(255, 172, 237, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
@@ -316,6 +319,211 @@ body {
 
 .material-symbols-outlined {
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+}
+
+/* —— Login page —— */
+.login-page {
+  min-height: 100dvh;
+  background: #0d0b11;
+}
+
+.login-split {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-height: 100dvh;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .login-split {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.login-brand-column {
+  display: none;
+  min-height: 100dvh;
+  padding: 2.5rem 2rem 2.5rem 3.5rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+@media (min-width: 768px) {
+  .login-brand-column {
+    display: block;
+  }
+}
+
+.login-brand-inner {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: calc(100dvh - 5rem);
+  max-width: 32rem;
+}
+
+.login-brand-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 2.5rem 0;
+}
+
+.login-brand-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.login-form-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  min-width: 0;
+  background: #0d0b11;
+}
+
+.login-brand-mobile {
+  display: block;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+@media (min-width: 768px) {
+  .login-brand-mobile {
+    display: none;
+  }
+}
+
+/* 오른쪽: 폼 중앙 + 하단 상태 */
+.login-form-shell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  max-width: 24rem;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+@media (min-width: 768px) {
+  .login-form-shell {
+    max-width: 26rem;
+    padding: 0 3rem;
+  }
+}
+
+.login-form-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.login-form-foot {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem 1.75rem;
+  padding: 1.5rem 0 2rem;
+}
+
+.login-input {
+  height: 3rem;
+  border-radius: 0.625rem;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--on-surface);
+  font-size: 0.9375rem;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.login-input::placeholder {
+  color: rgba(196, 176, 196, 0.45);
+}
+
+.login-input:focus {
+  border-color: rgba(255, 198, 218, 0.5);
+  box-shadow: 0 0 0 3px rgba(255, 182, 201, 0.12);
+}
+
+.login-checkbox {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--primary-container);
+  border-radius: 0.25rem;
+}
+
+/* 공통 CTA 버튼 — 딸기우유 핑크 */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  color: var(--on-primary);
+  background: linear-gradient(
+    90deg,
+    var(--btn-primary-from) 0%,
+    var(--btn-primary-to) 100%
+  );
+  box-shadow: 0 4px 20px rgba(255, 182, 201, 0.28);
+  transition:
+    filter 0.2s ease,
+    transform 0.15s ease,
+    box-shadow 0.2s ease;
+}
+
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.04);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(255, 182, 201, 0.36);
+}
+
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.login-submit {
+  height: 3rem;
+  border-radius: 0.5rem;
+  font-size: 0.9375rem;
+  background: linear-gradient(180deg, #ffd4e8 0%, #ffb6c9 100%);
+  border: none;
+}
+
+/* —— Integrated table floor plan —— */
+.integrated-table-view {
+  background: radial-gradient(
+    ellipse at top,
+    rgba(215, 186, 255, 0.08) 0%,
+    transparent 55%
+  );
+}
+
+@media (max-width: 1023px) {
+  .integrated-table-view .grid.grid-cols-12 {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .integrated-table-view .grid > * {
+    grid-column: auto !important;
+    grid-row: auto !important;
+    min-height: 280px;
+  }
 }
 
 /* Scrollbar */

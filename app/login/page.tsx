@@ -1,63 +1,54 @@
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { LoginForm } from "./LoginForm";
+import { LoginBrand } from "@/components/login/LoginBrand";
 import Link from "next/link";
+
+function DemoLoginBlock() {
+  return (
+    <div className="login-form-shell">
+      <div className="login-form-body">
+        <header className="mb-8">
+          <h2 className="text-3xl font-bold tracking-tight">로그인</h2>
+          <p className="mt-2 text-sm text-on-surface-variant">
+            Supabase 연결 후 로그인할 수 있습니다.
+          </p>
+        </header>
+        <div className="rounded-xl p-5 space-y-4 border border-white/10 bg-black/25">
+          <p className="text-on-surface-variant text-sm">
+            <code className="text-primary">.env.local</code> 에 Supabase URL·키를 넣고
+            서버를 재시작하세요.
+          </p>
+          <pre className="text-[11px] bg-black/40 rounded-lg p-3 overflow-x-auto text-on-surface-variant border border-white/10">
+{`NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbG...`}
+          </pre>
+          <Link href="/admin/dashboard" className="btn-primary login-submit w-full no-underline">
+            데모 UI로 둘러보기
+            <span className="material-symbols-outlined text-lg">arrow_forward</span>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function LoginPage() {
   return (
-    <div className="min-h-dvh flex flex-col md:flex-row relative overflow-hidden">
+    <div className="login-page">
       <div className="bg-mesh" aria-hidden />
-      <div className="hidden md:flex md:w-1/2 flex-col justify-between p-12 border-r border-white/10 relative z-10">
-        <p className="text-2xl font-bold tracking-tight bg-gradient-to-br from-primary to-secondary bg-clip-text text-transparent">
-          MNF HOLDEM
-        </p>
-        <div className="max-w-md">
-          <p className="text-2xl md:text-3xl font-bold leading-relaxed tracking-tight text-on-surface">
-            <span className="text-primary text-glow-primary">MNF HOLDEM</span>
-            은 전문적인 토너먼트 운영과 데이터 분석을 통해 완벽한 게임 환경을 제공하는{" "}
-            <span className="text-primary text-glow-primary">프리미엄 홀덤펍</span>
-            입니다.
-          </p>
-        </div>
-        <p className="text-on-surface-variant/50 text-[11px] uppercase tracking-[0.25em]">
-          Professional Grade
-        </p>
-      </div>
-      <div className="flex-1 flex flex-col items-center justify-center p-8 relative z-10">
-        <div className="w-full max-w-[400px] space-y-8">
-          <div className="md:hidden text-center mb-4">
-            <p className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              MNF HOLDEM
-            </p>
+
+      <div className="login-split">
+        <aside className="login-brand-column">
+          <LoginBrand />
+        </aside>
+
+        <section className="login-form-column">
+          <div className="login-brand-mobile">
+            <LoginBrand compact />
           </div>
-          {!isSupabaseConfigured() ? (
-            <div className="glass-panel rounded-2xl p-6 space-y-4 text-left">
-              <h2 className="text-lg font-bold text-on-surface">Supabase 연결 필요</h2>
-              <p className="text-on-surface-variant text-sm">
-                프로젝트 루트에 <code className="text-primary">.env.local</code> 파일을
-                만들고 아래 값을 넣은 뒤, 개발 서버를 다시 시작하세요 (
-                <code className="text-xs">npm run dev</code>).
-              </p>
-              <pre className="text-[11px] bg-white/5 rounded-xl p-3 overflow-x-auto text-on-surface-variant border border-white/10">
-{`NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbG...`}
-              </pre>
-              <p className="text-on-surface-variant text-xs">
-                Supabase → Project Settings → API 에서 URL과{" "}
-                <strong className="text-on-surface">anon public</strong> 키를 복사합니다.
-              </p>
-              <Link
-                href="/admin/dashboard"
-                className="block w-full text-center border border-white/15 text-on-surface-variant font-semibold py-3.5 rounded-xl hover:border-primary/40 hover:text-primary transition-colors"
-              >
-                데모 UI로 먼저 둘러보기
-              </Link>
-            </div>
-          ) : (
-            <div className="glass-panel rounded-2xl p-8">
-              <LoginForm />
-            </div>
-          )}
-        </div>
+
+          {isSupabaseConfigured() ? <LoginForm /> : <DemoLoginBlock />}
+        </section>
       </div>
     </div>
   );

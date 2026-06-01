@@ -49,7 +49,7 @@ export default function GuestTransferPage() {
           className="w-full bg-surface-container-low border border-white/10 rounded-lg py-2 px-3"
         />
         {feedback && <p className="text-sm text-primary">{feedback}</p>}
-        <button type="submit" className="w-full bg-primary text-on-primary font-bold py-3 rounded-xl">
+        <button type="submit" className="btn-primary w-full py-3 rounded-xl">
           이체 요청
         </button>
       </form>

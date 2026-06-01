@@ -33,7 +33,7 @@ export function GuestLinkPhone() {
         className="w-full bg-surface-container-low border border-white/10 rounded-xl py-3 px-4 text-lg"
       />
       {error && <p className="text-error text-sm">{error}</p>}
-      <button type="submit" className="w-full bg-primary text-on-primary font-bold py-3 rounded-xl">
+      <button type="submit" className="btn-primary w-full py-3 rounded-xl">
         연동하기
       </button>
     </form>

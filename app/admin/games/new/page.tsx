@@ -73,7 +73,7 @@ export default async function NewGamePage() {
           <button
             type="submit"
             disabled={!isSupabaseConfigured()}
-            className="w-full bg-primary text-on-primary font-bold py-4 rounded-lg disabled:opacity-50"
+            className="btn-primary w-full py-4 rounded-lg"
           >
             게임 시작
           </button>

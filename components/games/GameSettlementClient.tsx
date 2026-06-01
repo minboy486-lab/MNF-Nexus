@@ -136,7 +136,7 @@ export function GameSettlementClient({ game, placements, icm, survivors }: Props
         <button
           type="button"
           onClick={saveConfig}
-          className="bg-primary text-on-primary font-bold px-4 py-2 rounded-lg text-sm"
+          className="btn-primary px-4 py-2 rounded-lg text-sm"
         >
           저장 · 추천금 재계산
         </button>
@@ -266,7 +266,7 @@ export function GameSettlementClient({ game, placements, icm, survivors }: Props
         <button
           type="button"
           onClick={handleFinalize}
-          className="w-full bg-primary text-on-primary font-bold py-4 rounded-xl text-lg"
+          className="btn-primary w-full py-4 rounded-xl text-lg"
         >
           프라이즈 확정 · 게임 마감
         </button>

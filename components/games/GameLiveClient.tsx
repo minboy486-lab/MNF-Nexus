@@ -120,7 +120,7 @@ export function GameLiveClient({ game: initialGame, allTables, totalChips, avgCh
         <button
           type="button"
           onClick={handleToggleClock}
-          className="px-5 py-2 rounded-lg bg-primary text-on-primary font-bold"
+          className="btn-primary px-5 py-2 rounded-lg text-sm"
         >
           {running ? "일시정지" : "타이머 시작"}
         </button>

@@ -76,7 +76,7 @@ export default async function PresetsPage() {
                 className="w-full mt-1 bg-surface-container-low border border-white/10 rounded-lg py-2 px-3 font-mono text-xs"
               />
             </div>
-            <button type="submit" className="w-full bg-primary text-on-primary font-bold py-3 rounded-lg">
+            <button type="submit" className="btn-primary w-full py-3 rounded-lg">
               저장
             </button>
           </form>
