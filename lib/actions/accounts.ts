@@ -6,12 +6,18 @@ import { getProfileRole } from "@/lib/auth/profile";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseAdminConfigured } from "@/lib/supabase/env";
+import {
+  displayLoginFromAuthEmail,
+  isValidStaffLoginId,
+  loginIdToAuthEmail,
+  normalizeStaffLoginId,
+} from "@/lib/auth/staff-login";
 import type { UserRole } from "@/lib/types";
 import { PROFILE_ROLES } from "@/lib/auth/roles";
 
 export type AccountRow = {
   id: string;
-  email: string;
+  login_id: string;
   display_name: string | null;
   role: UserRole;
   created_at: string;
@@ -56,7 +62,7 @@ export async function listAccounts(): Promise<
   const ids = listData.users.map((u) => u.id);
   const { data: profiles, error: profError } = await admin
     .from("profiles")
-    .select("id, role, display_name, created_at")
+    .select("id, role, display_name, login_id, created_at")
     .in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
 
   if (profError) return { error: profError.message };
@@ -69,9 +75,14 @@ export async function listAccounts(): Promise<
       typeof u.user_metadata?.display_name === "string"
         ? u.user_metadata.display_name
         : null;
+    const loginId =
+      p?.login_id ??
+      (typeof u.user_metadata?.login_id === "string" ? u.user_metadata.login_id : null) ??
+      displayLoginFromAuthEmail(u.email);
+
     return {
       id: u.id,
-      email: u.email ?? "",
+      login_id: loginId,
       display_name: p?.display_name ?? metaName,
       role: (p?.role ?? "guest") as UserRole,
       created_at: p?.created_at ?? u.created_at,
@@ -79,12 +90,12 @@ export async function listAccounts(): Promise<
     };
   });
 
-  accounts.sort((a, b) => a.email.localeCompare(b.email, "ko"));
+  accounts.sort((a, b) => a.login_id.localeCompare(b.login_id, "ko"));
   return { accounts };
 }
 
 export async function createAccount(payload: {
-  email: string;
+  login_id: string;
   password: string;
   display_name: string;
   role: UserRole;
@@ -92,24 +103,36 @@ export async function createAccount(payload: {
   const gate = await requireAccountAdmin();
   if ("error" in gate) return { error: gate.error };
 
-  const email = payload.email.trim().toLowerCase();
+  const loginId = normalizeStaffLoginId(payload.login_id);
   const password = payload.password;
   const displayName = payload.display_name.trim();
   const role = payload.role;
 
-  if (!email || !password || password.length < 6) {
-    return { error: "이메일과 비밀번호(6자 이상)를 입력하세요." };
+  if (!loginId || !password || password.length < 6) {
+    return { error: "아이디와 비밀번호(6자 이상)를 입력하세요." };
+  }
+  if (!isValidStaffLoginId(loginId)) {
+    return { error: "아이디는 영문 소문자·숫자·_(3~32자)만 사용할 수 있습니다." };
   }
   if (!PROFILE_ROLES.includes(role)) {
     return { error: "유효하지 않은 권한입니다." };
   }
 
   const admin = createAdminClient();
+
+  const { data: existing } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("login_id", loginId)
+    .maybeSingle();
+  if (existing) return { error: "이미 사용 중인 아이디입니다." };
+
+  const authEmail = loginIdToAuthEmail(loginId);
   const { data: created, error: createError } = await admin.auth.admin.createUser({
-    email,
+    email: authEmail,
     password,
     email_confirm: true,
-    user_metadata: { display_name: displayName },
+    user_metadata: { display_name: displayName, login_id: loginId },
   });
   if (createError) return { error: createError.message };
   if (!created.user) return { error: "계정 생성에 실패했습니다." };
@@ -119,6 +142,7 @@ export async function createAccount(payload: {
     .update({
       role,
       display_name: displayName || null,
+      login_id: loginId,
     })
     .eq("id", created.user.id);
 

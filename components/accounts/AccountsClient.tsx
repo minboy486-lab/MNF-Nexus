@@ -20,14 +20,14 @@ type Props = {
 };
 
 type FormState = {
-  email: string;
+  login_id: string;
   password: string;
   display_name: string;
   role: UserRole;
 };
 
 const emptyForm: FormState = {
-  email: "",
+  login_id: "",
   password: "",
   display_name: "",
   role: "staff",
@@ -35,7 +35,7 @@ const emptyForm: FormState = {
 
 function AccountFormModal({
   mode,
-  editEmail,
+  editLoginId,
   form,
   newPassword,
   pending,
@@ -46,7 +46,7 @@ function AccountFormModal({
   onNewPasswordChange,
 }: {
   mode: "create" | "edit";
-  editEmail?: string;
+  editLoginId?: string;
   form: FormState;
   newPassword: string;
   pending: boolean;
@@ -60,7 +60,7 @@ function AccountFormModal({
     <AppModal
       onClose={onClose}
       title={mode === "create" ? "계정 생성" : "계정 수정"}
-      subtitle={mode === "edit" && editEmail ? editEmail : undefined}
+      subtitle={mode === "edit" && editLoginId ? `@${editLoginId}` : undefined}
       accent="tertiary"
       maxWidth="md"
       titleId="account-modal-title"
@@ -86,20 +86,28 @@ function AccountFormModal({
         autoComplete="off"
         className="space-y-5 pb-1"
       >
-        {mode === "create" && (
-          <label>
-            <span className="app-modal-label">이메일</span>
-            <input
-              type="email"
-              required
-              autoComplete="email"
-              placeholder="name@example.com"
-              className="app-modal-field"
-              value={form.email}
-              onChange={(e) => onFormChange({ email: e.target.value })}
-            />
-          </label>
-        )}
+          {mode === "create" && (
+            <label>
+              <span className="app-modal-label">아이디</span>
+              <input
+                type="text"
+                required
+                autoComplete="off"
+                placeholder="staff01"
+                className="app-modal-field"
+                minLength={3}
+                maxLength={32}
+                pattern="[a-zA-Z0-9_]+"
+                value={form.login_id}
+                onChange={(e) =>
+                  onFormChange({ login_id: e.target.value.toLowerCase() })
+                }
+              />
+              <p className="text-[10px] text-on-surface-variant/70 mt-1">
+                영문 소문자·숫자·_ (3~32자)
+              </p>
+            </label>
+          )}
 
         <label>
           <span className="app-modal-label">표시 이름</span>
@@ -183,7 +191,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
 
   function openEdit(row: AccountRow) {
     setForm({
-      email: row.email,
+      login_id: row.login_id,
       password: "",
       display_name: row.display_name ?? "",
       role: row.role === "counter" ? "screen" : row.role,
@@ -202,7 +210,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
     e.preventDefault();
     setPending(true);
     const result = await createAccount({
-      email: form.email,
+      login_id: form.login_id,
       password: form.password,
       display_name: form.display_name,
       role: form.role,
@@ -236,7 +244,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
   }
 
   async function handleDelete(row: AccountRow) {
-    if (!confirm(`계정을 삭제할까요?\n${row.email}`)) return;
+    if (!confirm(`계정을 삭제할까요?\n아이디: ${row.login_id}`)) return;
     setPending(true);
     const result = await deleteAccount(row.id);
     setPending(false);
@@ -255,9 +263,27 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
             <span className="material-symbols-outlined text-lg">warning</span>
             계정 API 미설정
           </p>
-          <p className="text-on-surface-variant leading-relaxed">
-            {configError ??
-              ".env.local에 SUPABASE_SERVICE_ROLE_KEY를 추가한 뒤 서버를 재시작하세요."}
+          <p className="text-on-surface-variant leading-relaxed space-y-2">
+            {configError ? (
+              <span>{configError}</span>
+            ) : (
+              <>
+                <span>
+                  서버가 <code className="text-primary">SUPABASE_SERVICE_ROLE_KEY</code>를
+                  아직 읽지 못했습니다.
+                </span>
+                <span className="block">
+                  .env.local에 넣었다면 <strong className="text-on-surface">터미널에서 dev
+                  서버를 완전히 종료(Ctrl+C)</strong>한 뒤{" "}
+                  <code className="text-primary">npm run dev</code>로 다시 시작하세요. (저장만
+                  하면 반영되지 않습니다.)
+                </span>
+                <span className="block text-xs opacity-80">
+                  Vercel 등 배포 환경에서는 프로젝트 Environment Variables에도 동일 키를
+                  등록해야 합니다.
+                </span>
+              </>
+            )}
           </p>
         </div>
       )}
@@ -287,7 +313,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10 bg-[#181a24] text-on-surface-variant text-[11px] uppercase tracking-wider">
               <tr className="border-b border-white/10">
-                <th className="text-left px-5 py-3.5 font-semibold">이메일</th>
+                <th className="text-left px-5 py-3.5 font-semibold">아이디</th>
                 <th className="text-left px-5 py-3.5 font-semibold">표시 이름</th>
                 <th className="text-left px-5 py-3.5 font-semibold">권한</th>
                 <th className="text-left px-5 py-3.5 font-semibold hidden lg:table-cell">
@@ -303,7 +329,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
                   className="border-b border-white/[0.06] hover:bg-white/[0.04] transition-colors"
                 >
                   <td className="px-5 py-3.5 font-mono text-xs sm:text-sm text-on-surface/90">
-                    {row.email}
+                    {row.login_id}
                   </td>
                   <td className="px-5 py-3.5">{row.display_name ?? "—"}</td>
                   <td className="px-5 py-3.5">
@@ -354,7 +380,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
       {modal && (
         <AccountFormModal
           mode={modal === "create" ? "create" : "edit"}
-          editEmail={modal !== "create" ? modal.edit.email : undefined}
+          editLoginId={modal !== "create" ? modal.edit.login_id : undefined}
           form={form}
           newPassword={newPassword}
           pending={pending}

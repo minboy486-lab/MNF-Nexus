@@ -19,7 +19,7 @@ export function getHomePath(role: UserRole | string | undefined | null): string 
     case "guest":
       return "/guest";
     case "staff":
-      return "/staff/games";
+      return "/staff/tables";
     case "manager":
     case "admin":
       return "/admin/dashboard";

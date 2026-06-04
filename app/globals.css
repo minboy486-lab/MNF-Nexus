@@ -399,19 +399,6 @@ body {
 .seat-pos-10 { left: 82%; bottom: 15%; transform: translate(-50%, 0); }
 .seat-pos-11 { left: 65%; bottom: 2%; transform: translate(-50%, 0); }
 
-/* 통합 테이블 뷰: 좌석을 테이블 안쪽으로 */
-.seat-pos-in-1  { left: 35%; bottom: 14%; transform: translate(-50%, 0); }
-.seat-pos-in-2  { left: 22%; bottom: 22%; transform: translate(-50%, 0); }
-.seat-pos-in-3  { left: 14%; bottom: 36%; transform: translate(-50%, -50%); }
-.seat-pos-in-4  { left: 16%; top: 28%; transform: translate(-50%, -50%); }
-.seat-pos-in-5  { left: 32%; top: 14%; transform: translate(-50%, -50%); }
-.seat-pos-in-6  { left: 50%; top: 12%; transform: translate(-50%, -50%); }
-.seat-pos-in-7  { left: 68%; top: 14%; transform: translate(-50%, -50%); }
-.seat-pos-in-8  { left: 84%; top: 28%; transform: translate(-50%, -50%); }
-.seat-pos-in-9  { left: 86%; bottom: 36%; transform: translate(-50%, -50%); }
-.seat-pos-in-10 { left: 78%; bottom: 22%; transform: translate(-50%, 0); }
-.seat-pos-in-11 { left: 65%; bottom: 14%; transform: translate(-50%, 0); }
-
 .seat-node {
   transition: all 0.2s ease;
   width: 56px;
@@ -419,10 +406,47 @@ body {
   position: absolute;
 }
 
+.integrated-table-view .integrated-table-oval-wrap {
+  min-height: 10.5rem;
+  aspect-ratio: 2.15 / 1;
+}
+
+.integrated-table-view .poker-table-surface--capsule {
+  min-height: 10.5rem;
+}
+
 .integrated-table-view .seat-node--integrated {
-  width: 112px;
-  height: 80px;
+  width: clamp(3.75rem, 14vw, 6.5rem);
+  height: clamp(2.65rem, 10vw, 4.5rem);
+  max-width: 38%;
+  max-height: 32%;
   z-index: 2;
+  padding: 0.15rem 0.2rem;
+}
+
+@media (max-width: 1023px) {
+  .integrated-table-view .integrated-table-oval-wrap {
+    min-height: 11.5rem;
+    aspect-ratio: 2.05 / 1;
+  }
+
+  .integrated-table-view .seat-node--integrated {
+    width: clamp(2.85rem, 17vw, 5rem);
+    height: clamp(2.1rem, 12vw, 3.5rem);
+    max-width: 30%;
+    max-height: 28%;
+  }
+
+  .integrated-table-view .seat-node--integrated .material-symbols-outlined {
+    font-size: 1.35rem !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .integrated-table-view .seat-node--integrated {
+    width: clamp(4.5rem, 9vw, 6.75rem);
+    height: clamp(3.15rem, 6.5vw, 4.75rem);
+  }
 }
 
 .material-symbols-outlined {
@@ -676,7 +700,7 @@ body {
     max-width: 100%;
     align-self: stretch;
     flex: 0 0 auto;
-    min-height: 28vh;
+    min-height: min(34vh, 22rem);
   }
 }
 

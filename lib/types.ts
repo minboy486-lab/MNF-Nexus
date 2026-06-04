@@ -44,6 +44,7 @@ export type Profile = {
   id: string;
   role: UserRole;
   display_name: string | null;
+  login_id?: string | null;
   created_at: string;
 };
 

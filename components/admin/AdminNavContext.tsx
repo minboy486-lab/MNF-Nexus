@@ -39,3 +39,8 @@ export function useAdminNav() {
   }
   return ctx;
 }
+
+/** AdminShell 밖(직원 테이블 등) — 없으면 undefined */
+export function useAdminNavOptional() {
+  return useContext(AdminNavContext);
+}

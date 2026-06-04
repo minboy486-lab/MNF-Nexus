@@ -1,5 +1,6 @@
 import { seatEllipseStyle } from "@/lib/poker/seat-ellipse";
 import { seatHoldemStyle } from "@/lib/poker/seat-holdem";
+import { seatIntegratedStyle } from "@/lib/poker/seat-integrated";
 import type { Seat } from "@/lib/types";
 import { formatChips } from "@/lib/utils/format";
 
@@ -47,7 +48,7 @@ export function SeatNode({
       type="button"
       onClick={onClick}
       style={posStyle}
-      className={`seat-node ${posClass} ${integratedPosClass} glass-panel rounded-lg flex flex-col items-center justify-center border transition-all ${
+      className={`seat-node ${posClass} glass-panel rounded-lg flex flex-col items-center justify-center border transition-all ${
         integratedFloor ? "seat-node--integrated" : floor ? "min-w-[2.5rem] min-h-[2.25rem]" : ""
       } ${
         occupied ? "border-primary/30" : "border-outline-variant/20 opacity-70"
@@ -57,8 +58,8 @@ export function SeatNode({
         <>
           {!compact && seat && (
             <span
-              className={`font-bold text-on-surface-variant mb-0.5 ${
-                integratedFloor ? "text-[9px] md:text-[10px]" : "text-[6px]"
+              className={`font-bold text-on-surface-variant mb-0.5 leading-tight ${
+                integratedFloor ? "text-[8px] sm:text-[9px] max-w-full truncate px-0.5" : "text-[6px]"
               }`}
             >
               S{seatNumber} | {formatChips(seat.chips)}
@@ -70,7 +71,7 @@ export function SeatNode({
           <span
             className={`font-black truncate w-full text-center ${
               integratedFloor
-                ? "text-xs md:text-sm"
+                ? "text-[10px] sm:text-xs max-w-full truncate px-0.5 leading-tight"
                 : floor
                   ? "text-[9px] md:text-[10px]"
                   : compact

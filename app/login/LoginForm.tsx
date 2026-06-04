@@ -46,21 +46,29 @@ export function LoginForm() {
           )}
 
           <div className="space-y-2">
-            <label htmlFor="email" className="text-sm text-on-surface-variant">
-              아이디 또는 이메일
+            <label htmlFor="loginId" className="text-sm text-on-surface-variant">
+              아이디
             </label>
             <div className="relative">
-              <FieldIcon name="mail" />
+              <FieldIcon name="person" />
               <input
-                id="email"
-                name="email"
-                type="email"
+                id="loginId"
+                name="loginId"
+                type="text"
                 required
-                autoComplete="email"
-                placeholder="example@mnf.com"
+                autoComplete="username"
+                placeholder="admin"
                 className="login-input w-full pl-11 pr-4"
+                minLength={3}
+                maxLength={32}
+                pattern="[a-zA-Z0-9_]+"
+                title="영문, 숫자, _ (3~32자)"
               />
             </div>
+            <p className="text-[11px] text-on-surface-variant/70">
+              예: <span className="text-on-surface-variant">admin</span> · 기존{" "}
+              <span className="text-on-surface-variant">admin@mnf.com</span> 도 가능
+            </p>
           </div>
 
           <div className="space-y-2">
