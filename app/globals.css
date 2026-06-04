@@ -297,6 +297,95 @@ body {
   position: relative;
 }
 
+.poker-table-surface--ellipse {
+  border-radius: 50%;
+  aspect-ratio: 2.15 / 1;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0 auto;
+}
+
+.poker-table-surface--ellipse .seat-node {
+  width: clamp(52px, 6.5vw, 72px);
+  height: clamp(40px, 5vw, 56px);
+}
+
+/* 홀덤 레이스웨이 (직선 사이드 + 둥근 단부) */
+.poker-table-surface--holdem {
+  --holdem-shape: polygon(
+    5% 36%,
+    5% 64%,
+    13% 90%,
+    87% 90%,
+    95% 64%,
+    95% 36%,
+    87% 10%,
+    13% 10%
+  );
+  clip-path: var(--holdem-shape);
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0 auto;
+  aspect-ratio: 2.35 / 1;
+  border: none;
+  box-shadow:
+    0 0 0 5px rgba(255, 255, 255, 0.05),
+    0 0 48px rgba(0, 0, 0, 0.55),
+    inset 0 0 40px rgba(255, 16, 240, 0.07);
+}
+
+.poker-table-surface--holdem::before {
+  content: "";
+  position: absolute;
+  inset: 3% 4% 5% 4%;
+  clip-path: var(--holdem-shape);
+  background: radial-gradient(ellipse at 50% 45%, #1e2030 0%, #0a0b10 72%);
+  border: 2px solid rgba(255, 255, 255, 0.04);
+  pointer-events: none;
+}
+
+.poker-table-surface--holdem .seat-node {
+  width: clamp(52px, 6.5vw, 72px);
+  height: clamp(40px, 5vw, 56px);
+  z-index: 2;
+}
+
+/* 통합 뷰 · 테이블 상세 공통 캡슐 테이블 (rounded stadium) */
+.poker-table-surface--capsule {
+  border-radius: min(22%, 140px);
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: unset;
+}
+
+.integrated-table-oval-wrap,
+.table-detail-table-wrap {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+}
+
+.integrated-table-oval-wrap {
+  overflow: visible;
+}
+
+.table-detail-table-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
 .seat-pos-dealer { left: 50%; bottom: -8px; transform: translateX(-50%); }
 .seat-pos-1  { left: 35%; bottom: 2%; transform: translate(-50%, 0); }
 .seat-pos-2  { left: 18%; bottom: 15%; transform: translate(-50%, 0); }
@@ -310,11 +399,30 @@ body {
 .seat-pos-10 { left: 82%; bottom: 15%; transform: translate(-50%, 0); }
 .seat-pos-11 { left: 65%; bottom: 2%; transform: translate(-50%, 0); }
 
+/* 통합 테이블 뷰: 좌석을 테이블 안쪽으로 */
+.seat-pos-in-1  { left: 35%; bottom: 14%; transform: translate(-50%, 0); }
+.seat-pos-in-2  { left: 22%; bottom: 22%; transform: translate(-50%, 0); }
+.seat-pos-in-3  { left: 14%; bottom: 36%; transform: translate(-50%, -50%); }
+.seat-pos-in-4  { left: 16%; top: 28%; transform: translate(-50%, -50%); }
+.seat-pos-in-5  { left: 32%; top: 14%; transform: translate(-50%, -50%); }
+.seat-pos-in-6  { left: 50%; top: 12%; transform: translate(-50%, -50%); }
+.seat-pos-in-7  { left: 68%; top: 14%; transform: translate(-50%, -50%); }
+.seat-pos-in-8  { left: 84%; top: 28%; transform: translate(-50%, -50%); }
+.seat-pos-in-9  { left: 86%; bottom: 36%; transform: translate(-50%, -50%); }
+.seat-pos-in-10 { left: 78%; bottom: 22%; transform: translate(-50%, 0); }
+.seat-pos-in-11 { left: 65%; bottom: 14%; transform: translate(-50%, 0); }
+
 .seat-node {
   transition: all 0.2s ease;
   width: 56px;
   height: 40px;
   position: absolute;
+}
+
+.integrated-table-view .seat-node--integrated {
+  width: 112px;
+  height: 80px;
+  z-index: 2;
 }
 
 .material-symbols-outlined {
@@ -510,20 +618,221 @@ body {
   );
 }
 
+/* B 상단 중앙(=D·C 한 칸 너비) · D+C 하단 좌우 꽉 참 */
+.integrated-table-floor {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 0.5rem;
+  min-height: 0;
+  width: 100%;
+}
+
+.integrated-table-floor > .integrated-table-unit {
+  flex: 1 1 0;
+  width: calc((100% - 0.5rem) / 2);
+  max-width: 100%;
+  align-self: center;
+  min-width: 0;
+  min-height: 0;
+}
+
+.integrated-table-pair {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0.5rem;
+  min-height: 0;
+  width: 100%;
+}
+
+.integrated-table-pair > .integrated-table-unit {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  width: auto;
+}
+
+
+.integrated-table-view .poker-table-surface {
+  min-height: 0 !important;
+}
+
 @media (max-width: 1023px) {
-  .integrated-table-view .grid.grid-cols-12 {
-    display: flex;
-    flex-direction: column;
-    height: auto;
-    min-height: 0;
-    max-height: none;
+  .integrated-table-floor {
+    overflow-y: auto;
+    gap: 0.75rem;
   }
 
-  .integrated-table-view .grid > * {
-    grid-column: auto !important;
-    grid-row: auto !important;
-    min-height: 280px;
+  /* D·C 래퍼 해제 → B·D·C 동일한 세로 스택 */
+  .integrated-table-pair {
+    display: contents;
   }
+
+  .integrated-table-floor .integrated-table-unit {
+    width: 100%;
+    max-width: 100%;
+    align-self: stretch;
+    flex: 0 0 auto;
+    min-height: 28vh;
+  }
+}
+
+/* —— App modals (등록·생성 팝업 공통) —— */
+.account-panel-solid,
+.app-panel-solid {
+  background: #12141c;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.app-modal-backdrop,
+.account-modal-backdrop {
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.app-modal-panel,
+.account-modal-panel {
+  background: #14161f;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(255, 182, 201, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.app-modal-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #181a24;
+}
+
+.app-modal-body {
+  background: #14161f;
+}
+
+.app-modal-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: #181a24;
+}
+
+.app-modal-close {
+  padding: 0.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--on-surface-variant);
+  transition: background 0.2s ease;
+}
+
+.app-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--on-surface);
+}
+
+.app-modal-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  letter-spacing: 0.02em;
+  margin-bottom: 0.375rem;
+}
+
+.app-modal-label .required {
+  color: var(--error);
+}
+
+.app-modal-field,
+.account-field {
+  width: 100%;
+  height: 2.75rem;
+  padding: 0 0.875rem;
+  border-radius: 0.625rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--on-surface);
+  font-size: 0.9375rem;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.app-modal-field::placeholder,
+.account-field::placeholder {
+  color: rgba(196, 176, 196, 0.4);
+}
+
+.app-modal-field:hover:not(:disabled),
+.account-field:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.app-modal-field:focus,
+.account-field:focus {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 198, 218, 0.45);
+  box-shadow: 0 0 0 3px rgba(255, 182, 201, 0.14);
+}
+
+.app-modal-btn-secondary {
+  flex: 1;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--on-surface);
+  transition: background 0.2s ease;
+}
+
+.app-modal-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.app-modal-hint-ok {
+  font-size: 0.75rem;
+  color: #34d399;
+}
+
+.app-modal-hint-error {
+  font-size: 0.75rem;
+  color: var(--error);
+}
+
+.account-role-chip,
+.app-role-chip {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.625rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--on-surface-variant);
+  transition: all 0.2s ease;
+}
+
+.account-role-chip:hover,
+.app-role-chip:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.account-role-chip[data-active="true"],
+.app-role-chip[data-active="true"] {
+  background: rgba(255, 22, 240, 0.12);
+  border-color: rgba(255, 22, 240, 0.35);
+  color: var(--primary);
+  box-shadow: 0 0 20px rgba(255, 22, 240, 0.12);
 }
 
 /* Scrollbar */

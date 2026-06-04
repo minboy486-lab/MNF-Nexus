@@ -1,149 +1,230 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { PokerTableOval } from "@/components/poker/PokerTableOval";
-import { assignSeat, sitOutPlayer, manualRebuy } from "@/lib/actions/games";
-import type { MemberVisitWithMember, PhysicalTable, Seat, Game } from "@/lib/types";
-import { formatChips } from "@/lib/utils/format";
+import { SeatAssignPopover } from "@/components/tables/SeatAssignPopover";
+import { SeatOccupiedMenu } from "@/components/tables/SeatOccupiedMenu";
+import { TableGameHudBar } from "@/components/tables/TableGameHudBar";
+import {
+  assignSeatWithBuyIn,
+  sitOutPlayer,
+  manualRebuy,
+  moveSeat,
+  quickStartGameOnTable,
+} from "@/lib/actions/games";
+import type {
+  GameClock,
+  MemberVisitWithMember,
+  PhysicalTable,
+  Seat,
+  Game,
+  GamePreset,
+} from "@/lib/types";
+import type { PaymentMethod } from "@/lib/actions/ledger";
 
 type Props = {
   table: PhysicalTable;
   game: Game | null;
   seats: Seat[];
   activeVisits: MemberVisitWithMember[];
+  preset: GamePreset | null;
+  clock: GameClock | null;
+  defaultBuyIn: number;
+  allTables: PhysicalTable[];
 };
+
+type SeatMenu =
+  | { kind: "assign"; seatNumber: number }
+  | { kind: "occupied"; seat: Seat }
+  | null;
 
 export function TableDetailClient({
   table,
   game,
   seats,
   activeVisits,
+  preset,
+  clock,
+  defaultBuyIn,
+  allTables,
 }: Props) {
   const router = useRouter();
-  const [pickerSeat, setPickerSeat] = useState<number | null>(null);
+  const searchParams = useSearchParams();
+  const [menu, setMenu] = useState<SeatMenu>(null);
+  const [buyInAmount] = useState(defaultBuyIn);
+  const paymentMethod: PaymentMethod = "cash";
+  const [moveTarget, setMoveTarget] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
-  const totalChips = seats.reduce((s, x) => s + Number(x.chips), 0);
-  const occupied = seats.filter((s) => s.member_id);
-  const avg = occupied.length ? Math.round(totalChips / occupied.length) : 0;
+  useEffect(() => {
+    const raw = searchParams.get("seat");
+    if (!raw) return;
+    const n = Number(raw);
+    if (n >= 1 && n <= 11) {
+      const seat = seats.find((s) => s.seat_number === n);
+      if (seat?.member_id) setMenu({ kind: "occupied", seat });
+      else setMenu({ kind: "assign", seatNumber: n });
+    }
+  }, [searchParams, seats]);
+
+  const unseatedVisits = activeVisits.filter(
+    (v) => !seats.some((s) => s.member_id === v.member_id),
+  );
+
+  const otherTables = allTables.filter(
+    (t) => t.id !== table.id && game?.id && t.current_game_id === game.id,
+  );
+
+  function closeMenu() {
+    setMenu(null);
+  }
+
+  function handleSeatClick(seatNumber: number) {
+    if (!game) return;
+    const seat = seats.find((s) => s.seat_number === seatNumber);
+    if (seat?.member_id) {
+      setMenu({ kind: "occupied", seat });
+      return;
+    }
+    setMenu({ kind: "assign", seatNumber });
+  }
+
+  async function handleQuickStart() {
+    setPending(true);
+    const presetId = preset?.id;
+    const result = await quickStartGameOnTable(table.id, presetId);
+    setPending(false);
+    if (result && "error" in result && result.error && !("gameId" in result && result.gameId)) {
+      alert(result.error);
+      return;
+    }
+    if (result && "gameId" in result && result.gameId) {
+      router.push(`/admin/games/${result.gameId}`);
+    } else {
+      router.refresh();
+    }
+  }
 
   async function handleAssign(visit: MemberVisitWithMember) {
-    if (!game || pickerSeat === null) return;
-    await assignSeat(game.id, table.id, pickerSeat, visit.member_id, visit.id);
-    setPickerSeat(null);
+    if (!game || menu?.kind !== "assign") return;
+    setPending(true);
+    const result = await assignSeatWithBuyIn(
+      game.id,
+      table.id,
+      menu.seatNumber,
+      visit.member_id,
+      buyInAmount,
+      paymentMethod,
+      visit.id,
+    );
+    setPending(false);
+    if (result && "error" in result && result.error) {
+      alert(result.error);
+      return;
+    }
+    closeMenu();
     router.refresh();
   }
 
   async function handleSitOut(seat: Seat) {
     if (!game || !seat.member_id) return;
+    closeMenu();
     await sitOutPlayer(seat.member_id, game.id);
     router.refresh();
   }
 
   async function handleManualRebuy(seat: Seat) {
     if (!game || !seat.member_id) return;
-    await manualRebuy(game.id, seat.id, seat.member_id);
+    closeMenu();
+    setPending(true);
+    await manualRebuy(game.id, seat.id, seat.member_id, buyInAmount, paymentMethod);
+    setPending(false);
     router.refresh();
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="glass-panel rounded-2xl p-5 border-t-2 border-primary/50">
-          <p className="text-[10px] uppercase tracking-[0.15em] text-on-surface-variant font-semibold">총 칩</p>
-          <p className="stat-display stat-display-xl text-primary text-glow-primary mt-1">{formatChips(totalChips)}</p>
-        </div>
-        <div className="glass-panel rounded-2xl p-5 border-t-2 border-tertiary/50">
-          <p className="text-[10px] uppercase tracking-[0.15em] text-on-surface-variant font-semibold">평균 칩</p>
-          <p className="stat-display stat-display-xl text-tertiary text-glow-tertiary mt-1">{formatChips(avg)}</p>
-        </div>
-        <div className="glass-panel rounded-2xl p-5 border-t-2 border-secondary/50">
-          <p className="text-[10px] uppercase tracking-[0.15em] text-on-surface-variant font-semibold">착석</p>
-          <p className="stat-display stat-display-xl text-secondary text-glow-secondary mt-1">
-            {occupied.length}
-            <span className="text-lg text-on-surface-variant/60 font-semibold">/11</span>
-          </p>
-        </div>
-        {game && (
-          <div className="glass-panel rounded-xl p-4">
-            <p className="text-xs text-on-surface-variant">레지</p>
-            <p className="text-sm font-bold">
-              {game.registration_closed ? "마감" : "오픈"}
-            </p>
-          </div>
-        )}
-      </div>
+  function handleMove(seat: Seat) {
+    if (!game || !seat.member_id) return;
+    const targetTableId = moveTarget ?? table.id;
+    const n = prompt("이동할 좌석 번호 (1-11)");
+    if (!n) return;
+    const toSeat = Number(n);
+    if (toSeat < 1 || toSeat > 11) {
+      alert("좌석 번호는 1~11입니다.");
+      return;
+    }
+    closeMenu();
+    setPending(true);
+    moveSeat(game.id, seat.member_id, targetTableId, toSeat).then((result) => {
+      setPending(false);
+      if (result && "error" in result && result.error) alert(result.error);
+      setMoveTarget(null);
+      router.refresh();
+    });
+  }
 
-      {game ? (
+  return (
+    <div className="relative flex flex-col flex-1 min-h-0 gap-1.5">
+      {!game && (
+        <div className="glass-panel rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 shrink-0">
+          <p className="text-sm text-on-surface-variant flex-1">연결된 게임이 없습니다.</p>
+          <button
+            type="button"
+            disabled={pending || !preset}
+            onClick={handleQuickStart}
+            className="btn-primary px-4 py-2 rounded-lg text-sm"
+          >
+            빠른 게임 시작
+          </button>
+          <Link href="/admin/games/new" className="text-sm text-primary hover:underline">
+            상세 개설 →
+          </Link>
+        </div>
+      )}
+
+      {game && (
         <>
-          <PokerTableOval
-            tableCode={table.code}
-            seats={seats}
-            onSeatClick={(n) => setPickerSeat(n)}
+          <TableGameHudBar
+            game={game}
+            clock={clock}
+            preset={preset}
+            blindName={preset?.name}
           />
-          {pickerSeat !== null && (
-            <div className="glass-panel rounded-xl p-4 border border-primary/40">
-              <p className="text-sm font-bold mb-3">
-                좌석 {pickerSeat} — 방문 중 손님
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {activeVisits.map((v) => (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={() => handleAssign(v)}
-                    className="px-3 py-2 rounded-lg bg-surface-container-high hover:bg-primary/20 text-sm"
-                  >
-                    {v.members?.nickname ?? v.member_id}
-                    {v.members && v.members.credit_balance < 0 && (
-                      <span className="text-error text-xs ml-1">
-                        ({v.members.credit_balance.toLocaleString()})
-                      </span>
-                    )}
-                  </button>
-                ))}
-                {activeVisits.length === 0 && (
-                  <p className="text-sm text-on-surface-variant">
-                    방문 중 손님이 없습니다. 접수대에서 조회하세요.
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => setPickerSeat(null)}
-                className="mt-3 text-xs text-on-surface-variant"
-              >
-                취소
-              </button>
+          <div className="table-detail-table-area">
+            <div className="table-detail-table-wrap">
+              <PokerTableOval
+                tableCode={table.code}
+                seats={seats}
+                floor
+                showRebuyCount
+                onSeatClick={handleSeatClick}
+              />
+              {menu?.kind === "assign" && (
+                <SeatAssignPopover
+                  seatNumber={menu.seatNumber}
+                  visits={unseatedVisits}
+                  pending={pending}
+                  onSelect={handleAssign}
+                  onClose={closeMenu}
+                />
+              )}
+              {menu?.kind === "occupied" && (
+                <SeatOccupiedMenu
+                  seat={menu.seat}
+                  otherTables={otherTables}
+                  moveTarget={moveTarget}
+                  onMoveTargetChange={setMoveTarget}
+                  onRebuy={() => handleManualRebuy(menu.seat)}
+                  onMove={() => handleMove(menu.seat)}
+                  onSitOut={() => handleSitOut(menu.seat)}
+                  onClose={closeMenu}
+                  pending={pending}
+                />
+              )}
             </div>
-          )}
-          <div className="flex flex-wrap gap-2">
-            {seats
-              .filter((s) => s.member_id)
-              .map((seat) => (
-                <div key={seat.id} className="glass-panel rounded-lg px-3 py-2 text-sm flex gap-2 items-center">
-                  <span>S{seat.seat_number}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleSitOut(seat)}
-                    className="text-error hover:underline"
-                  >
-                    싯아웃
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleManualRebuy(seat)}
-                    className="text-primary hover:underline"
-                    title={game.registration_closed ? "수동 리바인" : "리바인"}
-                  >
-                    리바인{game.registration_closed ? "(수동)" : ""}
-                  </button>
-                </div>
-              ))}
           </div>
         </>
-      ) : (
-        <p className="text-on-surface-variant">연결된 게임이 없습니다.</p>
       )}
     </div>
   );

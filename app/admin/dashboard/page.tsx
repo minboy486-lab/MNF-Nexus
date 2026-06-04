@@ -9,8 +9,11 @@ import {
   getGames,
   getOpenVenueSession,
 } from "@/lib/data/queries";
+import { LiveGamesTabs } from "@/components/games/LiveGamesTabs";
 import { formatTimer } from "@/lib/utils/format";
 import { demoClocks } from "@/lib/demo/data";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { getGame } from "@/lib/data/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +28,24 @@ export default async function DashboardPage() {
   const games = await getGames();
   const running = games.filter((g) => isGameLive(g.status));
 
+  const runningWithClocks = await Promise.all(
+    running.map(async (game) => {
+      let clock = demoClocks[game.id];
+      if (isSupabaseConfigured()) {
+        const full = await getGame(game.id);
+        const c = full?.game_clocks;
+        clock = Array.isArray(c) ? c[0] : c ?? clock;
+      }
+      return { game, clock };
+    }),
+  );
+
   return (
     <>
       <AdminTopBar title="MNF HOLDEM" subtitle="통합 모니터링 데스크" />
       <div className="admin-main flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
         <SessionBanner session={session} />
+        <LiveGamesTabs games={games} />
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard label="진행 테이블" value={stats.activeTables} accent="primary" />
           <StatCard label="진행 게임" value={stats.activeGames} accent="tertiary" />
@@ -41,8 +57,7 @@ export default async function DashboardPage() {
         <section>
           <SectionHeader title="진행 중인 게임" />
           <div className="grid gap-4 md:grid-cols-2">
-            {running.map((game) => {
-              const clock = demoClocks[game.id];
+            {runningWithClocks.map(({ game, clock }) => {
               const live = isGameLive(game.status);
               return (
                 <Link

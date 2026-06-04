@@ -1,14 +1,44 @@
-export type UserRole = "admin" | "staff" | "guest";
-export type FloorStatus = "visitor" | "waiting" | "in_game" | "reserved";
+export type UserRole =
+  | "admin"
+  | "manager"
+  | "staff"
+  | "guest"
+  | "screen"
+  /** @deprecated migrated to screen */
+  | "counter";
+export type FloorStatus =
+  | "registered"
+  | "visitor"
+  | "waiting"
+  | "in_game"
+  | "reserved";
 export type GameMode = "single_table" | "multi_table";
 
+/** @deprecated Use BlindStructureRow — legacy rows may omit `kind`. */
 export type BlindLevel = {
   level: number;
   small: number;
   big: number;
   ante: number;
   minutes: number;
+  kind?: "level";
 };
+
+export type BlindStructureRow =
+  | {
+      kind: "level";
+      level: number;
+      small: number;
+      big: number;
+      ante: number;
+      minutes: number;
+    }
+  | {
+      kind: "break";
+      minutes: number;
+    };
+
+export type PresetGameKind = "daily" | "tournament";
 
 export type Profile = {
   id: string;
@@ -30,8 +60,23 @@ export type GamePreset = {
   id: string;
   name: string;
   buy_in: number;
-  blind_structure: BlindLevel[];
-  prize_rules: unknown | null;
+  blind_structure: BlindStructureRow[];
+  prize_rules: PresetPrizeRules | null;
+  game_kind: PresetGameKind;
+  rebuy_cost: number;
+  addon_enabled: boolean;
+  addon_price: number;
+  buy_in_chips: number;
+  rebuy_chips: RebuyChipTier[];
+  /** @deprecated use rebuy_chips */
+  rebuy1_chips: number;
+  /** @deprecated use rebuy_chips */
+  rebuy2_chips: number;
+  addon_chips: number;
+  bonus_enabled: boolean;
+  bonus_chips: number;
+  participation_points: number;
+  prize_pool_percent: number;
   created_at: string;
 };
 
@@ -61,11 +106,25 @@ export type Game = {
   prize_structure_id: string | null;
   win_point_preset_id: string | null;
   win_point_multiplier: number;
+  button_seat?: number | null;
   created_at: string;
   updated_at: string;
 };
 
 export type PrizePlacement = { rank: number; percent: number };
+
+export type WinPointPlacement = { rank: number; points: number };
+
+export type RebuyChipTier = { order: number; chips: number };
+
+export type PresetPrizeRules = {
+  placements: PrizePlacement[];
+  win_points?: WinPointPlacement[];
+  /** DB 컬럼 미적용 시 prize_rules JSON 백업 */
+  participation_points?: number;
+  buy_in_chips?: number;
+  rebuy_chips?: RebuyChipTier[];
+};
 
 export type PrizeStructure = {
   id: string;
@@ -121,6 +180,7 @@ export type GameClock = {
   blind_big: number;
   ante: number;
   is_running: boolean;
+  version?: number;
   updated_at: string;
   created_at: string;
 };
@@ -128,7 +188,9 @@ export type GameClock = {
 export type Member = {
   id: string;
   venue_id: string | null;
+  login_id: string | null;
   nickname: string;
+  display_name: string | null;
   phone: string | null;
   point_balance: number;
   credit_balance: number;
@@ -179,6 +241,7 @@ export type Seat = {
   chips: number;
   rebuy_count: number;
   first_sat_at: string | null;
+  last_rebuy_at?: string | null;
   created_at: string;
   members?: Member | null;
 };

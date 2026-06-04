@@ -80,5 +80,25 @@ insert into public.win_point_presets (venue_id, name, placements) values
   )
 on conflict do nothing;
 
+insert into public.staff (venue_id, name, role, hourly_wage, pin_hash) values
+  ('00000000-0000-4000-8000-000000000001', '딜러 A', 'dealer', 15000, null),
+  ('00000000-0000-4000-8000-000000000001', '매니저', 'manager', 20000, null)
+on conflict do nothing;
+
+insert into public.kakao_templates (venue_id, kind, body_template) values
+  (
+    '00000000-0000-4000-8000-000000000001',
+    'status',
+    '[MNF] {game_name}\n테이블: {table}\nLevel {level} | {blinds}\n생존 {survivors}/{entries}'
+  ),
+  (
+    '00000000-0000-4000-8000-000000000001',
+    'money_in',
+    '[MNF] 투데이 머니인 {session_date}\n{winners_list}\n합계: {total}'
+  )
+on conflict do nothing;
+
 -- After creating admin user in Supabase Auth:
 -- update public.profiles set role = 'admin', venue_id = '00000000-0000-4000-8000-000000000001' where id = '<your-user-uuid>';
+
+-- 손님 451명 (닉네임 목록, PW 123456): 006 적용 후 seed_members.sql 실행

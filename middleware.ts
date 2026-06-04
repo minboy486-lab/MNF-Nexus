@@ -1,5 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  canAccessAdminArea,
+  canManageAccounts,
+  isManagerOrAdmin,
+  isScreenRole,
+} from "@/lib/auth/roles";
+import { getCounterRedirectPath, getHomePath } from "@/lib/auth/routes";
 import { getSupabaseAnonKey, getSupabaseUrl, isSupabaseConfigured } from "@/lib/supabase/env";
 
 const ADMIN_PREFIX = "/admin";
@@ -8,8 +15,18 @@ const COUNTER_PREFIX = "/counter";
 const GUEST_PREFIX = "/guest";
 const PUBLIC = ["/login", "/"];
 
+async function getRole(supabase: ReturnType<typeof createServerClient>, userId: string) {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .single();
+  return profile?.role ?? null;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const userAgent = request.headers.get("user-agent");
 
   if (!isSupabaseConfigured()) {
     return NextResponse.next();
@@ -55,101 +72,92 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname === "/login" && user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-    const url = request.nextUrl.clone();
-    url.pathname =
-      profile?.role === "guest"
-        ? "/guest"
-        : profile?.role === "staff"
-          ? "/staff/games"
-          : "/admin/dashboard";
-    return NextResponse.redirect(url);
-  }
+  if (user) {
+    const role = await getRole(supabase, user.id);
 
-  if (user && pathname.startsWith(ADMIN_PREFIX)) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+    if (isScreenRole(role)) {
+      const screenHome = getCounterRedirectPath(role, userAgent);
+      const allowed =
+        pathname.startsWith("/tv") ||
+        pathname === "/login" ||
+        pathname.startsWith(COUNTER_PREFIX);
 
-    const staffAllowedAdmin =
-      profile?.role === "staff" &&
-      (pathname.startsWith("/admin/games") || pathname.startsWith("/admin/tables"));
+      if (!allowed) {
+        const url = request.nextUrl.clone();
+        url.pathname = screenHome;
+        return NextResponse.redirect(url);
+      }
 
-    if (profile?.role !== "admin" && !staffAllowedAdmin) {
+      if (pathname === "/login" || pathname === "/") {
+        const url = request.nextUrl.clone();
+        url.pathname = screenHome;
+        return NextResponse.redirect(url);
+      }
+
+      return response;
+    }
+
+    if (pathname === "/login") {
       const url = request.nextUrl.clone();
-      url.pathname = profile?.role === "staff" ? "/staff/games" : "/login";
+      url.pathname = getHomePath(role);
       return NextResponse.redirect(url);
     }
-  }
 
-  if (user && pathname.startsWith(GUEST_PREFIX)) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+    if (pathname.startsWith(ADMIN_PREFIX)) {
+      const staffAllowedAdmin =
+        role === "staff" &&
+        (pathname.startsWith("/admin/games") || pathname.startsWith("/admin/tables"));
 
-    if (profile?.role === "staff") {
+      const accountsOnlyAdmin =
+        pathname.startsWith("/admin/accounts") && !canManageAccounts(role);
+
+      if (accountsOnlyAdmin) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/admin/dashboard";
+        return NextResponse.redirect(url);
+      }
+
+      if (!canAccessAdminArea(role) && !staffAllowedAdmin) {
+        const url = request.nextUrl.clone();
+        url.pathname = role === "staff" ? "/staff/games" : getHomePath(role);
+        return NextResponse.redirect(url);
+      }
+    }
+
+    if (pathname.startsWith(GUEST_PREFIX)) {
+      if (role === "staff") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/staff/games";
+        return NextResponse.redirect(url);
+      }
+      if (isManagerOrAdmin(role) || role === "admin") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/admin/dashboard";
+        return NextResponse.redirect(url);
+      }
+    }
+
+    if (pathname.startsWith(COUNTER_PREFIX)) {
+      if (!canAccessAdminArea(role) && role !== "staff") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/login";
+        return NextResponse.redirect(url);
+      }
+    }
+
+    if (pathname.startsWith(STAFF_PREFIX)) {
+      if (role !== "staff" && !isManagerOrAdmin(role)) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/login";
+        return NextResponse.redirect(url);
+      }
+    }
+
+    if (pathname === "/") {
       const url = request.nextUrl.clone();
-      url.pathname = "/staff/games";
+      url.pathname = getHomePath(role);
       return NextResponse.redirect(url);
     }
-    if (profile?.role === "admin") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/admin/dashboard";
-      return NextResponse.redirect(url);
-    }
-  }
-
-  if (user && pathname.startsWith(COUNTER_PREFIX)) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.role !== "staff" && profile?.role !== "admin") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      return NextResponse.redirect(url);
-    }
-  }
-
-  if (user && pathname.startsWith(STAFF_PREFIX)) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.role !== "staff" && profile?.role !== "admin") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      return NextResponse.redirect(url);
-    }
-  }
-
-  if (pathname === "/" && user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-    const url = request.nextUrl.clone();
-    url.pathname =
-      profile?.role === "guest"
-        ? "/guest"
-        : profile?.role === "staff"
-          ? "/staff/games"
-          : "/admin/dashboard";
-    return NextResponse.redirect(url);
   }
 
   if (PUBLIC.includes(pathname) && pathname !== "/") {

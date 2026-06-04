@@ -3,64 +3,244 @@
 import { revalidatePath } from "next/cache";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import type { BlindLevel } from "@/lib/types";
+import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { requireOpenSession } from "@/lib/venue/session";
+import { recordBuyIn, recordRebuy, type PaymentMethod } from "@/lib/actions/ledger";
+import { renumberRanks, renumberRebuyOrders } from "@/lib/presets/preset-form";
+import { insertGamePresetRow, updateGamePresetRow } from "@/lib/presets/preset-db";
+import { getPlayLevels, serializeStructure } from "@/lib/presets/structure";
+import { isUuid } from "@/lib/utils/uuid";
+import type {
+  BlindLevel,
+  BlindStructureRow,
+  PresetGameKind,
+  PrizePlacement,
+} from "@/lib/types";
 
-export async function createPreset(formData: FormData) {
+async function nextDailyGameNumber(sessionId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("games")
+    .select("daily_game_number")
+    .eq("venue_session_id", sessionId)
+    .order("daily_game_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data?.daily_game_number ?? 0) + 1;
+}
+
+export type CreatePresetPayload = {
+  name: string;
+  game_kind: PresetGameKind;
+  buy_in: number;
+  rebuy_cost: number;
+  addon_enabled: boolean;
+  addon_price: number;
+  buy_in_chips: number;
+  rebuy_chips: { order: number; chips: number }[];
+  addon_chips: number;
+  bonus_enabled: boolean;
+  bonus_chips: number;
+  blind_structure: BlindStructureRow[];
+  placements: PrizePlacement[];
+  win_points: { rank: number; points: number }[];
+  participation_points: number;
+  prize_pool_percent: number;
+};
+
+export type PresetMutationResult =
+  | { success: true; id?: string }
+  | { error: string };
+
+export async function createPresetFromPayload(
+  payload: CreatePresetPayload,
+): Promise<PresetMutationResult> {
   if (!isSupabaseConfigured()) {
     return { error: "Supabase가 연결되지 않았습니다." };
   }
 
-  const name = String(formData.get("name") ?? "");
-  const buyIn = Number(formData.get("buy_in") ?? 0);
-  const structureRaw = String(formData.get("blind_structure") ?? "[]");
+  if (!payload.name.trim()) {
+    return { error: "이름을 입력하세요." };
+  }
 
-  let blind_structure: BlindLevel[] = [];
-  try {
-    blind_structure = JSON.parse(structureRaw) as BlindLevel[];
-  } catch {
-    return { error: "블라인드 구조 JSON이 올바르지 않습니다." };
+  const playLevels = getPlayLevels(payload.blind_structure);
+  if (playLevels.length === 0) {
+    return { error: "블라인드 레벨을 1개 이상 추가하세요." };
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("game_presets").insert({
-    name,
-    buy_in: buyIn,
+  const result = await insertGamePresetRow(supabase, buildPresetRow(payload));
+
+  if ("error" in result) return { error: result.error };
+  revalidatePath("/admin/presets");
+  return { success: true, id: result.id };
+}
+
+function buildPresetRow(payload: CreatePresetPayload) {
+  const blind_structure = serializeStructure(payload.blind_structure);
+  const prize_rules = {
+    placements: renumberRanks(payload.placements),
+    win_points: renumberRanks(payload.win_points),
+    participation_points: Math.max(0, payload.participation_points),
+    buy_in_chips: payload.buy_in_chips,
+    rebuy_chips: renumberRebuyOrders(payload.rebuy_chips),
+  };
+  return {
+    name: payload.name.trim(),
+    game_kind: payload.game_kind,
+    buy_in: payload.buy_in,
+    rebuy_cost: payload.rebuy_cost,
+    addon_enabled: payload.addon_enabled,
+    addon_price: payload.addon_enabled ? payload.addon_price : 0,
+    buy_in_chips: payload.buy_in_chips,
+    rebuy_chips: renumberRebuyOrders(payload.rebuy_chips),
+    rebuy1_chips: payload.rebuy_chips[0]?.chips ?? 0,
+    rebuy2_chips: payload.rebuy_chips[1]?.chips ?? 0,
+    addon_chips: payload.addon_enabled ? payload.addon_chips : 0,
+    bonus_enabled: payload.bonus_enabled,
+    bonus_chips: payload.bonus_enabled ? payload.bonus_chips : 0,
+    participation_points: Math.max(0, payload.participation_points),
+    prize_pool_percent: Math.min(100, Math.max(0, payload.prize_pool_percent)),
     blind_structure,
-  });
+    prize_rules,
+  };
+}
+
+export async function updatePresetFromPayload(
+  id: string,
+  payload: CreatePresetPayload,
+): Promise<PresetMutationResult> {
+  if (!isSupabaseConfigured()) {
+    return { error: "Supabase가 연결되지 않았습니다." };
+  }
+  if (!isUuid(id)) {
+    return { error: "저장된 블라인드만 수정할 수 있습니다. (데모 데이터)" };
+  }
+  if (!payload.name.trim()) {
+    return { error: "이름을 입력하세요." };
+  }
+  if (getPlayLevels(payload.blind_structure).length === 0) {
+    return { error: "블라인드 레벨을 1개 이상 추가하세요." };
+  }
+
+  const supabase = await createClient();
+  const result = await updateGamePresetRow(supabase, id, buildPresetRow(payload));
+
+  if ("error" in result) return { error: result.error };
+  revalidatePath("/admin/presets");
+  return { success: true };
+}
+
+export async function deletePreset(id: string) {
+  if (!isSupabaseConfigured()) {
+    return { error: "Supabase가 연결되지 않았습니다." };
+  }
+  if (!isUuid(id)) {
+    return { error: "저장된 블라인드만 삭제할 수 있습니다. (데모 데이터)" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("game_presets").delete().eq("id", id);
 
   if (error) return { error: error.message };
   revalidatePath("/admin/presets");
   return { success: true };
 }
 
-export async function startGame(formData: FormData) {
+/** @deprecated Use createPresetFromPayload */
+export async function createPreset(formData: FormData) {
+  const structureRaw = String(formData.get("blind_structure") ?? "[]");
+  let blind_structure: BlindStructureRow[] = [];
+  try {
+    blind_structure = JSON.parse(structureRaw) as BlindStructureRow[];
+  } catch {
+    return { error: "블라인드 구조 JSON이 올바르지 않습니다." };
+  }
+  return createPresetFromPayload({
+    name: String(formData.get("name") ?? ""),
+    game_kind: "daily",
+    buy_in: Number(formData.get("buy_in") ?? 0),
+    rebuy_cost: 0,
+    addon_enabled: false,
+    addon_price: 0,
+    buy_in_chips: 0,
+    rebuy_chips: [{ order: 1, chips: 0 }],
+    addon_chips: 0,
+    bonus_enabled: false,
+    bonus_chips: 0,
+    blind_structure,
+    placements: [],
+    win_points: [],
+    participation_points: 0,
+    prize_pool_percent: 100,
+  });
+}
+
+export type StartGameResult =
+  | { gameId: string; dailyNumber: number }
+  | { error: string };
+
+export async function startGameFromSelection(input: {
+  presetId: string;
+  physicalTableIds: string[];
+}): Promise<StartGameResult> {
   if (!isSupabaseConfigured()) {
     return { error: "Supabase가 연결되지 않았습니다. 데모 모드에서는 게임 개설이 제한됩니다." };
   }
 
-  const presetId = String(formData.get("preset_id") ?? "");
-  const tableIds = formData.getAll("physical_table_ids") as string[];
+  const sessionResult = await requireOpenSession();
+  if ("error" in sessionResult) {
+    return { error: sessionResult.error ?? "영업 세션이 열려 있지 않습니다." };
+  }
+
+  const presetId = input.presetId.trim();
+  const tableIds = [...new Set(input.physicalTableIds.filter(Boolean))];
 
   if (!presetId || tableIds.length === 0) {
-    return { error: "프리셋과 물리 테이블을 선택하세요." };
+    return { error: "블라인드와 물리 테이블을 선택하세요." };
   }
 
   const supabase = await createClient();
+  const { data: busyTables } = await supabase
+    .from("physical_tables")
+    .select("id, code, current_game_id")
+    .in("id", tableIds);
+
+  const inUse = (busyTables ?? []).filter((t) => t.current_game_id);
+  if (inUse.length > 0) {
+    const codes = inUse.map((t) => t.code).join(", ");
+    return { error: `사용 중인 테이블이 있습니다: ${codes}` };
+  }
+
   const { data: preset } = await supabase
     .from("game_presets")
-    .select("blind_structure")
+    .select("blind_structure, buy_in")
     .eq("id", presetId)
     .single();
 
-  const levels = (preset?.blind_structure ?? []) as BlindLevel[];
-  const first = levels[0] ?? { level: 1, small: 100, big: 200, ante: 0, minutes: 20 };
+  const levels = getPlayLevels((preset?.blind_structure ?? []) as BlindStructureRow[]);
+  const first = levels[0] ?? {
+    kind: "level" as const,
+    level: 1,
+    small: 100,
+    big: 200,
+    ante: 0,
+    minutes: 20,
+  };
+  const dailyNumber = await nextDailyGameNumber(sessionResult.session.id);
 
   const { data: game, error: gameError } = await supabase
     .from("games")
     .insert({
       preset_id: presetId,
+      venue_id: DEFAULT_VENUE_ID,
+      venue_session_id: sessionResult.session.id,
+      daily_game_number: dailyNumber,
       status: "running",
       mode: tableIds.length > 1 ? "multi_table" : "single_table",
+      button_seat: null,
+      survivor_count: 0,
+      entry_count: 0,
     })
     .select("id")
     .single();
@@ -105,7 +285,93 @@ export async function startGame(formData: FormData) {
 
   revalidatePath("/admin/tables");
   revalidatePath("/admin/dashboard");
-  return { gameId: game.id };
+  revalidatePath("/admin/operations");
+  return { gameId: game.id, dailyNumber };
+}
+
+/** @deprecated Prefer startGameFromSelection — kept for server form actions */
+export async function startGame(formData: FormData) {
+  return startGameFromSelection({
+    presetId: String(formData.get("preset_id") ?? ""),
+    physicalTableIds: formData.getAll("physical_table_ids") as string[],
+  });
+}
+
+/** 테이블 상세에서 빠른 게임 시작 (기본 프리셋 1개). */
+export async function quickStartGameOnTable(physicalTableId: string, presetId?: string) {
+  if (!isSupabaseConfigured()) return { error: "데모 모드" };
+
+  const supabase = await createClient();
+  const { data: table } = await supabase
+    .from("physical_tables")
+    .select("current_game_id, code")
+    .eq("id", physicalTableId)
+    .single();
+
+  if (table?.current_game_id) {
+    return { error: "이미 게임이 진행 중입니다.", gameId: table.current_game_id };
+  }
+
+  let pid = presetId;
+  if (!pid) {
+    const { data: presets } = await supabase
+      .from("game_presets")
+      .select("id")
+      .order("name")
+      .limit(1);
+    pid = presets?.[0]?.id;
+  }
+  if (!pid) return { error: "블라인드 맵이 없습니다." };
+
+  const fd = new FormData();
+  fd.set("preset_id", pid);
+  fd.append("physical_table_ids", physicalTableId);
+  fd.set("draw_button", "on");
+  return startGame(fd);
+}
+
+/** 통합 테이블 뷰 임시: 프라이즈 정산 없이 게임 종료 */
+export async function quickEndGameOnTable(physicalTableId: string) {
+  if (!isSupabaseConfigured()) return { error: "데모 모드" };
+
+  const supabase = await createClient();
+  const { data: table } = await supabase
+    .from("physical_tables")
+    .select("current_game_id, code")
+    .eq("id", physicalTableId)
+    .single();
+
+  const gameId = table?.current_game_id;
+  if (!gameId) return { error: "진행 중인 게임이 없습니다." };
+
+  await supabase
+    .from("games")
+    .update({ status: "ended", updated_at: new Date().toISOString() })
+    .eq("id", gameId);
+
+  await supabase
+    .from("game_clocks")
+    .update({ is_running: false, updated_at: new Date().toISOString() })
+    .eq("game_id", gameId);
+
+  await supabase
+    .from("physical_tables")
+    .update({ current_game_id: null })
+    .eq("current_game_id", gameId);
+
+  await supabase.from("game_logs").insert({
+    game_id: gameId,
+    physical_table_id: physicalTableId,
+    message: `임시 게임 종료 (테이블 ${table?.code ?? ""})`,
+    level: "info",
+  });
+
+  revalidatePath("/admin/tables");
+  revalidatePath(`/admin/tables/${physicalTableId}`);
+  revalidatePath(`/admin/games/${gameId}`);
+  revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/operations");
+  return { success: true, gameId };
 }
 
 export async function toggleClock(gameId: string, isRunning: boolean) {
@@ -202,6 +468,129 @@ export async function assignSeat(
   revalidatePath(`/admin/games/${gameId}`);
 }
 
+export async function assignSeatWithBuyIn(
+  gameId: string,
+  physicalTableId: string,
+  seatNumber: number,
+  memberId: string,
+  amount: number,
+  paymentMethod: PaymentMethod = "cash",
+  memberVisitId?: string | null,
+) {
+  if (!isSupabaseConfigured()) return { error: "데모 모드" };
+
+  const supabase = await createClient();
+  const { data: seat } = await supabase
+    .from("seats")
+    .select("id, member_id")
+    .eq("game_id", gameId)
+    .eq("physical_table_id", physicalTableId)
+    .eq("seat_number", seatNumber)
+    .single();
+
+  if (!seat) return { error: "좌석을 찾을 수 없습니다." };
+  if (seat.member_id) return { error: "이미 착석한 좌석입니다." };
+
+  await assignSeat(gameId, physicalTableId, seatNumber, memberId, memberVisitId);
+
+  const buyInResult = await recordBuyIn(
+    gameId,
+    seat.id,
+    memberId,
+    amount,
+    paymentMethod,
+    memberVisitId,
+  );
+  if ("error" in buyInResult && buyInResult.error) return buyInResult;
+
+  await supabase.from("game_logs").insert({
+    game_id: gameId,
+    message: `바이인 ${amount.toLocaleString()} — 좌석 ${seatNumber}`,
+    level: "info",
+  });
+
+  revalidatePath(`/admin/tables/${physicalTableId}`);
+  revalidatePath(`/admin/games/${gameId}`);
+  return { success: true };
+}
+
+export async function moveSeat(
+  gameId: string,
+  memberId: string,
+  toPhysicalTableId: string,
+  toSeatNumber: number,
+) {
+  if (!isSupabaseConfigured()) return { error: "데모 모드" };
+
+  const supabase = await createClient();
+  const { data: fromSeat } = await supabase
+    .from("seats")
+    .select("*")
+    .eq("game_id", gameId)
+    .eq("member_id", memberId)
+    .maybeSingle();
+
+  if (!fromSeat) return { error: "현재 좌석을 찾을 수 없습니다." };
+
+  const { data: toSeat } = await supabase
+    .from("seats")
+    .select("id, member_id")
+    .eq("game_id", gameId)
+    .eq("physical_table_id", toPhysicalTableId)
+    .eq("seat_number", toSeatNumber)
+    .single();
+
+  if (!toSeat) return { error: "이동할 좌석이 없습니다." };
+  if (toSeat.member_id) return { error: "대상 좌석이 비어 있지 않습니다." };
+
+  await supabase
+    .from("seats")
+    .update({
+      member_id: null,
+      member_visit_id: null,
+      seat_status: "empty",
+    })
+    .eq("id", fromSeat.id);
+
+  await supabase
+    .from("seats")
+    .update({
+      member_id: memberId,
+      member_visit_id: fromSeat.member_visit_id,
+      seat_status: "occupied",
+      chips: fromSeat.chips,
+      rebuy_count: fromSeat.rebuy_count,
+      first_sat_at: fromSeat.first_sat_at,
+      last_rebuy_at: fromSeat.last_rebuy_at,
+    })
+    .eq("id", toSeat.id);
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  await supabase.from("seat_moves").insert({
+    game_id: gameId,
+    member_id: memberId,
+    from_physical_table_id: fromSeat.physical_table_id,
+    from_seat_number: fromSeat.seat_number,
+    to_physical_table_id: toPhysicalTableId,
+    to_seat_number: toSeatNumber,
+    moved_by: user?.id ?? null,
+  });
+
+  await supabase.from("game_logs").insert({
+    game_id: gameId,
+    message: `좌석 이동 S${fromSeat.seat_number} → S${toSeatNumber}`,
+    level: "info",
+  });
+
+  revalidatePath(`/admin/tables/${fromSeat.physical_table_id}`);
+  revalidatePath(`/admin/tables/${toPhysicalTableId}`);
+  revalidatePath(`/admin/games/${gameId}`);
+  return { success: true };
+}
+
 export async function sitOutPlayer(memberId: string, gameId: string) {
   if (!isSupabaseConfigured()) return;
 
@@ -227,54 +616,137 @@ export async function manualRebuy(
   gameId: string,
   seatId: string,
   memberId: string,
+  amount?: number,
+  paymentMethod: PaymentMethod = "cash",
 ) {
   if (!isSupabaseConfigured()) return;
 
   const supabase = await createClient();
-  const { data: seat } = await supabase
-    .from("seats")
-    .select("rebuy_count")
-    .eq("id", seatId)
-    .single();
+  let rebuyAmount = amount;
+  if (rebuyAmount == null) {
+    const { data: game } = await supabase
+      .from("games")
+      .select("preset_id, game_presets(buy_in)")
+      .eq("id", gameId)
+      .single();
+    const preset = game?.game_presets as { buy_in?: number } | null;
+    rebuyAmount = preset?.buy_in ?? 0;
+  }
 
-  await supabase
-    .from("seats")
-    .update({ rebuy_count: (seat?.rebuy_count ?? 0) + 1 })
-    .eq("id", seatId);
+  if (rebuyAmount > 0) {
+    await recordRebuy(gameId, seatId, memberId, rebuyAmount, paymentMethod);
+  } else {
+    const { data: seat } = await supabase
+      .from("seats")
+      .select("rebuy_count")
+      .eq("id", seatId)
+      .single();
 
-  const { data: game } = await supabase
-    .from("games")
-    .select("rebuy_count")
-    .eq("id", gameId)
-    .single();
+    await supabase
+      .from("seats")
+      .update({
+        rebuy_count: (seat?.rebuy_count ?? 0) + 1,
+        last_rebuy_at: new Date().toISOString(),
+      })
+      .eq("id", seatId);
 
-  await supabase
-    .from("games")
-    .update({ rebuy_count: (game?.rebuy_count ?? 0) + 1 })
-    .eq("id", gameId);
+    const { data: game } = await supabase
+      .from("games")
+      .select("rebuy_count")
+      .eq("id", gameId)
+      .single();
 
-  await supabase.from("game_logs").insert({
-    game_id: gameId,
-    message: `수동 리바인 (member ${memberId})`,
-    level: "info",
-  });
+    await supabase
+      .from("games")
+      .update({ rebuy_count: (game?.rebuy_count ?? 0) + 1 })
+      .eq("id", gameId);
+
+    await supabase.from("game_logs").insert({
+      game_id: gameId,
+      message: `수동 리바인 (member ${memberId})`,
+      level: "info",
+    });
+  }
 
   revalidatePath(`/admin/games/${gameId}`);
 }
 
-export async function addVisitor(nickname: string) {
+export async function advanceBlindLevel(gameId: string) {
   if (!isSupabaseConfigured()) return { error: "데모 모드" };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("members").insert({
-    nickname,
-    floor_status: "visitor",
-    venue_id: "00000000-0000-4000-8000-000000000001",
+  const { data: game } = await supabase
+    .from("games")
+    .select("preset_id, game_presets(blind_structure)")
+    .eq("id", gameId)
+    .single();
+
+  const { data: clock } = await supabase
+    .from("game_clocks")
+    .select("*")
+    .eq("game_id", gameId)
+    .single();
+
+  if (!clock) return { error: "타이머 없음" };
+
+  const levels = getPlayLevels(
+    ((game?.game_presets as { blind_structure?: BlindStructureRow[] } | null)
+      ?.blind_structure ?? []) as BlindStructureRow[],
+  );
+
+  const nextLevelNum = clock.level + 1;
+  const next = levels.find((l) => l.level === nextLevelNum);
+
+  if (!next) {
+    return { error: "마지막 레벨입니다." };
+  }
+
+  await supabase
+    .from("game_clocks")
+    .update({
+      level: next.level,
+      remaining_seconds: next.minutes * 60,
+      blind_small: next.small,
+      blind_big: next.big,
+      ante: next.ante ?? 0,
+      is_running: true,
+      version: (clock.version ?? 1) + 1,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("game_id", gameId);
+
+  await supabase.from("game_logs").insert({
+    game_id: gameId,
+    message: `Level ${next.level} — ${next.small}/${next.big}`,
+    level: "info",
   });
 
-  if (error) return { error: error.message };
-  revalidatePath("/admin/guests");
-  return { success: true };
+  revalidatePath(`/admin/games/${gameId}`);
+  revalidatePath("/admin/operations");
+  return { success: true, level: next.level };
+}
+
+export async function syncClockRemaining(gameId: string, remainingSeconds: number) {
+  if (!isSupabaseConfigured()) return;
+
+  const supabase = await createClient();
+  await supabase
+    .from("game_clocks")
+    .update({
+      remaining_seconds: Math.max(0, remainingSeconds),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("game_id", gameId);
+}
+
+export async function addVisitor(nickname: string) {
+  const slug = nickname.trim().toLowerCase().replace(/\s+/g, "_") || "guest";
+  const { createMember } = await import("@/lib/actions/members");
+  return createMember({
+    loginId: `${slug}_${Date.now().toString(36)}`,
+    password: "0000",
+    nickname: nickname.trim(),
+  });
 }
 
 export async function approveRequest(requestId: string) {
@@ -289,9 +761,13 @@ export async function approveRequest(requestId: string) {
 
   if (!req) return;
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   await supabase
     .from("approval_requests")
-    .update({ status: "approved" })
+    .update({ status: "approved", approved_by: user?.id ?? null })
     .eq("id", requestId);
 
   if (req.request_type === "seat_reservation" && req.game_id && req.seat_number && req.physical_table_id) {
@@ -301,9 +777,47 @@ export async function approveRequest(requestId: string) {
       req.seat_number,
       req.member_id,
     );
-  } else {
+  } else if (
+    (req.request_type === "buy_in_request" || req.request_type === "buy_in") &&
+    req.game_id
+  ) {
+    const payload = (req.payload ?? {}) as { member_visit_id?: string; amount?: number };
+    const { data: game } = await supabase
+      .from("games")
+      .select("preset_id, game_presets(buy_in)")
+      .eq("id", req.game_id)
+      .single();
+    const buyIn =
+      payload.amount ??
+      (game?.game_presets as { buy_in?: number } | null)?.buy_in ??
+      0;
+
+    const { data: emptySeat } = await supabase
+      .from("seats")
+      .select("id, physical_table_id, seat_number")
+      .eq("game_id", req.game_id)
+      .is("member_id", null)
+      .order("seat_number")
+      .limit(1)
+      .maybeSingle();
+
+    if (emptySeat) {
+      await assignSeatWithBuyIn(
+        req.game_id,
+        emptySeat.physical_table_id,
+        emptySeat.seat_number,
+        req.member_id,
+        buyIn,
+        "cash",
+        payload.member_visit_id,
+      );
+    }
+  } else if (req.request_type === "participation") {
     await supabase.from("members").update({ floor_status: "in_game" }).eq("id", req.member_id);
+  } else if (req.request_type === "reservation") {
+    await supabase.from("members").update({ floor_status: "reserved" }).eq("id", req.member_id);
   }
 
   revalidatePath("/admin/guests");
+  revalidatePath("/guest");
 }

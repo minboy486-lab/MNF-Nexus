@@ -12,6 +12,7 @@ import {
   demoTables,
 } from "@/lib/demo/data";
 import type {
+  GameClock,
   GameWithRelations,
   Member,
   MemberVisitWithMember,
@@ -43,8 +44,9 @@ export async function getGamePresets() {
   if (!isSupabaseConfigured()) return demoPresets;
 
   const supabase = await createClient();
-  const { data } = await supabase.from("game_presets").select("*").order("name");
-  return data?.length ? data : demoPresets;
+  const { data, error } = await supabase.from("game_presets").select("*").order("name");
+  if (error) return [];
+  return data ?? [];
 }
 
 export async function getGames() {
@@ -89,6 +91,18 @@ export async function getGame(gameId: string): Promise<GameWithRelations | null>
   } as GameWithRelations;
 }
 
+export async function getGameClock(gameId: string): Promise<GameClock | null> {
+  if (!isSupabaseConfigured()) return demoClocks[gameId] ?? null;
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("game_clocks")
+    .select("*")
+    .eq("game_id", gameId)
+    .maybeSingle();
+  return (data as GameClock | null) ?? null;
+}
+
 export async function getSeatsForGame(gameId: string, physicalTableId?: string) {
   if (!isSupabaseConfigured()) {
     return demoSeats.filter(
@@ -108,16 +122,63 @@ export async function getSeatsForGame(gameId: string, physicalTableId?: string) 
   return (data ?? []) as Seat[];
 }
 
-export async function getMembers() {
-  if (!isSupabaseConfigured()) return demoPlayers;
+export async function getMembers(search?: string) {
+  if (!isSupabaseConfigured()) {
+    const q = search?.trim().toLowerCase();
+    if (!q) return demoPlayers;
+    return demoPlayers.filter(
+      (m) =>
+        m.nickname.toLowerCase().includes(q) ||
+        m.login_id?.toLowerCase().includes(q) ||
+        m.display_name?.toLowerCase().includes(q),
+    );
+  }
 
   const supabase = await createClient();
-  const { data } = await supabase
+  let query = supabase
     .from("members")
     .select("*")
     .eq("venue_id", DEFAULT_VENUE_ID)
-    .order("created_at", { ascending: false });
-  return data?.length ? (data as Member[]) : demoPlayers;
+    .order("nickname", { ascending: true });
+
+  const { data } = await query;
+  let list = (data ?? []) as Member[];
+
+  const q = search?.trim().toLowerCase();
+  if (q) {
+    list = list.filter(
+      (m) =>
+        m.nickname.toLowerCase().includes(q) ||
+        (m.login_id?.toLowerCase().includes(q) ?? false) ||
+        (m.display_name?.toLowerCase().includes(q) ?? false) ||
+        (m.phone?.includes(q) ?? false),
+    );
+  }
+
+  return list.length ? list : [];
+}
+
+/** 손님별 누적 방문(체크인) 횟수 */
+export async function getMemberVisitCounts(): Promise<Record<string, number>> {
+  if (!isSupabaseConfigured()) return {};
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("member_visits")
+    .select("member_id")
+    .eq("venue_id", DEFAULT_VENUE_ID);
+
+  const counts: Record<string, number> = {};
+  for (const row of data ?? []) {
+    const id = row.member_id as string;
+    counts[id] = (counts[id] ?? 0) + 1;
+  }
+  return counts;
+}
+
+export async function getActiveVisitMemberIds(): Promise<Set<string>> {
+  const visits = await getActiveMemberVisits();
+  return new Set(visits.map((v) => v.member_id));
 }
 
 /** @deprecated */

@@ -1,6 +1,7 @@
 -- MNF platform: venues, sessions, members, visits, ledger, blind maps
+-- 재실행 가능 (IF NOT EXISTS, 정책/realtime 중복 무시)
 
-create table public.venues (
+create table if not exists public.venues (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   timezone text not null default 'Asia/Seoul',
@@ -8,7 +9,7 @@ create table public.venues (
   created_at timestamptz not null default now()
 );
 
-create table public.venue_sessions (
+create table if not exists public.venue_sessions (
   id uuid primary key default gen_random_uuid(),
   venue_id uuid not null references public.venues (id) on delete cascade,
   status text not null default 'open' check (status in ('open', 'closed')),
@@ -19,11 +20,11 @@ create table public.venue_sessions (
   created_at timestamptz not null default now()
 );
 
-create index venue_sessions_venue_open_idx
+create index if not exists venue_sessions_venue_open_idx
   on public.venue_sessions (venue_id, status)
   where status = 'open';
 
-create table public.blind_structures (
+create table if not exists public.blind_structures (
   id uuid primary key default gen_random_uuid(),
   venue_id uuid references public.venues (id) on delete cascade,
   template_name text not null,
@@ -31,7 +32,7 @@ create table public.blind_structures (
   created_at timestamptz not null default now()
 );
 
-create table public.blind_levels (
+create table if not exists public.blind_levels (
   id uuid primary key default gen_random_uuid(),
   structure_id uuid not null references public.blind_structures (id) on delete cascade,
   level_number integer not null,
@@ -55,7 +56,12 @@ alter table public.physical_tables
 alter table public.physical_tables
   add column if not exists sort_order smallint not null default 0;
 
-alter table public.venue_players rename to members;
+do $$
+begin
+  if to_regclass('public.members') is null and to_regclass('public.venue_players') is not null then
+    alter table public.venue_players rename to members;
+  end if;
+end $$;
 
 alter table public.members
   add column if not exists venue_id uuid references public.venues (id) on delete cascade;
@@ -76,7 +82,7 @@ create unique index if not exists members_venue_phone_uidx
   on public.members (venue_id, phone)
   where phone is not null;
 
-create table public.member_visits (
+create table if not exists public.member_visits (
   id uuid primary key default gen_random_uuid(),
   venue_id uuid not null references public.venues (id) on delete cascade,
   venue_session_id uuid not null references public.venue_sessions (id) on delete cascade,
@@ -87,7 +93,7 @@ create table public.member_visits (
   created_at timestamptz not null default now()
 );
 
-create index member_visits_active_idx
+create index if not exists member_visits_active_idx
   on public.member_visits (venue_session_id, member_id)
   where checked_out_at is null and status = 'on_floor';
 
@@ -125,7 +131,15 @@ create unique index if not exists games_session_daily_number_uidx
 alter table public.game_clocks
   add column if not exists version integer not null default 1;
 
-alter table public.seats rename column venue_player_id to member_id;
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'seats' and column_name = 'venue_player_id'
+  ) then
+    alter table public.seats rename column venue_player_id to member_id;
+  end if;
+end $$;
 
 alter table public.seats
   add column if not exists member_visit_id uuid references public.member_visits (id) on delete set null;
@@ -137,9 +151,17 @@ alter table public.seats
 alter table public.seats
   add column if not exists first_sat_at timestamptz;
 
-alter table public.approval_requests rename column venue_player_id to member_id;
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'approval_requests' and column_name = 'venue_player_id'
+  ) then
+    alter table public.approval_requests rename column venue_player_id to member_id;
+  end if;
+end $$;
 
-create table public.money_transactions (
+create table if not exists public.money_transactions (
   id uuid primary key default gen_random_uuid(),
   venue_id uuid not null references public.venues (id) on delete cascade,
   venue_session_id uuid references public.venue_sessions (id) on delete set null,
@@ -174,10 +196,10 @@ create table public.money_transactions (
   created_at timestamptz not null default now()
 );
 
-create index money_transactions_session_idx
+create index if not exists money_transactions_session_idx
   on public.money_transactions (venue_session_id, occurred_at);
 
-create table public.seat_moves (
+create table if not exists public.seat_moves (
   id uuid primary key default gen_random_uuid(),
   game_id uuid not null references public.games (id) on delete cascade,
   member_id uuid not null references public.members (id) on delete cascade,
@@ -189,7 +211,7 @@ create table public.seat_moves (
   moved_by uuid references public.profiles (id) on delete set null
 );
 
-create table public.staff (
+create table if not exists public.staff (
   id uuid primary key default gen_random_uuid(),
   venue_id uuid not null references public.venues (id) on delete cascade,
   profile_id uuid references public.profiles (id) on delete set null,
@@ -201,7 +223,7 @@ create table public.staff (
   created_at timestamptz not null default now()
 );
 
-create table public.staff_shifts (
+create table if not exists public.staff_shifts (
   id uuid primary key default gen_random_uuid(),
   staff_id uuid not null references public.staff (id) on delete cascade,
   venue_session_id uuid references public.venue_sessions (id) on delete set null,
@@ -210,7 +232,7 @@ create table public.staff_shifts (
   created_at timestamptz not null default now()
 );
 
-create table public.staff_advances (
+create table if not exists public.staff_advances (
   id uuid primary key default gen_random_uuid(),
   staff_id uuid not null references public.staff (id) on delete cascade,
   venue_id uuid not null references public.venues (id) on delete cascade,
@@ -221,7 +243,7 @@ create table public.staff_advances (
   created_at timestamptz not null default now()
 );
 
-create table public.expense_categories (
+create table if not exists public.expense_categories (
   id uuid primary key default gen_random_uuid(),
   venue_id uuid references public.venues (id) on delete cascade,
   code text not null,
@@ -229,7 +251,7 @@ create table public.expense_categories (
   unique (venue_id, code)
 );
 
-create table public.expenses (
+create table if not exists public.expenses (
   id uuid primary key default gen_random_uuid(),
   venue_id uuid not null references public.venues (id) on delete cascade,
   venue_session_id uuid references public.venue_sessions (id) on delete set null,
@@ -241,7 +263,7 @@ create table public.expenses (
   created_at timestamptz not null default now()
 );
 
-create table public.daily_closeouts (
+create table if not exists public.daily_closeouts (
   id uuid primary key default gen_random_uuid(),
   venue_id uuid not null references public.venues (id) on delete cascade,
   venue_session_id uuid not null unique references public.venue_sessions (id) on delete cascade,
@@ -260,9 +282,18 @@ create table public.daily_closeouts (
   created_at timestamptz not null default now()
 );
 
-alter table public.money_transactions
-  add constraint money_transactions_closeout_fkey
-  foreign key (daily_closeout_id) references public.daily_closeouts (id) on delete set null;
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'money_transactions_closeout_fkey'
+      and conrelid = 'public.money_transactions'::regclass
+  ) then
+    alter table public.money_transactions
+      add constraint money_transactions_closeout_fkey
+      foreign key (daily_closeout_id) references public.daily_closeouts (id) on delete set null;
+  end if;
+end $$;
 
 alter table public.physical_tables drop constraint if exists physical_tables_code_key;
 
@@ -286,49 +317,97 @@ alter table public.daily_closeouts enable row level security;
 drop policy if exists venue_players_select on public.members;
 drop policy if exists venue_players_write on public.members;
 
+drop policy if exists members_select on public.members;
 create policy members_select on public.members for select to authenticated using (true);
+drop policy if exists members_write on public.members;
 create policy members_write on public.members for all using (public.is_staff_or_admin());
 
+drop policy if exists venues_select on public.venues;
 create policy venues_select on public.venues for select to authenticated using (true);
+drop policy if exists venues_write on public.venues;
 create policy venues_write on public.venues for all using (public.is_admin());
 
+drop policy if exists venue_sessions_select on public.venue_sessions;
 create policy venue_sessions_select on public.venue_sessions for select to authenticated using (true);
+drop policy if exists venue_sessions_write on public.venue_sessions;
 create policy venue_sessions_write on public.venue_sessions for all using (public.is_staff_or_admin());
 
+drop policy if exists blind_structures_select on public.blind_structures;
 create policy blind_structures_select on public.blind_structures for select to authenticated using (true);
+drop policy if exists blind_structures_write on public.blind_structures;
 create policy blind_structures_write on public.blind_structures for all using (public.is_admin());
 
+drop policy if exists blind_levels_select on public.blind_levels;
 create policy blind_levels_select on public.blind_levels for select to authenticated using (true);
+drop policy if exists blind_levels_write on public.blind_levels;
 create policy blind_levels_write on public.blind_levels for all using (public.is_admin());
 
+drop policy if exists member_visits_select on public.member_visits;
 create policy member_visits_select on public.member_visits for select to authenticated using (true);
+drop policy if exists member_visits_write on public.member_visits;
 create policy member_visits_write on public.member_visits for all using (public.is_staff_or_admin());
 
+drop policy if exists money_transactions_select on public.money_transactions;
 create policy money_transactions_select on public.money_transactions for select to authenticated using (true);
+drop policy if exists money_transactions_write on public.money_transactions;
 create policy money_transactions_write on public.money_transactions for all using (public.is_staff_or_admin());
 
+drop policy if exists seat_moves_select on public.seat_moves;
 create policy seat_moves_select on public.seat_moves for select to authenticated using (true);
+drop policy if exists seat_moves_insert on public.seat_moves;
 create policy seat_moves_insert on public.seat_moves for insert with check (public.is_staff_or_admin());
 
+drop policy if exists staff_select on public.staff;
 create policy staff_select on public.staff for select to authenticated using (true);
+drop policy if exists staff_write on public.staff;
 create policy staff_write on public.staff for all using (public.is_admin());
 
+drop policy if exists staff_shifts_select on public.staff_shifts;
 create policy staff_shifts_select on public.staff_shifts for select to authenticated using (true);
+drop policy if exists staff_shifts_write on public.staff_shifts;
 create policy staff_shifts_write on public.staff_shifts for all using (public.is_staff_or_admin());
 
+drop policy if exists staff_advances_select on public.staff_advances;
 create policy staff_advances_select on public.staff_advances for select to authenticated using (true);
+drop policy if exists staff_advances_write on public.staff_advances;
 create policy staff_advances_write on public.staff_advances for all using (public.is_admin());
 
+drop policy if exists expense_categories_select on public.expense_categories;
 create policy expense_categories_select on public.expense_categories for select to authenticated using (true);
+drop policy if exists expense_categories_write on public.expense_categories;
 create policy expense_categories_write on public.expense_categories for all using (public.is_admin());
 
+drop policy if exists expenses_select on public.expenses;
 create policy expenses_select on public.expenses for select to authenticated using (true);
+drop policy if exists expenses_write on public.expenses;
 create policy expenses_write on public.expenses for all using (public.is_staff_or_admin());
 
+drop policy if exists daily_closeouts_select on public.daily_closeouts;
 create policy daily_closeouts_select on public.daily_closeouts for select to authenticated using (true);
+drop policy if exists daily_closeouts_write on public.daily_closeouts;
 create policy daily_closeouts_write on public.daily_closeouts for all using (public.is_admin());
 
-alter publication supabase_realtime add table public.member_visits;
-alter publication supabase_realtime add table public.money_transactions;
-alter publication supabase_realtime add table public.members;
-alter publication supabase_realtime add table public.venue_sessions;
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'public.member_visits',
+    'public.money_transactions',
+    'public.members',
+    'public.venue_sessions'
+  ]
+  loop
+    begin
+      execute format('alter publication supabase_realtime add table %s', t);
+    exception
+      when duplicate_object then null;
+      when others then
+        if sqlerrm like '%already member of publication%' then
+          null;
+        else
+          raise;
+        end if;
+    end;
+  end loop;
+end $$;

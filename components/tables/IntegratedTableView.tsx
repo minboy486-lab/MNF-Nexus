@@ -1,84 +1,105 @@
 "use client";
 
-import Link from "next/link";
-import { PokerTableOval } from "@/components/poker/PokerTableOval";
+import { useState } from "react";
+import { useAdminNav } from "@/components/admin/AdminNavContext";
+import { StartGameModal } from "@/components/games/StartGameModal";
+import { IntegratedTableCard } from "@/components/tables/IntegratedTableCard";
 import type { IntegratedTableItem } from "@/lib/tables/integrated-table";
+import type { GamePreset, MemberVisitWithMember, PhysicalTable } from "@/lib/types";
+
+const FLOOR_ORDER = ["D", "B", "C"] as const;
 
 type Props = {
   tables: IntegratedTableItem[];
+  physicalTables: PhysicalTable[];
+  presets: GamePreset[];
+  activeVisits: MemberVisitWithMember[];
+  defaultBuyIn: number;
 };
 
-export function IntegratedTableView({ tables }: Props) {
+export function IntegratedTableView({
+  tables,
+  physicalTables,
+  presets,
+  activeVisits,
+  defaultBuyIn,
+}: Props) {
+  const { openMobileNav } = useAdminNav();
+  const defaultPresetId = presets[0]?.id;
+  const [startGameTableId, setStartGameTableId] = useState<string | null>(null);
+
+  const ordered = [...tables].sort(
+    (a, b) => FLOOR_ORDER.indexOf(a.code as (typeof FLOOR_ORDER)[number]) - FLOOR_ORDER.indexOf(b.code as (typeof FLOOR_ORDER)[number]),
+  );
+
   return (
-    <div className="integrated-table-view admin-main flex-1 overflow-y-auto p-6 md:p-8">
-      <div className="flex flex-wrap justify-between items-center gap-4 mb-8 border-b border-white/5 pb-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">
+    <div className="integrated-table-view flex-1 flex flex-col min-h-0 overflow-hidden px-2 py-3 md:px-3 md:py-4 w-full">
+      <div className="flex flex-wrap justify-between items-center gap-2 mb-2 border-b border-white/5 pb-2 shrink-0">
+        <div className="flex items-start gap-2 min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={openMobileNav}
+            className="md:hidden shrink-0 p-2 rounded-lg border border-white/10 bg-surface-container-low/60 hover:bg-white/10"
+            aria-label="메뉴 열기"
+          >
+            <span className="material-symbols-outlined text-2xl">menu</span>
+          </button>
+          <div className="min-w-0">
+          <h1 className="text-lg md:text-xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">
             통합 테이블 관제 뷰
           </h1>
-          <p className="text-xs text-on-surface-variant mt-1">
-            실제 매장 동선 배치 (주요 테이블: D · B · C 중심)
+          <p className="text-[10px] text-on-surface-variant">
+            B(상단) · D/C(하단) — 좌석 탭 시 방문 중 손님 배정
           </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10 backdrop-blur-md">
+        <div className="flex items-center gap-2 bg-white/5 px-2.5 py-1 rounded-full border border-white/10">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-primary-container" />
           </span>
-          <span className="text-xs font-mono tracking-wider text-primary">LIVE MONITOR</span>
+          <span className="text-[10px] font-mono tracking-wider text-primary">LIVE</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-12 grid-rows-6 gap-4 md:gap-6 h-[calc(100vh-200px)] min-h-[560px] max-h-[900px]">
-        {tables.map((table) => (
-          <Link
-            key={table.tableId}
-            href={`/admin/tables/${table.tableId}`}
-            className={`${table.gridClass} relative glass-panel rounded-3xl p-4 md:p-5 flex flex-col justify-between transition-all duration-300 hover:scale-[1.01] ${
-              table.isRunning ? "card-running" : ""
-            }`}
-          >
-            <div className="flex justify-between items-start z-10 gap-2">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 shrink-0 rounded-full bg-gradient-to-tr from-primary to-secondary flex items-center justify-center font-bold text-sm text-on-primary">
-                  {table.code}
-                </div>
-                <div className="min-w-0">
-                  <h3 className="font-bold text-lg tracking-wide truncate">{table.name}</h3>
-                  <span
-                    className={`text-[10px] font-mono tracking-wider ${
-                      table.isRunning ? "text-primary" : "text-on-surface-variant"
-                    }`}
-                  >
-                    • {table.statusLabel}
-                  </span>
-                </div>
-              </div>
-              <div className="text-right shrink-0">
-                <span className="text-[10px] text-on-surface-variant block">칩 합계</span>
-                <span className="stat-display text-xl text-primary text-glow-primary">
-                  {table.totalChips}
-                </span>
-                <span className="text-[10px] text-on-surface-variant block stat-display text-sm">
-                  {table.occupied}/11명
-                </span>
-              </div>
-            </div>
-
-            <div className="flex-1 flex items-center justify-center my-3 min-h-0">
-              {table.isRunning ? (
-                <div className="w-full max-w-[280px]">
-                  <PokerTableOval tableCode={table.code} seats={table.seats} compact />
-                </div>
-              ) : (
-                <p className="text-sm font-semibold text-on-surface-variant/60 tracking-wider">
-                  게임 없음
-                </p>
+      <div className="integrated-table-floor flex-1 min-h-0 w-full">
+        {(() => {
+          const byCode = Object.fromEntries(ordered.map((t) => [t.code, t]));
+          const tableB = byCode.B;
+          const tableD = byCode.D;
+          const tableC = byCode.C;
+          const cardProps = {
+            defaultPresetId,
+            defaultBuyIn,
+            activeVisits,
+            onStartGame: (tableId: string) => setStartGameTableId(tableId),
+          };
+          return (
+            <>
+              {tableB && (
+                <IntegratedTableCard key={tableB.tableId} table={tableB} {...cardProps} />
               )}
-            </div>
-          </Link>
-        ))}
+              <div className="integrated-table-pair">
+                {tableD && (
+                  <IntegratedTableCard key={tableD.tableId} table={tableD} {...cardProps} />
+                )}
+                {tableC && (
+                  <IntegratedTableCard key={tableC.tableId} table={tableC} {...cardProps} />
+                )}
+              </div>
+            </>
+          );
+        })()}
       </div>
+
+      {startGameTableId && (
+        <StartGameModal
+          presets={presets}
+          tables={physicalTables}
+          initialTableId={startGameTableId}
+          onClose={() => setStartGameTableId(null)}
+        />
+      )}
     </div>
   );
 }

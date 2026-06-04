@@ -1,15 +1,15 @@
-import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import { AdminShell } from "@/components/admin/AdminShell";
+import { canManageAccounts } from "@/lib/auth/roles";
+import { getCurrentUserRole } from "@/lib/auth/session";
 
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const viewerRole = await getCurrentUserRole();
+  const showAccountLink = canManageAccounts(viewerRole);
   return (
-    <div className="admin-shell flex min-h-dvh">
-      <div className="bg-mesh" aria-hidden />
-      <AdminSidebar />
-      <div className="admin-main flex-1 flex flex-col min-w-0">{children}</div>
-    </div>
+    <AdminShell showAccountLink={showAccountLink}>{children}</AdminShell>
   );
 }
