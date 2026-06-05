@@ -5,7 +5,7 @@ const GRID_CLASS: Record<string, string> = {
   D: "integrated-slot-d",
   B: "integrated-slot-b",
   C: "integrated-slot-c",
-  A: "hidden",
+  A: "integrated-slot-a",
 };
 
 export type IntegratedTableItem = {
@@ -17,7 +17,12 @@ export type IntegratedTableItem = {
   hasGame: boolean;
   gameId: string | null;
   occupied: number;
+  /** 최초 바인 수 */
   entryCount: number;
+  /** 리바인 수 */
+  rebuyCount: number;
+  /** 총 바인수 = 최초바인 + 리바인 */
+  totalBuyInCount: number;
   survivorCount: number;
   blindLevel: number | null;
   blindSmall: number | null;
@@ -33,6 +38,18 @@ function isRunning(status: string) {
   return status === "running" || status === "registration_closed";
 }
 
+function countSeatedInGame(
+  rows: { game: Game | null; seats: Seat[] }[],
+  gameId: string,
+): number {
+  let total = 0;
+  for (const row of rows) {
+    if (row.game?.id !== gameId) continue;
+    total += row.seats.filter((s) => s.member_id).length;
+  }
+  return total;
+}
+
 export function buildIntegratedTableItems(
   rows: {
     table: { id: string; code: string; label: string };
@@ -43,9 +60,7 @@ export function buildIntegratedTableItems(
   }[],
   presetNameById: Map<string, string> = new Map(),
 ): IntegratedTableItem[] {
-  return rows
-    .filter((r) => r.table.code !== "A")
-    .map((r) => {
+  return rows.map((r) => {
       const live = r.game && isRunning(r.game.status);
       const hasGame = Boolean(r.game);
       const presetName =
@@ -62,7 +77,12 @@ export function buildIntegratedTableItems(
         gameId: r.game?.id ?? null,
         occupied: r.occupied,
         entryCount: r.game?.entry_count ?? 0,
-        survivorCount: r.game?.survivor_count ?? 0,
+        rebuyCount: r.game?.rebuy_count ?? 0,
+        totalBuyInCount:
+          (r.game?.entry_count ?? 0) + (r.game?.rebuy_count ?? 0),
+        survivorCount: r.game?.id
+          ? countSeatedInGame(rows, r.game.id)
+          : 0,
         blindLevel: r.clock?.level ?? (hasGame ? 1 : null),
         blindSmall: r.clock?.blind_small ?? null,
         blindBig: r.clock?.blind_big ?? null,

@@ -7,6 +7,7 @@ import {
   getGameClock,
   getGamePresets,
   getActiveMemberVisits,
+  getSeatedMemberIdsInActiveGames,
 } from "@/lib/data/queries";
 import { COMBINE_PRIORITY } from "@/lib/constants";
 import type { PhysicalTableCode } from "@/lib/constants";
@@ -15,11 +16,12 @@ import type { Seat } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 export default async function TablesPage() {
-  const [tables, games, presets, activeVisits] = await Promise.all([
+  const [tables, games, presets, activeVisits, inGameMemberIds] = await Promise.all([
     getPhysicalTables(),
     getGames(),
     getGamePresets(),
     getActiveMemberVisits(),
+    getSeatedMemberIdsInActiveGames(),
   ]);
   const defaultBuyIn = presets[0]?.buy_in ?? 500000;
   const gameMap = new Map(games.map((g) => [g.id, g]));
@@ -51,6 +53,7 @@ export default async function TablesPage() {
       physicalTables={tables}
       presets={presets}
       activeVisits={activeVisits}
+      inGameMemberIds={inGameMemberIds}
       defaultBuyIn={defaultBuyIn}
     />
   );

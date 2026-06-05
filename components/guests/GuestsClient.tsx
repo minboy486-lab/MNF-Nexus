@@ -3,9 +3,9 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ApprovalRequest, Member, MemberVisitWithMember } from "@/lib/types";
-import { checkInVisit, checkOutVisit } from "@/lib/actions/members";
+import { checkInVisit, checkInVisits, checkOutVisit } from "@/lib/actions/members";
 import { MemberRegisterModal } from "@/components/guests/MemberRegisterForm";
-import { formatChips } from "@/lib/utils/format";
+import { formatMp } from "@/lib/utils/mp";
 import { matchesNicknameSearch } from "@/lib/utils/chosung";
 
 type SortMode = "visits" | "name";
@@ -37,13 +37,21 @@ function MemberRow({
     <button
       type="button"
       onClick={onSelect}
-      className={`${rowBase} flex items-center justify-between gap-1 ${
+      className={`${rowBase} flex items-center gap-2 ${
         selected
           ? "border-primary bg-primary/15 ring-1 ring-primary/40 font-semibold"
           : "border-white/10 bg-surface-container-low/40 hover:border-primary/30 hover:bg-primary/5"
       }`}
     >
-      <span className="truncate">{member.nickname}</span>
+      <span
+        className={`material-symbols-outlined text-base shrink-0 ${
+          selected ? "text-primary" : "text-on-surface-variant/50"
+        }`}
+        aria-hidden
+      >
+        {selected ? "check_box" : "check_box_outline_blank"}
+      </span>
+      <span className="truncate flex-1 min-w-0">{member.nickname}</span>
       {visitCount > 0 && (
         <span className="text-[10px] tabular-nums text-on-surface-variant/70 shrink-0">
           {visitCount}
@@ -76,7 +84,7 @@ function VisitRow({
       <span className="truncate">{m?.nickname}</span>
       {m && m.credit_balance < 0 && (
         <span className="text-error text-xs font-bold tabular-nums shrink-0">
-          {formatChips(m.credit_balance)}
+          {formatMp(m.credit_balance)}
         </span>
       )}
     </button>
@@ -143,9 +151,11 @@ export function GuestsClient({
   const [sortMode, setSortMode] = useState<SortMode>("visits");
   const [error, setError] = useState<string | null>(null);
   const [showRegister, setShowRegister] = useState(false);
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
+
+  const selectedMemberCount = selectedMemberIds.size;
 
   const visitingSet = useMemo(() => new Set(visitingMemberIds), [visitingMemberIds]);
 
@@ -161,17 +171,38 @@ export function GuestsClient({
 
   const poolCount = members.length - visitingSet.size;
 
+  function toggleMemberSelection(memberId: string) {
+    setSelectedMemberIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(memberId)) next.delete(memberId);
+      else next.add(memberId);
+      return next;
+    });
+    setSelectedVisitId(null);
+  }
+
   async function handleCheckIn() {
-    if (!selectedMemberId) return;
+    if (selectedMemberCount === 0) return;
     setMoving(true);
     setError(null);
-    const res = await checkInVisit(selectedMemberId);
+    const res = await checkInVisits([...selectedMemberIds]);
     setMoving(false);
-    if (res && "error" in res && res.error) {
+    if (res && "error" in res && res.error && !("succeeded" in res)) {
       setError(res.error);
       return;
     }
-    setSelectedMemberId(null);
+    if (res && "succeeded" in res) {
+      const failed = res.failed ?? [];
+      if (failed.length > 0) {
+        const okCount = res.succeeded?.length ?? 0;
+        setError(
+          okCount > 0
+            ? `${okCount}명 방문 중 · ${failed.length}명 실패 (${failed[0].error})`
+            : failed[0].error,
+        );
+      }
+    }
+    setSelectedMemberIds(new Set());
     router.refresh();
   }
 
@@ -254,9 +285,11 @@ export function GuestsClient({
           accentClass="bg-secondary"
           count={poolCount}
           hint={
-            sortMode === "visits"
-              ? "방문 많은 순 · 선택 후 › 방문 중"
-              : "이름순 · 선택 후 › 방문 중"
+            selectedMemberCount > 0
+              ? `${selectedMemberCount}명 선택 · › 방문 중`
+              : sortMode === "visits"
+                ? "복수 선택 가능 · 방문 많은 순 · › 방문 중"
+                : "복수 선택 가능 · 이름순 · › 방문 중"
           }
           empty={
             pool.length === 0 ? (
@@ -272,11 +305,8 @@ export function GuestsClient({
                 <MemberRow
                   member={m}
                   visitCount={visitCounts[m.id] ?? 0}
-                  selected={selectedMemberId === m.id}
-                  onSelect={() => {
-                    setSelectedMemberId(m.id);
-                    setSelectedVisitId(null);
-                  }}
+                  selected={selectedMemberIds.has(m.id)}
+                  onSelect={() => toggleMemberSelection(m.id)}
                 />
               </li>
             ))}
@@ -286,13 +316,18 @@ export function GuestsClient({
         <div className="flex flex-col items-center justify-center gap-2 shrink-0 self-stretch py-4">
           <button
             type="button"
-            disabled={!selectedMemberId || moving}
+            disabled={selectedMemberCount === 0 || moving}
             onClick={() => handleCheckIn()}
-            title="방문 중으로"
+            title={selectedMemberCount > 1 ? `${selectedMemberCount}명 방문 중으로` : "방문 중으로"}
             aria-label="방문 중으로 이동"
-            className="flex items-center justify-center w-11 h-11 rounded-full border border-primary/50 bg-primary/20 text-primary hover:bg-primary/35 disabled:opacity-30 disabled:pointer-events-none transition-colors shrink-0"
+            className="relative flex items-center justify-center w-11 h-11 rounded-full border border-primary/50 bg-primary/20 text-primary hover:bg-primary/35 disabled:opacity-30 disabled:pointer-events-none transition-colors shrink-0"
           >
             <span className="material-symbols-outlined text-[26px]">chevron_right</span>
+            {selectedMemberCount > 1 && (
+              <span className="absolute -top-1 -right-1 min-w-[1.125rem] h-[1.125rem] px-0.5 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center">
+                {selectedMemberCount}
+              </span>
+            )}
           </button>
           <button
             type="button"
@@ -327,7 +362,7 @@ export function GuestsClient({
                   selected={selectedVisitId === v.id}
                   onSelect={() => {
                     setSelectedVisitId(v.id);
-                    setSelectedMemberId(null);
+                    setSelectedMemberIds(new Set());
                   }}
                 />
               </li>

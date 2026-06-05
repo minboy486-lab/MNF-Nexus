@@ -166,8 +166,8 @@ export const demoPlayers: Member[] = [
 ];
 
 export const demoSeats: Seat[] = [
-  { id: "s-1", game_id: "game-1", physical_table_id: "tbl-b", seat_number: 1, member_id: "vp-1", member_visit_id: null, seat_status: "occupied", chips: 150000, rebuy_count: 0, first_sat_at: now, created_at: now },
-  { id: "s-2", game_id: "game-1", physical_table_id: "tbl-b", seat_number: 2, member_id: "vp-2", member_visit_id: null, seat_status: "occupied", chips: 80000, rebuy_count: 1, first_sat_at: now, created_at: now },
+  { id: "s-1", game_id: "game-1", physical_table_id: "tbl-b", seat_number: 1, member_id: "vp-1", member_visit_id: null, seat_status: "occupied", chips: 150000, rebuy_count: 0, buy_in_count: 1, first_payment_method: "credit", last_payment_method: "credit", first_sat_at: now, created_at: now },
+  { id: "s-2", game_id: "game-1", physical_table_id: "tbl-b", seat_number: 2, member_id: "vp-2", member_visit_id: null, seat_status: "occupied", chips: 80000, rebuy_count: 1, buy_in_count: 2, first_payment_method: "cash", last_payment_method: "cash", first_sat_at: now, created_at: now },
 ];
 
 export const demoAssignments: GameTableAssignment[] = [

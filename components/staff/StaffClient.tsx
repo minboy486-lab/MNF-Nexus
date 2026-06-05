@@ -1,5 +1,7 @@
 "use client";
 
+import { formatMp } from "@/lib/utils/mp";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -81,8 +83,8 @@ export function StaffClient({ staff, payrollLines, configured }: Props) {
               <div>
                 <p className="font-bold">{s.name}</p>
                 <p className="text-xs text-on-surface-variant">
-                  {s.role} · 시급 {s.hourly_wage.toLocaleString()}원
-                  {line && ` · ${line.hours}h · 실지급 ${line.net.toLocaleString()}`}
+                  {s.role} · 시급 {formatMp(s.hourly_wage)}
+                  {line && ` · ${line.hours}h · 실지급 ${formatMp(line.net)}`}
                 </p>
               </div>
               <div className="flex gap-2">

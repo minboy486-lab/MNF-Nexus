@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { finalizeDailyCloseout } from "@/lib/actions/settlement";
 import type { SessionLedgerTotals } from "@/lib/actions/settlement";
 import type { VenueSession } from "@/lib/types";
+import { formatMp } from "@/lib/utils/mp";
 
 type GameLine = {
   gameId: string;
@@ -67,7 +68,7 @@ export function DailySettlementClient({
     setPending(false);
     if (result?.error) alert(result.error);
     else {
-      alert(ok ? "대차 OK (0)" : `대차 차이: ${totals?.balanceDelta?.toLocaleString()}`);
+      alert(ok ? "대차 OK (0)" : `대차 차이: ${formatMp(totals?.balanceDelta ?? 0)}`);
       router.refresh();
     }
   }
@@ -81,27 +82,27 @@ export function DailySettlementClient({
         </p>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>바인+리바인</div>
-          <div className="text-right font-mono">{buyInTotal.toLocaleString()}</div>
+          <div className="text-right font-mono">{formatMp(buyInTotal)}</div>
           <div>프라이즈</div>
-          <div className="text-right font-mono">{(totals?.totalPrize ?? 0).toLocaleString()}</div>
+          <div className="text-right font-mono">{formatMp(totals?.totalPrize ?? 0)}</div>
           <div>현금</div>
-          <div className="text-right font-mono">{(totals?.totalCash ?? 0).toLocaleString()}</div>
+          <div className="text-right font-mono">{formatMp(totals?.totalCash ?? 0)}</div>
           <div>카드</div>
-          <div className="text-right font-mono">{(totals?.totalCard ?? 0).toLocaleString()}</div>
+          <div className="text-right font-mono">{formatMp(totals?.totalCard ?? 0)}</div>
           <div>계좌</div>
-          <div className="text-right font-mono">{(totals?.totalTransfer ?? 0).toLocaleString()}</div>
+          <div className="text-right font-mono">{formatMp(totals?.totalTransfer ?? 0)}</div>
           <div>포인트 순변동</div>
-          <div className="text-right font-mono">{(totals?.totalPointNet ?? 0).toLocaleString()}</div>
-          <div>외상 회수 / 신규</div>
+          <div className="text-right font-mono">{formatMp(totals?.totalPointNet ?? 0)}</div>
+          <div>후불 회수 / 신규</div>
           <div className="text-right font-mono">
-            {(totals?.totalCreditCollected ?? 0).toLocaleString()} / −
-            {(totals?.totalCreditNew ?? 0).toLocaleString()}
+            {formatMp(totals?.totalCreditCollected ?? 0, { suffix: false })} / −
+            {formatMp(totals?.totalCreditNew ?? 0, { suffix: false })} MP
           </div>
         </div>
         <p
           className={`mt-6 text-2xl font-bold stat-display ${ok ? "text-emerald-400" : "text-error"}`}
         >
-          balance Δ {totals?.balanceDelta?.toLocaleString() ?? 0}
+          balance Δ {formatMp(totals?.balanceDelta ?? 0, { suffix: false })} MP
           {ok ? " ✓" : " — 확인 필요"}
         </p>
       </section>
@@ -121,9 +122,9 @@ export function DailySettlementClient({
             {gameLines.map((line) => (
               <tr key={line.gameId} className="border-b border-white/5">
                 <td className="py-2">{line.label}</td>
-                <td className="py-2 text-right font-mono">{line.buyIn.toLocaleString()}</td>
-                <td className="py-2 text-right font-mono">{line.prize.toLocaleString()}</td>
-                <td className="py-2 text-right font-mono">{line.balance.toLocaleString()}</td>
+                <td className="py-2 text-right font-mono">{formatMp(line.buyIn)}</td>
+                <td className="py-2 text-right font-mono">{formatMp(line.prize)}</td>
+                <td className="py-2 text-right font-mono">{formatMp(line.balance)}</td>
               </tr>
             ))}
           </tbody>
@@ -139,7 +140,7 @@ export function DailySettlementClient({
             {creditMembers.map((m) => (
               <li key={m.id} className="flex justify-between text-sm">
                 <span>{m.nickname}</span>
-                <span className="text-error font-mono">{m.credit_balance.toLocaleString()}</span>
+                <span className="text-error font-mono">{formatMp(m.credit_balance)}</span>
               </li>
             ))}
           </ul>

@@ -1,3 +1,4 @@
+/** 포커 칩 수량 (K/M 축약). 금액 표시는 formatMp 사용 */
 export function formatChips(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
@@ -26,3 +27,5 @@ export function formatDateTimeKST(iso: string): string {
     parts.find((p) => p.type === type)?.value ?? "";
   return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
 }
+
+export { formatMp } from "@/lib/utils/mp";

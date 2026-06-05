@@ -5,7 +5,7 @@ import {
   getGuestRecentPlacements,
   getRunningGamesForGuest,
 } from "@/lib/data/guest-queries";
-import { formatChips } from "@/lib/utils/format";
+import { formatMp } from "@/lib/utils/mp";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +38,7 @@ export default async function GuestGamesPage() {
                 <p className="font-semibold">
                   {row.games?.game_presets?.name ?? "게임"} · {row.finish_rank}등
                 </p>
-                <p className="text-sm text-primary">{formatChips(row.final_amount)}</p>
+                <p className="text-sm text-primary">{formatMp(row.final_amount)}</p>
               </li>
             ),
           )}

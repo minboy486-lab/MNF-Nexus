@@ -19,8 +19,12 @@ export function SeatAnchoredPopover({
   widthClass = "w-44 sm:w-52",
 }: Props) {
   const anchor = getSeatCapsuleAnchor(seatNumber);
-  const offset =
-    anchor.place === "right" ? "translate(10px, -50%)" : "translate(calc(-100% - 10px), -50%)";
+  const offset = {
+    left: "translate(calc(-100% - 10px), -50%)",
+    right: "translate(10px, -50%)",
+    above: "translate(-50%, calc(-100% - 12px))",
+    below: "translate(-50%, 12px)",
+  }[anchor.placement];
 
   return (
     <>
@@ -31,7 +35,7 @@ export function SeatAnchoredPopover({
         onClick={onClose}
       />
       <div
-        className={`absolute z-40 glass-panel rounded-xl border border-primary/35 shadow-2xl ${widthClass} max-h-[min(70vh,320px)] flex flex-col overflow-hidden`}
+        className={`absolute z-40 seat-popover-panel rounded-xl border border-primary/35 shadow-2xl ${widthClass} max-h-[min(70vh,380px)] flex flex-col overflow-hidden`}
         style={{
           left: `${anchor.left}%`,
           top: `${anchor.top}%`,
@@ -41,7 +45,7 @@ export function SeatAnchoredPopover({
         role="dialog"
         aria-label={title}
       >
-        <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-b border-white/10 bg-surface-container-high/50">
+        <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-b border-white/10 bg-[#1c1a22]">
           <h4 className="text-xs font-bold truncate">{title}</h4>
           <button
             type="button"
@@ -52,7 +56,7 @@ export function SeatAnchoredPopover({
             <span className="material-symbols-outlined text-base">close</span>
           </button>
         </div>
-        {children}
+        <div className="seat-popover-body flex-1 min-h-0 overflow-y-auto">{children}</div>
       </div>
     </>
   );

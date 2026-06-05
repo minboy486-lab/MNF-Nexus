@@ -103,6 +103,33 @@ export async function getGameClock(gameId: string): Promise<GameClock | null> {
   return (data as GameClock | null) ?? null;
 }
 
+/** 진행 중 게임에 실제 착석한 member_id (종료된 게임 잔여 좌석 제외) */
+export async function getSeatedMemberIdsInActiveGames(): Promise<string[]> {
+  if (!isSupabaseConfigured()) {
+    return demoSeats
+      .filter((s) => {
+        const game = demoGames.find((g) => g.id === s.game_id);
+        return s.member_id && game && (game.status === "running" || game.status === "registration_closed");
+      })
+      .map((s) => s.member_id as string);
+  }
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("seats")
+    .select("member_id, games!inner(status)")
+    .not("member_id", "is", null)
+    .in("games.status", ["running", "registration_closed"]);
+
+  return [
+    ...new Set(
+      (data ?? [])
+        .map((row) => row.member_id as string | null)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+}
+
 export async function getSeatsForGame(gameId: string, physicalTableId?: string) {
   if (!isSupabaseConfigured()) {
     return demoSeats.filter(
@@ -119,7 +146,9 @@ export async function getSeatsForGame(gameId: string, physicalTableId?: string) 
     .eq("game_id", gameId);
   if (physicalTableId) q = q.eq("physical_table_id", physicalTableId);
   const { data } = await q;
-  return (data ?? []) as Seat[];
+  const seats = (data ?? []) as Seat[];
+  const { enrichSeatsWithPaymentMethods } = await import("@/lib/data/seat-enrichment");
+  return enrichSeatsWithPaymentMethods(seats, gameId);
 }
 
 export async function getMembers(search?: string) {

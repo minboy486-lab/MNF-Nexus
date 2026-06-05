@@ -241,6 +241,9 @@ export type Seat = {
   seat_status: "empty" | "occupied" | "sit_out";
   chips: number;
   rebuy_count: number;
+  buy_in_count: number;
+  first_payment_method?: "cash" | "card" | "transfer" | "points" | "credit" | null;
+  last_payment_method?: "cash" | "card" | "transfer" | "points" | "credit" | null;
   first_sat_at: string | null;
   last_rebuy_at?: string | null;
   created_at: string;

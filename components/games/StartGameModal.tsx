@@ -4,16 +4,24 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { StartGameForm } from "@/components/games/StartGameForm";
+import type { IntegratedTableItem } from "@/lib/tables/integrated-table";
 import type { GamePreset, PhysicalTable } from "@/lib/types";
 
 type Props = {
   presets: GamePreset[];
   tables: PhysicalTable[];
+  runningTables?: IntegratedTableItem[];
   initialTableId?: string;
   onClose: () => void;
 };
 
-export function StartGameModal({ presets, tables, initialTableId, onClose }: Props) {
+export function StartGameModal({
+  presets,
+  tables,
+  runningTables,
+  initialTableId,
+  onClose,
+}: Props) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
@@ -52,6 +60,7 @@ export function StartGameModal({ presets, tables, initialTableId, onClose }: Pro
           <StartGameForm
             presets={presets}
             tables={tables}
+            runningTables={runningTables}
             initialTableId={initialTableId}
             showCancel
             onCancel={onClose}

@@ -6,7 +6,7 @@ import {
   getGuestPendingRequests,
 } from "@/lib/data/guest-queries";
 import { getPhysicalTables, getGames, getOpenVenueSession } from "@/lib/data/queries";
-import { formatChips } from "@/lib/utils/format";
+import { formatMp } from "@/lib/utils/mp";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +38,7 @@ export default async function GuestHomePage() {
         <div className="grid grid-cols-2 gap-4 mt-4">
           <div>
             <p className="text-xs text-on-surface-variant">포인트</p>
-            <p className="text-xl font-bold text-primary">{formatChips(member.point_balance)}</p>
+            <p className="text-xl font-bold text-primary">{formatMp(member.point_balance)}</p>
           </div>
           <div>
             <p className="text-xs text-on-surface-variant">승점</p>
@@ -47,7 +47,7 @@ export default async function GuestHomePage() {
         </div>
         {member.credit_balance < 0 && (
           <p className="text-error text-sm mt-3 font-semibold">
-            외상: {formatChips(member.credit_balance)}
+            후불: {formatMp(member.credit_balance)}
           </p>
         )}
       </section>

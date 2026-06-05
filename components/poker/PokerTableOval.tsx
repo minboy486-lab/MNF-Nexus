@@ -9,8 +9,6 @@ type Props = {
   floor?: boolean;
   /** 전체 테이블 페이지: 좌석 2배 + 테이블 내부 배치 */
   integratedFloor?: boolean;
-  /** 관리자·직원 테이블: 좌석별 리바인 횟수 */
-  showRebuyCount?: boolean;
   /** 타원 테이블 + 타원 좌석 배치 */
   ellipse?: boolean;
   /** 홀덤 레이스웨이 테이블 */
@@ -24,7 +22,6 @@ export function PokerTableOval({
   compact,
   floor,
   integratedFloor,
-  showRebuyCount,
   ellipse,
   holdem,
   onSeatClick,
@@ -74,7 +71,6 @@ export function PokerTableOval({
           compact={compact && !floor}
           floor={floor}
           integratedFloor={integratedFloor}
-          showRebuyCount={showRebuyCount}
           ellipse={useEllipse}
           holdem={useHoldem}
           onClick={onSeatClick ? () => onSeatClick(num) : undefined}

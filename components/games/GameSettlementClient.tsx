@@ -13,7 +13,7 @@ import {
   finalizeGameSettlement,
 } from "@/lib/actions/prize";
 import type { GameFinishPlacement, GameIcmChop, Member, Seat } from "@/lib/types";
-import { formatChips } from "@/lib/utils/format";
+import { formatMp } from "@/lib/utils/mp";
 
 type GameRow = {
   id: string;
@@ -113,7 +113,7 @@ export function GameSettlementClient({ game, placements, icm, survivors }: Props
         </p>
         <div className="grid sm:grid-cols-2 gap-4">
           <label className="block text-sm">
-            총 상금 (원)
+            총 상금
             <input
               type="number"
               value={totalPool}
@@ -141,9 +141,9 @@ export function GameSettlementClient({ game, placements, icm, survivors }: Props
           저장 · 추천금 재계산
         </button>
         <p className="text-sm">
-          지급 합계: <strong>{formatChips(paidSum)}</strong> · 잔여:{" "}
+          지급 합계: <strong>{formatMp(paidSum)}</strong> · 잔여:{" "}
           <strong className={remaining > 0 ? "text-tertiary" : "text-primary"}>
-            {formatChips(remaining)}
+            {formatMp(remaining)}
           </strong>
         </p>
       </section>
@@ -203,7 +203,7 @@ export function GameSettlementClient({ game, placements, icm, survivors }: Props
                   <td className="py-3 pr-4 font-bold">{p.finish_rank}등</td>
                   <td className="py-3 pr-4">{p.members?.nickname}</td>
                   <td className="py-3 pr-4 text-on-surface-variant">
-                    {formatChips(p.suggested_amount)}
+                    {formatMp(p.suggested_amount)}
                   </td>
                   <td className="py-3">
                     <input
@@ -226,7 +226,7 @@ export function GameSettlementClient({ game, placements, icm, survivors }: Props
 
       {survivors.length > 0 && remaining > 0 && (
         <section className="glass-panel rounded-xl p-5 space-y-4 border border-tertiary/30">
-          <h2 className="font-bold text-tertiary">ICM 찹 (잔여 {formatChips(remaining)})</h2>
+          <h2 className="font-bold text-tertiary">ICM 찹 (잔여 {formatMp(remaining)})</h2>
           {icmInputs.map((row, i) => (
             <div key={row.memberId} className="flex gap-3 items-center flex-wrap">
               <span className="font-semibold w-24">{row.nickname}</span>
@@ -254,7 +254,7 @@ export function GameSettlementClient({ game, placements, icm, survivors }: Props
             <ul className="text-sm space-y-1">
               {icmResults.map((r) => (
                 <li key={r.member_id}>
-                  {r.nickname}: {formatChips(r.icm_amount)}
+                  {r.nickname}: {formatMp(r.icm_amount)}
                 </li>
               ))}
             </ul>

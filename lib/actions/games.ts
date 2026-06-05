@@ -10,6 +10,7 @@ import { renumberRanks, renumberRebuyOrders } from "@/lib/presets/preset-form";
 import { insertGamePresetRow, updateGamePresetRow } from "@/lib/presets/preset-db";
 import { getPlayLevels, serializeStructure } from "@/lib/presets/structure";
 import { isUuid } from "@/lib/utils/uuid";
+import { formatMp } from "@/lib/utils/mp";
 import type {
   BlindLevel,
   BlindStructureRow,
@@ -359,6 +360,41 @@ export async function quickEndGameOnTable(physicalTableId: string) {
     .update({ current_game_id: null })
     .eq("current_game_id", gameId);
 
+  const { data: occupiedSeats } = await supabase
+    .from("seats")
+    .select("member_id")
+    .eq("game_id", gameId)
+    .not("member_id", "is", null);
+
+  const memberIds = [
+    ...new Set(
+      (occupiedSeats ?? [])
+        .map((s) => s.member_id as string | null)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  await supabase
+    .from("seats")
+    .update({
+      member_id: null,
+      member_visit_id: null,
+      seat_status: "empty",
+      chips: 0,
+      rebuy_count: 0,
+      buy_in_count: 0,
+      first_payment_method: null,
+      last_payment_method: null,
+    })
+    .eq("game_id", gameId);
+
+  if (memberIds.length > 0) {
+    await supabase
+      .from("members")
+      .update({ floor_status: "waiting" })
+      .in("id", memberIds);
+  }
+
   await supabase.from("game_logs").insert({
     game_id: gameId,
     physical_table_id: physicalTableId,
@@ -408,36 +444,70 @@ export async function addTableToGame(gameId: string, physicalTableId: string) {
   if (!isSupabaseConfigured()) return { error: "데모 모드" };
 
   const supabase = await createClient();
-  await supabase.from("game_table_assignments").insert({
+
+  const { data: game } = await supabase
+    .from("games")
+    .select("id, status")
+    .eq("id", gameId)
+    .maybeSingle();
+
+  if (!game) return { error: "게임을 찾을 수 없습니다." };
+  if (game.status !== "running" && game.status !== "registration_closed") {
+    return { error: "진행 중인 게임에만 테이블을 추가할 수 있습니다." };
+  }
+
+  const { data: physTable } = await supabase
+    .from("physical_tables")
+    .select("id, code, current_game_id")
+    .eq("id", physicalTableId)
+    .maybeSingle();
+
+  if (!physTable) return { error: "테이블을 찾을 수 없습니다." };
+  if (physTable.current_game_id) {
+    return { error: `테이블 ${physTable.code}는 이미 게임 중입니다.` };
+  }
+
+  const { data: existing } = await supabase
+    .from("game_table_assignments")
+    .select("id")
+    .eq("game_id", gameId)
+    .eq("physical_table_id", physicalTableId)
+    .maybeSingle();
+
+  if (existing) return { error: "이미 같은 게임에 연결된 테이블입니다." };
+
+  const { error: assignError } = await supabase.from("game_table_assignments").insert({
     game_id: gameId,
     physical_table_id: physicalTableId,
   });
-  await supabase
-    .from("games")
-    .update({ mode: "multi_table" })
-    .eq("id", gameId);
+  if (assignError) return { error: assignError.message };
+
+  await supabase.from("games").update({ mode: "multi_table" }).eq("id", gameId);
   await supabase
     .from("physical_tables")
     .update({ current_game_id: gameId })
     .eq("id", physicalTableId);
 
   for (let seat = 1; seat <= 11; seat++) {
-    await supabase.from("seats").insert({
+    const { error: seatError } = await supabase.from("seats").insert({
       game_id: gameId,
       physical_table_id: physicalTableId,
       seat_number: seat,
+      chips: 0,
     });
+    if (seatError) return { error: seatError.message };
   }
 
   await supabase.from("game_logs").insert({
     game_id: gameId,
-    message: "멀티테이블 전환 — 물리 테이블 추가",
+    message: `멀티테이블 전환 — 테이블 ${physTable.code} 추가`,
     level: "info",
   });
 
   revalidatePath(`/admin/games/${gameId}`);
   revalidatePath("/admin/tables");
-  return { success: true };
+  revalidatePath("/staff/tables");
+  return { success: true, gameId };
 }
 
 export async function assignSeat(
@@ -491,6 +561,16 @@ export async function assignSeatWithBuyIn(
   if (!seat) return { error: "좌석을 찾을 수 없습니다." };
   if (seat.member_id) return { error: "이미 착석한 좌석입니다." };
 
+  const { data: seatedInActive } = await supabase
+    .from("seats")
+    .select("id, games!inner(status)")
+    .eq("member_id", memberId)
+    .in("games.status", ["running", "registration_closed"])
+    .limit(1)
+    .maybeSingle();
+
+  if (seatedInActive) return { error: "이미 게임 중인 손님입니다." };
+
   await assignSeat(gameId, physicalTableId, seatNumber, memberId, memberVisitId);
 
   const buyInResult = await recordBuyIn(
@@ -505,7 +585,7 @@ export async function assignSeatWithBuyIn(
 
   await supabase.from("game_logs").insert({
     game_id: gameId,
-    message: `바이인 ${amount.toLocaleString()} — 좌석 ${seatNumber}`,
+    message: `바이인 ${formatMp(amount)} — 좌석 ${seatNumber}`,
     level: "info",
   });
 
@@ -560,6 +640,9 @@ export async function moveSeat(
       seat_status: "occupied",
       chips: fromSeat.chips,
       rebuy_count: fromSeat.rebuy_count,
+      buy_in_count: fromSeat.buy_in_count,
+      first_payment_method: fromSeat.first_payment_method,
+      last_payment_method: fromSeat.last_payment_method,
       first_sat_at: fromSeat.first_sat_at,
       last_rebuy_at: fromSeat.last_rebuy_at,
     })
@@ -587,20 +670,64 @@ export async function moveSeat(
 
   revalidatePath(`/admin/tables/${fromSeat.physical_table_id}`);
   revalidatePath(`/admin/tables/${toPhysicalTableId}`);
+  revalidatePath("/admin/tables");
+  revalidatePath("/staff/tables");
   revalidatePath(`/admin/games/${gameId}`);
   return { success: true };
 }
 
 export async function sitOutPlayer(memberId: string, gameId: string) {
-  if (!isSupabaseConfigured()) return;
+  if (!isSupabaseConfigured()) return { error: "데모 모드" };
 
   const supabase = await createClient();
-  await supabase
+
+  const seatUpdate = await supabase
     .from("seats")
-    .update({ member_id: null, member_visit_id: null, seat_status: "empty" })
+    .update({
+      member_id: null,
+      member_visit_id: null,
+      seat_status: "empty",
+      chips: 0,
+      rebuy_count: 0,
+      buy_in_count: 0,
+      first_payment_method: null,
+      last_payment_method: null,
+    })
+    .eq("game_id", gameId)
     .eq("member_id", memberId);
 
-  await supabase.from("members").update({ floor_status: "waiting" }).eq("id", memberId);
+  if (seatUpdate.error) {
+    const fallback = await supabase
+      .from("seats")
+      .update({
+        member_id: null,
+        member_visit_id: null,
+        seat_status: "empty",
+        chips: 0,
+        rebuy_count: 0,
+      })
+      .eq("game_id", gameId)
+      .eq("member_id", memberId);
+    if (fallback.error) return { error: fallback.error.message };
+  }
+
+  const memberUpdate = await supabase
+    .from("members")
+    .update({ floor_status: "waiting" })
+    .eq("id", memberId);
+
+  if (memberUpdate.error) return { error: memberUpdate.error.message };
+
+  const { count: remaining } = await supabase
+    .from("seats")
+    .select("id", { count: "exact", head: true })
+    .eq("game_id", gameId)
+    .not("member_id", "is", null);
+
+  await supabase
+    .from("games")
+    .update({ survivor_count: remaining ?? 0 })
+    .eq("id", gameId);
 
   await supabase.from("game_logs").insert({
     game_id: gameId,
@@ -609,7 +736,15 @@ export async function sitOutPlayer(memberId: string, gameId: string) {
   });
 
   revalidatePath("/admin/guests");
+  revalidatePath("/admin/tables");
+  revalidatePath("/staff/tables");
   revalidatePath(`/admin/games/${gameId}`);
+  return { success: true };
+}
+
+export async function fetchMemberBuyInLogs(gameId: string, memberId: string) {
+  const { getMemberBuyInLogs } = await import("@/lib/data/seat-enrichment");
+  return getMemberBuyInLogs(gameId, memberId);
 }
 
 export async function manualRebuy(
@@ -619,7 +754,7 @@ export async function manualRebuy(
   amount?: number,
   paymentMethod: PaymentMethod = "cash",
 ) {
-  if (!isSupabaseConfigured()) return;
+  if (!isSupabaseConfigured()) return { error: "데모 모드" };
 
   const supabase = await createClient();
   let rebuyAmount = amount;
@@ -634,7 +769,8 @@ export async function manualRebuy(
   }
 
   if (rebuyAmount > 0) {
-    await recordRebuy(gameId, seatId, memberId, rebuyAmount, paymentMethod);
+    const result = await recordRebuy(gameId, seatId, memberId, rebuyAmount, paymentMethod);
+    if (result && "error" in result && result.error) return { error: result.error };
   } else {
     const { data: seat } = await supabase
       .from("seats")
@@ -642,10 +778,26 @@ export async function manualRebuy(
       .eq("id", seatId)
       .single();
 
+    const { data: existing } = await supabase
+      .from("game_member_buy_ins")
+      .select("buy_in_count")
+      .eq("game_id", gameId)
+      .eq("member_id", memberId)
+      .maybeSingle();
+
+    const nextBuyIn = (existing?.buy_in_count ?? 0) + 1;
+
+    await supabase.from("game_member_buy_ins").upsert(
+      { game_id: gameId, member_id: memberId, buy_in_count: nextBuyIn },
+      { onConflict: "game_id,member_id" },
+    );
+
     await supabase
       .from("seats")
       .update({
         rebuy_count: (seat?.rebuy_count ?? 0) + 1,
+        buy_in_count: nextBuyIn,
+        last_payment_method: paymentMethod,
         last_rebuy_at: new Date().toISOString(),
       })
       .eq("id", seatId);
@@ -669,6 +821,9 @@ export async function manualRebuy(
   }
 
   revalidatePath(`/admin/games/${gameId}`);
+  revalidatePath("/admin/tables");
+  revalidatePath("/staff/tables");
+  return { success: true };
 }
 
 export async function advanceBlindLevel(gameId: string) {

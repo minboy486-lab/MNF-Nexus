@@ -1,3 +1,5 @@
+import { formatMp } from "@/lib/utils/mp";
+
 export type KakaoSharePayload = {
   title: string;
   description: string;
@@ -34,13 +36,11 @@ export function buildMoneyInShare(params: {
   games: { label: string; buyIn: number }[];
   totalBuyIn: number;
 }): KakaoSharePayload {
-  const lines = params.games.map(
-    (g) => `${g.label}: ${g.buyIn.toLocaleString()}원`,
-  );
+  const lines = params.games.map((g) => `${g.label}: ${formatMp(g.buyIn)}`);
   const text = [
     `[MNF] 투데이 머니인 ${params.sessionDate}`,
     ...lines,
-    `합계: ${params.totalBuyIn.toLocaleString()}원`,
+    `합계: ${formatMp(params.totalBuyIn)}`,
   ].join("\n");
 
   return {

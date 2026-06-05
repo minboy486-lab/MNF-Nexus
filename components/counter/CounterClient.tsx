@@ -10,8 +10,6 @@ import {
   lookupMemberByNicknameOrLogin,
 } from "@/lib/actions/members";
 import type { Member, VenueSession } from "@/lib/types";
-import { formatChips } from "@/lib/utils/format";
-
 type Props = {
   session: VenueSession | null;
 };

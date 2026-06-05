@@ -1,6 +1,6 @@
 import { GuestLinkPhone } from "@/components/guest/GuestLinkPhone";
 import { getGuestMember, getGuestPointHistory } from "@/lib/data/guest-queries";
-import { formatChips } from "@/lib/utils/format";
+import { formatMp } from "@/lib/utils/mp";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ export default async function GuestPointsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">포인트</h1>
-      <p className="text-3xl font-bold text-primary">{formatChips(member.point_balance)}</p>
+      <p className="text-3xl font-bold text-primary">{formatMp(member.point_balance)}</p>
 
       <h2 className="font-bold text-sm text-on-surface-variant mt-6">최근 내역</h2>
       <ul className="space-y-2">
@@ -25,7 +25,7 @@ export default async function GuestPointsPage() {
             <span>{row.txn_type}</span>
             <span className={row.amount >= 0 ? "text-primary" : "text-error"}>
               {row.amount >= 0 ? "+" : ""}
-              {formatChips(row.amount)}
+              {formatMp(row.amount)}
             </span>
           </li>
         ))}

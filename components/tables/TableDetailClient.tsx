@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { PokerTableOval } from "@/components/poker/PokerTableOval";
@@ -14,6 +14,11 @@ import {
   moveSeat,
   quickStartGameOnTable,
 } from "@/lib/actions/games";
+import type { PaymentMethod } from "@/lib/actions/ledger";
+import {
+  collectSeatedMemberIds,
+  filterAssignableVisits,
+} from "@/lib/games/assignable-visits";
 import type {
   GameClock,
   MemberVisitWithMember,
@@ -22,17 +27,18 @@ import type {
   Game,
   GamePreset,
 } from "@/lib/types";
-import type { PaymentMethod } from "@/lib/actions/ledger";
 
 type Props = {
   table: PhysicalTable;
   game: Game | null;
   seats: Seat[];
   activeVisits: MemberVisitWithMember[];
+  inGameMemberIds: string[];
   preset: GamePreset | null;
   clock: GameClock | null;
   defaultBuyIn: number;
   allTables: PhysicalTable[];
+  gameSeats: Seat[];
 };
 
 type SeatMenu =
@@ -45,17 +51,16 @@ export function TableDetailClient({
   game,
   seats,
   activeVisits,
+  inGameMemberIds,
   preset,
   clock,
   defaultBuyIn,
   allTables,
+  gameSeats,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [menu, setMenu] = useState<SeatMenu>(null);
-  const [buyInAmount] = useState(defaultBuyIn);
-  const paymentMethod: PaymentMethod = "cash";
-  const [moveTarget, setMoveTarget] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -69,13 +74,30 @@ export function TableDetailClient({
     }
   }, [searchParams, seats]);
 
-  const unseatedVisits = activeVisits.filter(
-    (v) => !seats.some((s) => s.member_id === v.member_id),
-  );
+  const unseatedVisits = useMemo(() => {
+    if (!game) return [];
+    const seated = new Set(inGameMemberIds);
+    for (const id of collectSeatedMemberIds(gameSeats)) seated.add(id);
+    return filterAssignableVisits(activeVisits, seated);
+  }, [activeVisits, game, gameSeats, inGameMemberIds]);
 
-  const otherTables = allTables.filter(
-    (t) => t.id !== table.id && game?.id && t.current_game_id === game.id,
-  );
+  const moveTables = useMemo(() => {
+    if (!game?.id) return [];
+    return allTables
+      .filter((t) => t.current_game_id === game.id)
+      .map((t) => ({ id: t.id, code: t.code }));
+  }, [allTables, game?.id]);
+
+  const occupiedSeatsByTable = useMemo(() => {
+    if (!game?.id) return {};
+    const map: Record<string, number[]> = {};
+    for (const s of gameSeats) {
+      if (!s.member_id || !s.physical_table_id) continue;
+      if (!map[s.physical_table_id]) map[s.physical_table_id] = [];
+      map[s.physical_table_id].push(s.seat_number);
+    }
+    return map;
+  }, [game?.id, gameSeats]);
 
   function closeMenu() {
     setMenu(null);
@@ -107,7 +129,7 @@ export function TableDetailClient({
     }
   }
 
-  async function handleAssign(visit: MemberVisitWithMember) {
+  async function handleAssign(visit: MemberVisitWithMember, paymentMethod: PaymentMethod) {
     if (!game || menu?.kind !== "assign") return;
     setPending(true);
     const result = await assignSeatWithBuyIn(
@@ -115,7 +137,7 @@ export function TableDetailClient({
       table.id,
       menu.seatNumber,
       visit.member_id,
-      buyInAmount,
+      defaultBuyIn,
       paymentMethod,
       visit.id,
     );
@@ -130,38 +152,44 @@ export function TableDetailClient({
 
   async function handleSitOut(seat: Seat) {
     if (!game || !seat.member_id) return;
-    closeMenu();
-    await sitOutPlayer(seat.member_id, game.id);
-    router.refresh();
-  }
-
-  async function handleManualRebuy(seat: Seat) {
-    if (!game || !seat.member_id) return;
-    closeMenu();
     setPending(true);
-    await manualRebuy(game.id, seat.id, seat.member_id, buyInAmount, paymentMethod);
+    const result = await sitOutPlayer(seat.member_id, game.id);
     setPending(false);
-    router.refresh();
-  }
-
-  function handleMove(seat: Seat) {
-    if (!game || !seat.member_id) return;
-    const targetTableId = moveTarget ?? table.id;
-    const n = prompt("이동할 좌석 번호 (1-11)");
-    if (!n) return;
-    const toSeat = Number(n);
-    if (toSeat < 1 || toSeat > 11) {
-      alert("좌석 번호는 1~11입니다.");
+    if (result && "error" in result && result.error) {
+      alert(result.error);
       return;
     }
     closeMenu();
+    router.refresh();
+  }
+
+  async function handleManualRebuy(seat: Seat, paymentMethod: PaymentMethod) {
+    if (!game || !seat.member_id) return;
     setPending(true);
-    moveSeat(game.id, seat.member_id, targetTableId, toSeat).then((result) => {
-      setPending(false);
-      if (result && "error" in result && result.error) alert(result.error);
-      setMoveTarget(null);
-      router.refresh();
-    });
+    const result = await manualRebuy(
+      game.id,
+      seat.id,
+      seat.member_id,
+      defaultBuyIn,
+      paymentMethod,
+    );
+    setPending(false);
+    if (result && "error" in result && result.error) {
+      alert(result.error);
+      return;
+    }
+    closeMenu();
+    router.refresh();
+  }
+
+  async function handleMove(seat: Seat, toTableId: string, toSeatNumber: number) {
+    if (!game || !seat.member_id) return;
+    closeMenu();
+    setPending(true);
+    const result = await moveSeat(game.id, seat.member_id, toTableId, toSeatNumber);
+    setPending(false);
+    if (result && "error" in result && result.error) alert(result.error);
+    router.refresh();
   }
 
   return (
@@ -197,7 +225,6 @@ export function TableDetailClient({
                 tableCode={table.code}
                 seats={seats}
                 floor
-                showRebuyCount
                 onSeatClick={handleSeatClick}
               />
               {menu?.kind === "assign" && (
@@ -205,18 +232,19 @@ export function TableDetailClient({
                   seatNumber={menu.seatNumber}
                   visits={unseatedVisits}
                   pending={pending}
-                  onSelect={handleAssign}
+                  onAssign={handleAssign}
                   onClose={closeMenu}
                 />
               )}
               {menu?.kind === "occupied" && (
                 <SeatOccupiedMenu
                   seat={menu.seat}
-                  otherTables={otherTables}
-                  moveTarget={moveTarget}
-                  onMoveTargetChange={setMoveTarget}
-                  onRebuy={() => handleManualRebuy(menu.seat)}
-                  onMove={() => handleMove(menu.seat)}
+                  gameId={game.id}
+                  fromTableId={table.id}
+                  moveTables={moveTables}
+                  occupiedSeatsByTable={occupiedSeatsByTable}
+                  onRebuyConfirm={(paymentMethod) => handleManualRebuy(menu.seat, paymentMethod)}
+                  onMove={(toTableId, toSeat) => handleMove(menu.seat, toTableId, toSeat)}
                   onSitOut={() => handleSitOut(menu.seat)}
                   onClose={closeMenu}
                   pending={pending}

@@ -10,6 +10,7 @@ import {
   getActiveMemberVisits,
   getGamePresets,
   getGameClock,
+  getSeatedMemberIdsInActiveGames,
 } from "@/lib/data/queries";
 
 export const dynamic = "force-dynamic";
@@ -31,10 +32,12 @@ export default async function TableDetailPage({ params }: Props) {
     ? games.find((g) => g.id === table.current_game_id) ?? null
     : null;
 
-  const [seats, clock, activeVisits] = await Promise.all([
+  const [seats, gameSeats, clock, activeVisits, inGameMemberIds] = await Promise.all([
     game ? getSeatsForGame(game.id, table.id) : Promise.resolve([]),
+    game ? getSeatsForGame(game.id) : Promise.resolve([]),
     game ? getGameClock(game.id) : Promise.resolve(null),
     getActiveMemberVisits(),
+    getSeatedMemberIdsInActiveGames(),
   ]);
   const preset = game?.preset_id
     ? presets.find((p) => p.id === game.preset_id)
@@ -58,10 +61,12 @@ export default async function TableDetailPage({ params }: Props) {
           game={game}
           seats={seats}
           activeVisits={activeVisits}
+          inGameMemberIds={inGameMemberIds}
           preset={preset ?? null}
           clock={clock}
           defaultBuyIn={defaultBuyIn}
           allTables={allTables}
+          gameSeats={gameSeats}
         />
       </div>
     </>

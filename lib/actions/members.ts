@@ -207,6 +207,29 @@ export async function checkInVisit(memberId: string) {
   return { visitId: data.id };
 }
 
+/** 여러 손님을 한 번에 방문 중으로 */
+export async function checkInVisits(memberIds: string[]) {
+  if (!memberIds.length) return { error: "선택된 손님이 없습니다." };
+
+  const succeeded: string[] = [];
+  const failed: { memberId: string; error: string }[] = [];
+
+  for (const memberId of memberIds) {
+    const res = await checkInVisit(memberId);
+    if (res && "error" in res && res.error) {
+      failed.push({ memberId, error: res.error });
+    } else {
+      succeeded.push(memberId);
+    }
+  }
+
+  if (!succeeded.length) {
+    return { error: failed[0]?.error ?? "방문 등록에 실패했습니다.", failed };
+  }
+
+  return { succeeded, failed };
+}
+
 export async function checkOutVisit(visitId: string) {
   if (!isSupabaseConfigured()) return { error: "데모 모드" };
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { closePayrollPeriod } from "@/lib/actions/staff";
+import { formatMp } from "@/lib/utils/mp";
 
 type PayrollLine = {
   staffId: string;
@@ -50,20 +51,20 @@ export function MonthlySettlementClient({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="glass-panel rounded-xl p-5">
           <p className="text-xs text-on-surface-variant">게임 매출(바인)</p>
-          <p className="stat-display text-xl text-primary mt-1">{revenue.toLocaleString()}</p>
+          <p className="stat-display text-xl text-primary mt-1">{formatMp(revenue)}</p>
         </div>
         <div className="glass-panel rounded-xl p-5">
           <p className="text-xs text-on-surface-variant">매장 지출</p>
-          <p className="stat-display text-xl text-error mt-1">{expenses.toLocaleString()}</p>
+          <p className="stat-display text-xl text-error mt-1">{formatMp(expenses)}</p>
         </div>
         <div className="glass-panel rounded-xl p-5">
           <p className="text-xs text-on-surface-variant">급여(실지급)</p>
-          <p className="stat-display text-xl text-tertiary mt-1">{payrollNet.toLocaleString()}</p>
+          <p className="stat-display text-xl text-tertiary mt-1">{formatMp(payrollNet)}</p>
         </div>
         <div className="glass-panel rounded-xl p-5">
           <p className="text-xs text-on-surface-variant">순이익(추정)</p>
           <p className={`stat-display text-xl mt-1 ${profit >= 0 ? "text-emerald-400" : "text-error"}`}>
-            {profit.toLocaleString()}
+            {formatMp(profit)}
           </p>
         </div>
       </div>
@@ -85,9 +86,9 @@ export function MonthlySettlementClient({
               <tr key={line.staffId} className="border-b border-white/5">
                 <td className="py-2">{line.name}</td>
                 <td className="py-2 text-right">{line.hours}h</td>
-                <td className="py-2 text-right font-mono">{line.gross.toLocaleString()}</td>
-                <td className="py-2 text-right font-mono text-error">−{line.advances.toLocaleString()}</td>
-                <td className="py-2 text-right font-mono text-primary">{line.net.toLocaleString()}</td>
+                <td className="py-2 text-right font-mono">{formatMp(line.gross)}</td>
+                <td className="py-2 text-right font-mono text-error">−{formatMp(line.advances, { suffix: false })} MP</td>
+                <td className="py-2 text-right font-mono text-primary">{formatMp(line.net)}</td>
               </tr>
             ))}
           </tbody>
