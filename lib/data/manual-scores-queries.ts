@@ -29,6 +29,7 @@ export async function getManualScoresForDate(playDate: string): Promise<ManualSc
     .select("*")
     .eq("venue_id", DEFAULT_VENUE_ID)
     .eq("play_date", playDate)
+    .order("game_no", { ascending: true })
     .order("nickname", { ascending: true });
 
   return (data ?? []) as ManualScoreDaily[];
@@ -46,7 +47,7 @@ export async function getScoreRanking(from: string, to: string): Promise<ScoreRa
     .lte("play_date", to);
 
   const rows = data ?? [];
-  const byNick = new Map<string, ScoreRankingRow>();
+  const byNick = new Map<string, ScoreRankingRow & { dates: Set<string> }>();
 
   for (const row of rows) {
     const pts = dailyTotalPoints(row);
@@ -54,18 +55,21 @@ export async function getScoreRanking(from: string, to: string): Promise<ScoreRa
     const prev = byNick.get(key);
     if (prev) {
       prev.total_points += pts;
-      prev.visit_days += 1;
+      prev.dates.add(row.play_date);
+      prev.visit_days = prev.dates.size;
     } else {
       byNick.set(key, {
         nickname: row.nickname,
         member_id: row.member_id,
         total_points: pts,
         visit_days: 1,
+        dates: new Set([row.play_date]),
       });
     }
   }
 
-  return [...byNick.values()].sort((a, b) => b.total_points - a.total_points);
+  return [...byNick.values()]
+    .map(({ dates: _, ...row }) => row).sort((a, b) => b.total_points - a.total_points);
 }
 
 export async function getAttendanceSummary(from: string, to: string): Promise<AttendanceRow[]> {
@@ -85,6 +89,7 @@ export async function getAttendanceSummary(from: string, to: string): Promise<At
   for (const row of data ?? []) {
     const prev = byNick.get(row.nickname);
     if (prev) {
+      prev.game_count += 1;
       if (!prev.visit_dates.includes(row.play_date)) {
         prev.visit_dates.push(row.play_date);
         prev.visit_count += 1;
@@ -94,6 +99,7 @@ export async function getAttendanceSummary(from: string, to: string): Promise<At
         nickname: row.nickname,
         member_id: row.member_id,
         visit_count: 1,
+        game_count: 1,
         visit_dates: [row.play_date],
       });
     }
@@ -104,5 +110,34 @@ export async function getAttendanceSummary(from: string, to: string): Promise<At
       ...r,
       visit_dates: [...r.visit_dates].sort((a, b) => b.localeCompare(a)),
     }))
-    .sort((a, b) => b.visit_count - a.visit_count || a.nickname.localeCompare(b.nickname));
+    .sort(
+      (a, b) =>
+        b.visit_count - a.visit_count ||
+        b.game_count - a.game_count ||
+        a.nickname.localeCompare(b.nickname, "ko"),
+    );
+}
+
+/** 닉네임별 누적 방문일 수 (자동완성 정렬용) */
+export async function getNicknameVisitCounts(): Promise<Record<string, number>> {
+  if (!isSupabaseConfigured()) return {};
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("manual_score_daily")
+    .select("nickname, play_date")
+    .eq("venue_id", DEFAULT_VENUE_ID);
+
+  const byNick = new Map<string, Set<string>>();
+  for (const row of data ?? []) {
+    const dates = byNick.get(row.nickname) ?? new Set<string>();
+    dates.add(row.play_date);
+    byNick.set(row.nickname, dates);
+  }
+
+  const result: Record<string, number> = {};
+  for (const [nickname, dates] of byNick) {
+    result[nickname] = dates.size;
+  }
+  return result;
 }

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { AddManualScoreInput } from "@/lib/actions/manual-scores";
-import { addManualScore } from "@/lib/actions/manual-scores";
+import { setManualScoreRow } from "@/lib/actions/manual-scores";
 
 export async function addManualScoresBatch(rows: AddManualScoreInput[]) {
   let saved = 0;
@@ -16,7 +16,7 @@ export async function addManualScoresBatch(rows: AddManualScoreInput[]) {
     const moneyIn = Math.round(row.moneyInPoints || 0);
     if (!nick || buyIn + rebuy + moneyIn === 0) continue;
 
-    const result = await addManualScore(row);
+    const result = await setManualScoreRow(row);
     if ("error" in result && result.error) {
       return { error: `${lastNickname ? `${lastNickname} 다음 — ` : ""}${result.error}`, saved };
     }

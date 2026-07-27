@@ -850,59 +850,158 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-/* —— 승점 게임 기록 (엑셀형 시트) —— */
+/* —— 승점 게임 기록 (컴팩트 멀티 게임) —— */
+.score-games-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+@media (max-width: 520px) {
+  .score-games-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.score-game-block {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.25rem;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+  min-width: 0;
+}
+
+.score-game-label {
+  padding: 0.3rem 0.5rem;
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--primary);
+  background: var(--surface-container-low);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .score-record-sheet {
   table-layout: fixed;
+  font-size: 0.625rem;
 }
 
-.score-sheet-date-row th {
-  border: 2px solid rgba(255, 255, 255, 0.25);
-}
-
-.score-sheet-header-row .score-sheet-th {
-  background: #ffeb3b;
-  color: #111;
-  font-weight: 700;
+.score-sheet-th {
+  background: var(--surface-container-high);
+  color: var(--primary);
+  font-weight: 600;
   text-align: center;
-  padding: 0.5rem 0.75rem;
-  border: 2px solid rgba(0, 0, 0, 0.85);
-  font-size: 0.875rem;
+  padding: 0.2rem 0.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.625rem;
+  line-height: 1.2;
+}
+
+.score-sheet-th-num,
+.score-sheet-td-num {
+  width: 2ch;
+  padding: 0;
+  text-align: center;
+  color: var(--on-surface-variant);
+  font-size: 0.5rem;
+  line-height: 1;
+}
+
+.score-sheet-th-num {
+  background: var(--surface-container-high);
+  border-right: none;
+}
+
+.score-sheet-td-num {
+  border-right: none;
+}
+
+.score-sheet-col-num {
+  width: 2ch;
+}
+
+.score-sheet-col-nick {
+  width: auto;
+}
+
+.score-sheet-col-score {
+  width: 17%;
 }
 
 .score-sheet-td {
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.1rem 0.15rem;
   vertical-align: middle;
-  background: rgba(255, 255, 255, 0.02);
+  line-height: 1.2;
+  height: 1.4375rem;
 }
 
 .score-sheet-saved-row .score-sheet-td {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .score-sheet-input {
   display: block;
   width: 100%;
-  min-height: 2rem;
-  padding: 0.35rem 0.5rem;
+  height: 1.4375rem;
+  padding: 0 0.15rem;
   border: none;
   background: transparent;
   color: inherit;
-  font-size: inherit;
+  font-size: 0.625rem;
   outline: none;
 }
 
 .score-sheet-input:focus {
-  background: rgba(255, 235, 59, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(255, 235, 59, 0.35);
+  background: rgba(245, 196, 216, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(245, 196, 216, 0.25);
 }
 
 .score-sheet-input-row .score-sheet-td {
   padding: 0;
 }
 
-.score-record-sheet {
-  border: 2px solid rgba(0, 0, 0, 0.85);
+.score-sheet-nick-cell {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 100%;
+  height: 1.4375rem;
+  min-height: 1.4375rem;
+  overflow: hidden;
+}
+
+.score-sheet-nick-cell .score-sheet-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
+.score-sheet-row-delete {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.75rem;
+  height: 1.4375rem;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  line-height: 1;
+  font-size: 0.5625rem;
+  color: rgba(239, 68, 68, 0.45);
+  cursor: pointer;
+}
+
+.score-sheet-row-delete:hover:not(:disabled) {
+  color: rgb(239, 68, 68);
+}
+
+.score-record-panel .score-record-date:focus-visible {
+  outline: 1px solid var(--primary);
+  border-radius: 0.25rem;
 }
 
 .app-modal-backdrop,

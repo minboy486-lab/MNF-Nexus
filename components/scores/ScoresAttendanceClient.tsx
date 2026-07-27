@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ScoreRecordSheet } from "@/components/scores/ScoreRecordSheet";
 import type {
   AttendanceRow,
@@ -42,6 +42,19 @@ export function ScoresAttendanceClient({
   const [tab, setTab] = useState<Tab>("record");
   const [from, setFrom] = useState(periodFrom);
   const [to, setTo] = useState(periodTo);
+  const [nicknameQuery, setNicknameQuery] = useState("");
+
+  const nicknameFilter = nicknameQuery.trim().toLowerCase();
+
+  const filteredRanking = useMemo(() => {
+    if (!nicknameFilter) return ranking;
+    return ranking.filter((row) => row.nickname.toLowerCase().includes(nicknameFilter));
+  }, [ranking, nicknameFilter]);
+
+  const filteredAttendance = useMemo(() => {
+    if (!nicknameFilter) return attendance;
+    return attendance.filter((row) => row.nickname.toLowerCase().includes(nicknameFilter));
+  }, [attendance, nicknameFilter]);
 
   function applyPeriod() {
     router.push(`/admin/scores?from=${from}&to=${to}&date=${defaultDate}`);
@@ -99,6 +112,16 @@ export function ScoresAttendanceClient({
               </button>
             </div>
           </label>
+          <label className="text-xs text-on-surface-variant">
+            닉네임 검색
+            <input
+              type="search"
+              value={nicknameQuery}
+              onChange={(e) => setNicknameQuery(e.target.value)}
+              placeholder="닉네임 입력"
+              className="login-input text-sm py-1.5 mt-1 w-40"
+            />
+          </label>
         </div>
       )}
 
@@ -129,7 +152,7 @@ export function ScoresAttendanceClient({
                 </tr>
               </thead>
               <tbody>
-                {ranking.map((row, i) => (
+                {filteredRanking.map((row, i) => (
                   <tr key={row.nickname} className="border-b border-white/5">
                     <td className="py-2.5 text-on-surface-variant">{i + 1}</td>
                     <td className="py-2.5 font-semibold">{row.nickname}</td>
@@ -141,10 +164,12 @@ export function ScoresAttendanceClient({
                     </td>
                   </tr>
                 ))}
-                {ranking.length === 0 && (
+                {filteredRanking.length === 0 && (
                   <tr>
                     <td colSpan={4} className="py-8 text-center text-on-surface-variant">
-                      기간 내 기록이 없습니다.
+                      {ranking.length === 0
+                        ? "기간 내 기록이 없습니다."
+                        : "검색 결과가 없습니다."}
                     </td>
                   </tr>
                 )}
@@ -165,25 +190,31 @@ export function ScoresAttendanceClient({
                 <tr className="text-on-surface-variant border-b border-white/10 text-xs">
                   <th className="text-left py-2">닉네임</th>
                   <th className="text-right py-2 w-20">방문</th>
+                  <th className="text-right py-2 w-20">게임</th>
                   <th className="text-left py-2 pl-4">방문 날짜</th>
                 </tr>
               </thead>
               <tbody>
-                {attendance.map((row) => (
+                {filteredAttendance.map((row) => (
                   <tr key={row.nickname} className="border-b border-white/5 align-top">
                     <td className="py-2.5 font-semibold">{row.nickname}</td>
                     <td className="py-2.5 text-right font-bold text-secondary tabular-nums">
                       {row.visit_count}회
+                    </td>
+                    <td className="py-2.5 text-right font-semibold text-primary tabular-nums">
+                      {row.game_count}회
                     </td>
                     <td className="py-2.5 pl-4 text-on-surface-variant text-xs leading-relaxed">
                       {row.visit_dates.map(formatDateKo).join(", ")}
                     </td>
                   </tr>
                 ))}
-                {attendance.length === 0 && (
+                {filteredAttendance.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="py-8 text-center text-on-surface-variant">
-                      기간 내 출석 기록이 없습니다.
+                    <td colSpan={4} className="py-8 text-center text-on-surface-variant">
+                      {attendance.length === 0
+                        ? "기간 내 출석 기록이 없습니다."
+                        : "검색 결과가 없습니다."}
                     </td>
                   </tr>
                 )}

@@ -4,9 +4,11 @@ import {
   currentMonthRange,
   getAttendanceSummary,
   getManualScoresForDate,
+  getNicknameVisitCounts,
   getScoreRanking,
 } from "@/lib/data/manual-scores-queries";
 import { getMembers } from "@/lib/data/queries";
+import { sortMembersByVisitCount } from "@/lib/scores/types";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 export const dynamic = "force-dynamic";
@@ -24,18 +26,22 @@ export default async function ScoresPage({ searchParams }: Props) {
   const from = params.from ?? month.from;
   const to = params.to ?? month.to;
 
-  const [members, todayScores, ranking, attendance] = await Promise.all([
+  const [members, todayScores, ranking, attendance, visitCounts] = await Promise.all([
     getMembers(),
     getManualScoresForDate(playDate),
     getScoreRanking(from, to),
     getAttendanceSummary(from, to),
+    getNicknameVisitCounts(),
   ]);
 
-  const memberSuggestions = members.map((m) => ({
-    id: m.id,
-    nickname: m.nickname,
-    display_name: m.display_name,
-  }));
+  const memberSuggestions = sortMembersByVisitCount(
+    members.map((m) => ({
+      id: m.id,
+      nickname: m.nickname,
+      display_name: m.display_name,
+      visit_count: visitCounts[m.nickname] ?? 0,
+    })),
+  );
 
   return (
     <>

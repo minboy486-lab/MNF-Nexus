@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { MemberSuggestion } from "@/lib/scores/types";
+import { sortMembersByVisitCount, type MemberSuggestion } from "@/lib/scores/types";
 
 type Props = {
   members: MemberSuggestion[];
@@ -23,14 +23,14 @@ export function NicknameAutocomplete({
 
   const suggestions = useMemo(() => {
     const q = value.trim().toLowerCase();
-    if (!q) return members.slice(0, 12);
-    return members
-      .filter(
-        (m) =>
-          m.nickname.toLowerCase().includes(q) ||
-          m.display_name?.toLowerCase().includes(q),
-      )
-      .slice(0, 12);
+    const matched = q
+      ? members.filter(
+          (m) =>
+            m.nickname.toLowerCase().includes(q) ||
+            m.display_name?.toLowerCase().includes(q),
+        )
+      : members;
+    return sortMembersByVisitCount(matched).slice(0, 12);
   }, [members, value]);
 
   function pick(nickname: string) {
