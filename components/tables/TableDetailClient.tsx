@@ -220,7 +220,7 @@ export function TableDetailClient({
             blindName={preset?.name}
           />
           <div className="table-detail-table-area">
-            <div className="table-detail-table-wrap">
+            <div className="table-detail-table-wrap" data-table-anchor={table.id}>
               <PokerTableOval
                 tableCode={table.code}
                 seats={seats}
@@ -230,6 +230,7 @@ export function TableDetailClient({
               {menu?.kind === "assign" && (
                 <SeatAssignPopover
                   seatNumber={menu.seatNumber}
+                  anchorScopeId={table.id}
                   visits={unseatedVisits}
                   pending={pending}
                   onAssign={handleAssign}

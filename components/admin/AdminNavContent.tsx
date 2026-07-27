@@ -6,6 +6,7 @@ import { signOut } from "@/lib/actions/auth";
 import { AdminNavAccountLink } from "@/components/admin/AdminNavAccountLink";
 
 const links = [
+  { href: "/admin/scores", label: "승점및출석", icon: "emoji_events" },
   { href: "/admin/dashboard", label: "대시보드", icon: "dashboard" },
   { href: "/admin/operations", label: "운영 탭", icon: "schedule" },
   { href: "/admin/tables", label: "전체 테이블", icon: "grid_view" },

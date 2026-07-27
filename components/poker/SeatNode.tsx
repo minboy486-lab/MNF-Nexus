@@ -123,7 +123,11 @@ export function SeatNode({
 
   if (integratedFloor && posStyle) {
     return (
-      <div className="seat-integrated-wrap absolute z-[3]" style={posStyle}>
+      <div
+        className="seat-integrated-wrap absolute z-[3]"
+        style={posStyle}
+        data-seat-anchor={seatNumber}
+      >
         <div className="seat-integrated-anchor relative w-fit pointer-events-none">
           <div className="pointer-events-auto">{seatButton}</div>
           <span className="seat-integrated-label absolute left-1/2 top-full -translate-x-1/2 text-[8px] sm:text-[9px] font-bold text-on-surface-variant/90 tracking-wide whitespace-nowrap pointer-events-none">
@@ -138,6 +142,7 @@ export function SeatNode({
     <button
       type="button"
       onClick={onClick}
+      data-seat-anchor={seatNumber}
       style={posStyle}
       className={`seat-node ${posClass} glass-panel rounded-lg flex flex-col items-center justify-center border transition-all ${
         floor ? "min-w-[2.5rem] min-h-[2.25rem]" : ""

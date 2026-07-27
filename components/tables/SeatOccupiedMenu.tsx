@@ -99,6 +99,7 @@ export function SeatOccupiedMenu({
   return (
     <SeatAnchoredPopover
       seatNumber={seat.seat_number}
+      anchorScopeId={fromTableId}
       title={`S${seat.seat_number} ${nickname}`}
       onClose={onClose}
       widthClass={widthClass}

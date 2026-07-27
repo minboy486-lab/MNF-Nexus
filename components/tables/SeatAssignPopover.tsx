@@ -9,6 +9,7 @@ import { formatMp } from "@/lib/utils/mp";
 
 type Props = {
   seatNumber: number;
+  anchorScopeId: string;
   visits: MemberVisitWithMember[];
   pending: boolean;
   onAssign: (visit: MemberVisitWithMember, paymentMethod: PaymentMethod) => void;
@@ -19,6 +20,7 @@ type Step = "guest" | "payment";
 
 export function SeatAssignPopover({
   seatNumber,
+  anchorScopeId,
   visits,
   pending,
   onAssign,
@@ -45,6 +47,7 @@ export function SeatAssignPopover({
   return (
     <SeatAnchoredPopover
       seatNumber={seatNumber}
+      anchorScopeId={anchorScopeId}
       title={title}
       onClose={onClose}
       widthClass={step === "payment" ? "w-40 sm:w-44" : "w-48 sm:w-56"}

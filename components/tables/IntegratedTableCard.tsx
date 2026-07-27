@@ -229,7 +229,10 @@ export function IntegratedTableCard({
       </div>
 
       <div className="flex-1 min-h-0 flex items-center justify-center relative mt-1 overflow-visible">
-        <div className="relative w-full h-full integrated-table-oval-wrap overflow-visible">
+        <div
+          className="relative w-full h-full integrated-table-oval-wrap overflow-visible"
+          data-table-anchor={table.tableId}
+        >
           <PokerTableOval
             tableCode={table.code}
             seats={table.hasGame ? table.seats : []}
