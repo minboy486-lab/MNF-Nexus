@@ -19,6 +19,7 @@ export default async function ScoresPage({ searchParams }: Props) {
   const params = await searchParams;
   const month = currentMonthRange();
   const today = new Date().toISOString().slice(0, 10);
+  const hasDateInUrl = Boolean(params.date);
   const playDate = params.date ?? today;
   const from = params.from ?? month.from;
   const to = params.to ?? month.to;
@@ -56,6 +57,7 @@ export default async function ScoresPage({ searchParams }: Props) {
           defaultDate={playDate}
           periodFrom={from}
           periodTo={to}
+          hasDateInUrl={hasDateInUrl}
         />
       </div>
     </>
