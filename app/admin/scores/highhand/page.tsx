@@ -1,12 +1,7 @@
 import { AdminTopBar } from "@/components/admin/AdminTopBar";
-import { ScoresAttendanceClient } from "@/components/scores/ScoresAttendanceClient";
-import {
-  currentMonthRange,
-  getAttendanceSummary,
-  getManualScoresForDate,
-  getNicknameVisitCounts,
-  getScoreRanking,
-} from "@/lib/data/manual-scores-queries";
+import { HighHandAdminClient } from "@/components/scores/HighHandAdminClient";
+import { getHighHandsForDate } from "@/lib/data/high-hand-queries";
+import { getNicknameVisitCounts } from "@/lib/data/manual-scores-queries";
 import { getMembers } from "@/lib/data/queries";
 import { sortMembersByVisitCount } from "@/lib/scores/types";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -15,22 +10,17 @@ import { getVenueOperatingDate } from "@/lib/venue/operating-date";
 export const dynamic = "force-dynamic";
 
 type Props = {
-  searchParams: Promise<{ date?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ date?: string }>;
 };
 
-export default async function ScoresPage({ searchParams }: Props) {
+export default async function HighHandAdminPage({ searchParams }: Props) {
   const params = await searchParams;
-  const month = currentMonthRange();
   const hasDateInUrl = Boolean(params.date);
   const playDate = params.date ?? getVenueOperatingDate();
-  const from = params.from ?? month.from;
-  const to = params.to ?? month.to;
 
-  const [members, todayScores, ranking, attendance, visitCounts] = await Promise.all([
+  const [entries, members, visitCounts] = await Promise.all([
+    getHighHandsForDate(playDate),
     getMembers(),
-    getManualScoresForDate(playDate),
-    getScoreRanking(from, to),
-    getAttendanceSummary(from, to),
     getNicknameVisitCounts(),
   ]);
 
@@ -45,25 +35,18 @@ export default async function ScoresPage({ searchParams }: Props) {
 
   return (
     <>
-      <AdminTopBar
-        title="승점 및 출석"
-        subtitle="게임 점수 기록 · 순위 · 방문 · 빙고 · 하이핸드"
-      />
+      <AdminTopBar title="하이핸드" subtitle="일별 포카드 · 스티플 · 로티플" />
       <div className="admin-main flex-1 flex flex-col min-h-0 overflow-hidden p-4 md:p-6">
         {!isSupabaseConfigured() && (
           <p className="shrink-0 mb-3 text-sm text-tertiary bg-tertiary/10 border border-tertiary/30 rounded-lg px-3 py-2">
             Supabase 미연결 — 데모 모드에서는 저장되지 않습니다.
           </p>
         )}
-        <ScoresAttendanceClient
-          members={memberSuggestions}
-          todayScores={todayScores}
-          ranking={ranking}
-          attendance={attendance}
-          defaultDate={playDate}
-          periodFrom={from}
-          periodTo={to}
+        <HighHandAdminClient
+          playDate={playDate}
           hasDateInUrl={hasDateInUrl}
+          entries={entries}
+          members={memberSuggestions}
         />
       </div>
     </>

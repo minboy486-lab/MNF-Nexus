@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { PublicGuestHeader } from "@/components/ranking/PublicGuestHeader";
 import type { ScoreRankingRow } from "@/lib/scores/types";
-
-const NICKNAME_KEY = "mnf-guest-ranking-nickname";
+import { useGuestNickname } from "@/lib/ranking/use-guest-nickname";
+import { usePublicScoresSync } from "@/lib/ranking/use-public-scores-sync";
 
 type Props = {
   ranking: ScoreRankingRow[];
@@ -11,139 +12,158 @@ type Props = {
   monthLabel: string;
 };
 
-function rankTier(rank: number): { label: string; className: string } | null {
-  if (rank <= 5) return { label: "TOP 5", className: "public-rank-badge-top" };
-  if (rank <= 40) return { label: "6~40위", className: "public-rank-badge-mid" };
-  return null;
+type RankTier = "top" | "mid" | "low";
+
+type RankedRow = ScoreRankingRow & { rank: number };
+
+function rankTier(rank: number): { label: string; tier: RankTier } {
+  if (rank <= 5) return { label: "TOP 5", tier: "top" };
+  if (rank <= 40) return { label: "6~40위", tier: "mid" };
+  return { label: "41위+", tier: "low" };
 }
 
-function NicknameModal({
-  initial,
-  onSave,
-  onClose,
+function tierRowClass(tier: RankTier): string {
+  if (tier === "top") return "public-ranking-row-top";
+  if (tier === "mid") return "public-ranking-row-mid";
+  return "public-ranking-row-low";
+}
+
+function tierNumClass(tier: RankTier): string {
+  if (tier === "top") return "public-ranking-rank-num-top";
+  if (tier === "mid") return "public-ranking-rank-num-mid";
+  return "public-ranking-rank-num-low";
+}
+
+function tierPointsClass(tier: RankTier, zero: boolean): string {
+  if (zero) return "public-ranking-points-zero";
+  if (tier === "top") return "public-ranking-points-top";
+  if (tier === "mid") return "public-ranking-points-mid";
+  return "public-ranking-points-low";
+}
+
+function tierBadgeClass(tier: RankTier): string {
+  if (tier === "top") return "public-rank-badge-top";
+  if (tier === "mid") return "public-rank-badge-mid";
+  return "public-rank-badge-low";
+}
+
+function PodiumCard({
+  row,
+  rank,
+  size,
+  isMe,
 }: {
-  initial: string;
-  onSave: (nick: string) => void;
-  onClose?: () => void;
+  row: RankedRow;
+  rank: 1 | 2 | 3;
+  size: "lg" | "md";
+  isMe: boolean;
 }) {
-  const [value, setValue] = useState(initial);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const nick = value.trim();
-    if (!nick) return;
-    onSave(nick);
-  }
-
+  const heights = { 1: "public-podium-1", 2: "public-podium-2", 3: "public-podium-3" };
+  const medals = { 1: "gold", 2: "silver", 3: "bronze" } as const;
   return (
-    <div className="public-ranking-modal-backdrop" role="dialog" aria-modal="true">
-      <div className="public-ranking-modal">
-        <h2 className="text-lg font-bold text-center mb-1">닉네임 설정</h2>
-        <p className="text-xs text-on-surface-variant text-center mb-5">
-          매장에서 사용하는 닉네임을 입력하세요
-        </p>
-        <form onSubmit={submit} className="space-y-4">
-          <label className="block text-xs text-on-surface-variant">
-            닉네임
-            <input
-              ref={inputRef}
-              type="text"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder="닉네임을 입력하세요"
-              className="login-input w-full mt-1.5 text-base py-3"
-              autoComplete="nickname"
-              maxLength={32}
-            />
-          </label>
-          <div className="flex gap-2">
-            {onClose && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 py-3 rounded-xl border border-white/15 text-sm font-semibold text-on-surface-variant hover:bg-white/5"
-              >
-                취소
-              </button>
-            )}
-            <button
-              type="submit"
-              disabled={!value.trim()}
-              className="flex-1 btn-primary py-3 rounded-xl text-sm font-bold disabled:opacity-40"
-            >
-              저장
-            </button>
-          </div>
-        </form>
-      </div>
+    <div
+      className={`public-podium-card ${heights[rank]} ${size === "lg" ? "public-podium-card-lg" : ""} ${isMe ? "public-podium-card-me" : ""}`}
+    >
+      <span className={`public-podium-medal public-podium-medal-${medals[rank]}`} aria-hidden>
+        <span className="material-symbols-outlined">military_tech</span>
+      </span>
+      <div className={`public-podium-rank public-podium-rank-${medals[rank]}`}>{rank}</div>
+      <p className="public-podium-name truncate">{row.nickname}</p>
+      <p className="public-podium-points tabular-nums">
+        {row.total_points.toLocaleString()}
+        <span className="text-[10px] font-semibold opacity-75">점</span>
+      </p>
+      {isMe && <span className="public-rank-badge-me public-podium-me">ME</span>}
     </div>
   );
 }
 
+function PodiumTop3({
+  top3,
+  nickname,
+}: {
+  top3: RankedRow[];
+  nickname: string | null;
+}) {
+  if (top3.length === 0) return null;
+  const [first, second, third] = top3;
+  const isMe = (nick: string) => nickname?.trim().toLowerCase() === nick.toLowerCase();
+
+  return (
+    <section className="public-podium mb-5" aria-label="TOP 3">
+      <div className="public-podium-grid">
+        {second ? (
+          <PodiumCard row={second} rank={2} size="md" isMe={isMe(second.nickname)} />
+        ) : (
+          <div aria-hidden />
+        )}
+        {first ? (
+          <PodiumCard row={first} rank={1} size="lg" isMe={isMe(first.nickname)} />
+        ) : (
+          <div aria-hidden />
+        )}
+        {third ? (
+          <PodiumCard row={third} rank={3} size="md" isMe={isMe(third.nickname)} />
+        ) : (
+          <div aria-hidden />
+        )}
+      </div>
+    </section>
+  );
+}
+
 function RankRow({
-  rank,
-  row,
+  item,
   isMe,
   rowRef,
 }: {
-  rank: number;
-  row: ScoreRankingRow;
+  item: RankedRow;
   isMe: boolean;
   rowRef?: React.RefObject<HTMLLIElement | null>;
 }) {
-  const tier = rankTier(rank);
-  const topFive = rank <= 5;
+  const tier = rankTier(item.rank);
+  const zero = item.total_points === 0;
 
   return (
     <li
       ref={isMe ? rowRef : undefined}
-      className={`public-ranking-row ${isMe ? "public-ranking-row-me" : ""} ${topFive ? "public-ranking-row-top" : ""}`}
+      className={`public-ranking-row ${tierRowClass(tier.tier)} ${zero ? "public-ranking-row-zero" : ""} ${isMe ? "public-ranking-row-me" : ""}`}
     >
-      <div
-        className={`public-ranking-rank-num ${topFive ? "public-ranking-rank-num-top" : "public-ranking-rank-num-default"}`}
-      >
-        {rank}
-      </div>
+      <div className={`public-ranking-rank-num ${tierNumClass(tier.tier)}`}>{item.rank}</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-bold truncate">{row.nickname}</span>
+          <span className={`font-bold truncate ${zero ? "text-on-surface-variant" : ""}`}>
+            {item.nickname}
+          </span>
           {isMe && <span className="public-rank-badge-me">ME</span>}
-          {tier && <span className={`public-rank-badge ${tier.className}`}>{tier.label}</span>}
+          <span className={`public-rank-badge ${tierBadgeClass(tier.tier)}`}>{tier.label}</span>
         </div>
-        <p className="text-[10px] text-on-surface-variant mt-0.5">
-          출석 {row.visit_days}일
-        </p>
       </div>
-      <div className="public-ranking-points">
-        <span className="tabular-nums font-bold">{row.total_points.toLocaleString()}</span>
-        <span className="text-[10px] text-on-surface-variant ml-0.5">점</span>
+      <div className={`public-ranking-points ${tierPointsClass(tier.tier, zero)}`}>
+        <span className="tabular-nums font-bold">{item.total_points.toLocaleString()}</span>
+        <span className="text-[10px] opacity-80 ml-0.5">점</span>
       </div>
     </li>
   );
 }
 
+const SECTIONS: { tier: RankTier; label: string; min: number; max: number }[] = [
+  { tier: "top", label: "TOP 5", min: 1, max: 5 },
+  { tier: "mid", label: "6 ~ 40위", min: 6, max: 40 },
+  { tier: "low", label: "41위+", min: 41, max: Infinity },
+];
+
 export function PublicRankingClient({ ranking, prevMonthTop, monthLabel }: Props) {
-  const [nickname, setNickname] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
+  const { nickname, ready, showNicknameModal, saveNickname, openEdit, closeEdit } =
+    useGuestNickname();
   const myRowRef = useRef<HTMLLIElement>(null);
 
-  useEffect(() => {
-    const saved = localStorage.getItem(NICKNAME_KEY);
-    if (saved) setNickname(saved);
-    setReady(true);
-  }, []);
+  usePublicScoresSync("ranking");
 
-  const saveNickname = useCallback((nick: string) => {
-    localStorage.setItem(NICKNAME_KEY, nick);
-    setNickname(nick);
-    setEditOpen(false);
-  }, []);
+  const ranked = useMemo(
+    () => ranking.map((row, i) => ({ ...row, rank: i + 1 })),
+    [ranking],
+  );
 
   const myIndex = useMemo(() => {
     if (!nickname) return -1;
@@ -162,47 +182,29 @@ export function PublicRankingClient({ ranking, prevMonthTop, monthLabel }: Props
     return () => window.clearTimeout(t);
   }, [myRow, ready, nickname]);
 
-  const showSetup = ready && !nickname && !editOpen;
-  const showEdit = editOpen;
+  const top3 = ranked.slice(0, 3);
+  const showPodium = top3.some((r) => r.total_points > 0);
 
   return (
     <div className="public-ranking-page">
-      {(showSetup || showEdit) && (
-        <NicknameModal
-          initial={nickname ?? ""}
-          onSave={saveNickname}
-          onClose={nickname ? () => setEditOpen(false) : undefined}
-        />
-      )}
-
-      <header className="public-ranking-header">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="public-ranking-logo">MNF</span>
-          <span className="font-bold text-sm bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent truncate">
-            HOLDEM
-          </span>
-        </div>
-        {nickname ? (
-          <button
-            type="button"
-            onClick={() => setEditOpen(true)}
-            className="text-sm font-semibold text-primary truncate max-w-[40%] hover:underline"
-          >
-            {nickname}
-          </button>
-        ) : (
-          <span className="text-xs text-on-surface-variant">닉네임 미설정</span>
-        )}
-      </header>
+      <PublicGuestHeader
+        nickname={nickname}
+        showNicknameModal={showNicknameModal}
+        onSaveNickname={saveNickname}
+        onOpenEdit={openEdit}
+        onCloseEdit={closeEdit}
+      />
 
       <div className="public-ranking-hero">
-        <p className="text-xs text-on-surface-variant tracking-wide">월별 랭킹</p>
-        <h1 className="text-2xl font-bold mt-0.5">{monthLabel}</h1>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-on-surface-variant/80">
+          Monthly Ranking
+        </p>
+        <h1 className="text-[1.75rem] font-black mt-1 tracking-tight">{monthLabel}</h1>
       </div>
 
       {prevMonthTop && (
         <section className="public-ranking-king glass-panel rounded-2xl p-4 mb-4">
-          <p className="text-[10px] text-on-surface-variant mb-1">지난달 1위</p>
+          <p className="text-[10px] text-on-surface-variant mb-1 uppercase tracking-wider">지난달 1위</p>
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <span className="material-symbols-outlined text-primary text-xl">emoji_events</span>
@@ -217,16 +219,18 @@ export function PublicRankingClient({ ranking, prevMonthTop, monthLabel }: Props
       )}
 
       {nickname && (
-        <section className={`public-ranking-my-card ${myRow ? "public-ranking-my-card-found" : "public-ranking-my-card-empty"}`}>
+        <section
+          className={`public-ranking-my-card ${myRow ? "public-ranking-my-card-found" : "public-ranking-my-card-empty"}`}
+        >
           <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="text-xs font-bold text-emerald-300/90">내 랭킹</span>
+            <span className="text-xs font-bold text-primary">내 랭킹</span>
             <span className="public-rank-badge-me">ME</span>
           </div>
           {myRow && myRank ? (
             <div className="flex items-end justify-between gap-3">
-              <div>
+              <div className="flex items-baseline gap-1">
                 <p className="text-3xl font-black tabular-nums leading-none">{myRank}</p>
-                <p className="text-xs text-on-surface-variant mt-1">위 · 출석 {myRow.visit_days}일</p>
+                <span className="text-lg font-bold text-on-surface-variant leading-none pb-0.5">위</span>
               </div>
               <p className="text-2xl font-bold text-primary tabular-nums">
                 {myRow.total_points.toLocaleString()}
@@ -241,30 +245,51 @@ export function PublicRankingClient({ ranking, prevMonthTop, monthLabel }: Props
         </section>
       )}
 
-      <section className="mt-4">
-        <h2 className="text-xs font-semibold text-on-surface-variant mb-2 px-0.5">
-          전체 순위 · {ranking.length}명
-        </h2>
+      {showPodium && <PodiumTop3 top3={top3} nickname={nickname} />}
+
+      <section className="mt-2">
+        <div className="flex items-end justify-between gap-3 mb-3">
+          <h2 className="text-sm font-bold">
+            전체 순위
+            <span className="text-on-surface-variant font-semibold ml-1.5">{ranking.length}명</span>
+          </h2>
+        </div>
+
         {ranking.length === 0 ? (
           <div className="glass-panel rounded-2xl p-8 text-center text-on-surface-variant text-sm">
             이번 달 기록이 아직 없습니다.
           </div>
         ) : (
-          <ul className="space-y-2">
-            {ranking.map((row, i) => (
-              <RankRow
-                key={row.nickname}
-                rank={i + 1}
-                row={row}
-                isMe={nickname?.trim().toLowerCase() === row.nickname.toLowerCase()}
-                rowRef={myRowRef}
-              />
-            ))}
-          </ul>
+          <div className="space-y-5">
+            {SECTIONS.map((section) => {
+              const rows = ranked.filter(
+                (r) => r.rank >= section.min && r.rank <= section.max,
+              );
+              if (rows.length === 0) return null;
+              return (
+                <div key={section.tier}>
+                  <div className={`public-ranking-section-head public-ranking-section-${section.tier}`}>
+                    {section.label}
+                    <span className="public-ranking-section-count">{rows.length}</span>
+                  </div>
+                  <ul className="space-y-2">
+                    {rows.map((item) => (
+                      <RankRow
+                        key={item.nickname}
+                        item={item}
+                        isMe={nickname?.trim().toLowerCase() === item.nickname.toLowerCase()}
+                        rowRef={myRowRef}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
         )}
       </section>
 
-      <p className="text-[10px] text-on-surface-variant/70 text-center mt-8 pb-4">
+      <p className="text-[10px] text-on-surface-variant/70 text-center mt-8 pb-2">
         승점은 매장 게임 기록 기준 · 매월 1일 갱신
       </p>
     </div>

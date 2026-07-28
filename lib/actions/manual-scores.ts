@@ -6,6 +6,11 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
 
+function revalidateScores() {
+  revalidateScores();
+  revalidatePath("/ranking");
+}
+
 export type AddManualScoreInput = {
   playDate: string;
   gameNo?: number;
@@ -121,7 +126,7 @@ export async function addManualScore(input: AddManualScoreInput) {
     if (error) return { error: error.message };
   }
 
-  revalidatePath("/admin/scores");
+  revalidateScores();
   return {
     success: true,
     memberCreated: memberResult.created,
@@ -173,7 +178,7 @@ export async function setManualScoreRow(input: AddManualScoreInput) {
 
     if (error) return { error: error.message };
 
-    revalidatePath("/admin/scores");
+    revalidateScores();
     return {
       success: true,
       memberCreated: memberResult.created,
@@ -200,7 +205,7 @@ export async function setManualScoreRow(input: AddManualScoreInput) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/admin/scores");
+  revalidateScores();
   return {
     success: true,
     memberCreated: memberResult.created,
@@ -259,7 +264,7 @@ export async function updateManualScoreRow(recordId: string, input: AddManualSco
 
   if (error) return { error: error.message };
 
-  revalidatePath("/admin/scores");
+  revalidateScores();
   return {
     success: true,
     memberCreated: memberResult.created,
@@ -275,6 +280,6 @@ export async function deleteManualScore(id: string) {
   const { error } = await supabase.from("manual_score_daily").delete().eq("id", id);
   if (error) return { error: error.message };
 
-  revalidatePath("/admin/scores");
+  revalidateScores();
   return { success: true };
 }

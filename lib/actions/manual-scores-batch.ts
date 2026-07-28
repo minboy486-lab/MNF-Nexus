@@ -28,5 +28,6 @@ export async function addManualScoresBatch(rows: AddManualScoreInput[]) {
   if (saved === 0) return { error: "저장할 행이 없습니다. 닉네임과 점수를 입력하세요." };
 
   revalidatePath("/admin/scores");
+  revalidatePath("/ranking");
   return { success: true, saved, anyMemberCreated };
 }

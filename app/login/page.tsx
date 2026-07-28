@@ -26,6 +26,13 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbG...`}
             데모 UI로 둘러보기
             <span className="material-symbols-outlined text-lg">arrow_forward</span>
           </Link>
+          <Link
+            href="/ranking"
+            className="login-ranking-btn flex items-center justify-center gap-2 w-full no-underline"
+          >
+            <span className="material-symbols-outlined text-xl">emoji_events</span>
+            로그인 없이 월별 랭킹보기
+          </Link>
         </div>
       </div>
     </div>

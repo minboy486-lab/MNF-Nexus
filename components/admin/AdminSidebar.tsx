@@ -23,18 +23,8 @@ export function AdminSidebar({ showAccountLink }: { showAccountLink?: boolean })
               aria-label="메뉴 닫기"
               onClick={closeNav}
             />
-            <aside className="glass-sidebar absolute left-0 top-0 bottom-0 w-[min(18rem,88vw)] flex flex-col py-5 shadow-2xl">
-              <div className="flex items-center justify-end px-3 pb-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={closeNav}
-                  className="p-2 rounded-lg hover:bg-white/10 text-on-surface-variant"
-                  aria-label="닫기"
-                >
-                  <span className="material-symbols-outlined text-xl">close</span>
-                </button>
-              </div>
-              <div className="flex flex-col flex-1 min-h-0 -mt-2">
+            <aside className="glass-sidebar absolute left-0 top-0 bottom-0 w-[min(18rem,88vw)] flex flex-col py-4 shadow-2xl">
+              <div className="flex flex-col flex-1 min-h-0">
                 <AdminNavContent onNavigate={closeNav} showAccountLink={showAccountLink} />
               </div>
             </aside>
@@ -46,8 +36,10 @@ export function AdminSidebar({ showAccountLink }: { showAccountLink?: boolean })
   return (
     <>
       {navOpen && (
-        <aside className="glass-sidebar hidden md:flex w-64 flex-col py-6 relative z-10 shrink-0">
-          <AdminNavContent showAccountLink={showAccountLink} />
+        <aside className="glass-sidebar hidden md:flex w-64 flex-col py-4 relative z-10 shrink-0">
+          <div className="flex flex-col flex-1 min-h-0">
+            <AdminNavContent showAccountLink={showAccountLink} />
+          </div>
         </aside>
       )}
       {mobileDrawer}

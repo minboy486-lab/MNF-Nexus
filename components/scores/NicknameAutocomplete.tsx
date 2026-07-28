@@ -9,6 +9,9 @@ type Props = {
   onChange: (value: string) => void;
   disabled?: boolean;
   id?: string;
+  onEnter?: () => void;
+  /** true면 자동완성 목록과 관계없이 Enter 시 onEnter 호출 */
+  enterSubmits?: boolean;
 };
 
 export function NicknameAutocomplete({
@@ -17,6 +20,8 @@ export function NicknameAutocomplete({
   onChange,
   disabled,
   id = "score-nickname",
+  onEnter,
+  enterSubmits = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -56,16 +61,24 @@ export function NicknameAutocomplete({
         onFocus={() => setOpen(true)}
         onBlur={() => window.setTimeout(() => setOpen(false), 150)}
         onKeyDown={(e) => {
-          if (!open || suggestions.length === 0) return;
-          if (e.key === "ArrowDown") {
+          if (e.key === "ArrowDown" && open && suggestions.length > 0) {
             e.preventDefault();
             setHighlight((h) => (h + 1) % suggestions.length);
-          } else if (e.key === "ArrowUp") {
+          } else if (e.key === "ArrowUp" && open && suggestions.length > 0) {
             e.preventDefault();
             setHighlight((h) => (h - 1 + suggestions.length) % suggestions.length);
-          } else if (e.key === "Enter" && suggestions[highlight]) {
-            e.preventDefault();
-            pick(suggestions[highlight].nickname);
+          } else if (e.key === "Enter") {
+            if (enterSubmits && onEnter && value.trim()) {
+              e.preventDefault();
+              setOpen(false);
+              onEnter();
+            } else if (open && suggestions.length > 0 && suggestions[highlight]) {
+              e.preventDefault();
+              pick(suggestions[highlight].nickname);
+            } else if (onEnter && value.trim()) {
+              e.preventDefault();
+              onEnter();
+            }
           } else if (e.key === "Escape") {
             setOpen(false);
           }

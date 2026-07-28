@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { signIn } from "@/lib/actions/auth";
 
@@ -65,10 +66,6 @@ export function LoginForm() {
                 title="영문, 숫자, _ (3~32자)"
               />
             </div>
-            <p className="text-[11px] text-on-surface-variant/70">
-              예: <span className="text-on-surface-variant">admin</span> · 기존{" "}
-              <span className="text-on-surface-variant">admin@mnf.com</span> 도 가능
-            </p>
           </div>
 
           <div className="space-y-2">
@@ -118,10 +115,13 @@ export function LoginForm() {
             <span className="material-symbols-outlined text-lg">arrow_forward</span>
           </button>
 
-          <p className="text-center text-sm text-on-surface-variant pt-2">
-            계정이 없으신가요?{" "}
-            <span className="text-primary font-semibold">계정 생성하기</span>
-          </p>
+          <Link
+            href="/ranking"
+            className="login-ranking-btn flex items-center justify-center gap-2 w-full no-underline"
+          >
+            <span className="material-symbols-outlined text-xl">emoji_events</span>
+            로그인 없이 월별 랭킹보기
+          </Link>
         </form>
       </div>
 

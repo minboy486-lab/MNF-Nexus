@@ -89,6 +89,11 @@ export async function getScoreRanking(from: string, to: string): Promise<ScoreRa
     .map(({ dates: _, ...row }) => row).sort((a, b) => b.total_points - a.total_points);
 }
 
+/** 손님 공개 랭킹: 이번 달 점수 기록이 있는 회원만 */
+export async function getPublicScoreRanking(from: string, to: string): Promise<ScoreRankingRow[]> {
+  return getScoreRanking(from, to);
+}
+
 export async function getAttendanceSummary(from: string, to: string): Promise<AttendanceRow[]> {
   if (!isSupabaseConfigured()) return [];
 

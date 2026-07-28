@@ -15,6 +15,10 @@ const COUNTER_PREFIX = "/counter";
 const GUEST_PREFIX = "/guest";
 const PUBLIC = ["/login", "/", "/ranking"];
 
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC.includes(pathname) || pathname.startsWith("/ranking/");
+}
+
 async function getRole(supabase: ReturnType<typeof createServerClient>, userId: string) {
   const { data: profile } = await supabase
     .from("profiles")
@@ -160,7 +164,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (PUBLIC.includes(pathname) && pathname !== "/") {
+  if (isPublicPath(pathname) && pathname !== "/") {
     return response;
   }
 
