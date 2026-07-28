@@ -1284,7 +1284,7 @@ body {
   justify-content: center;
   font-size: 0.875rem;
   font-weight: 800;
-  tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 .public-ranking-rank-num-top {
