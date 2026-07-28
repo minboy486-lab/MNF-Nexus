@@ -3,30 +3,35 @@
 import { createContext, useContext, useState, useCallback, useEffect } from "react";
 
 type AdminNavContextValue = {
-  mobileOpen: boolean;
-  openMobileNav: () => void;
-  closeMobileNav: () => void;
+  navOpen: boolean;
+  toggleNav: () => void;
+  openNav: () => void;
+  closeNav: () => void;
 };
 
 const AdminNavContext = createContext<AdminNavContextValue | null>(null);
 
 export function AdminNavProvider({ children }: { children: React.ReactNode }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(true);
 
-  const openMobileNav = useCallback(() => setMobileOpen(true), []);
-  const closeMobileNav = useCallback(() => setMobileOpen(false), []);
+  const toggleNav = useCallback(() => setNavOpen((open) => !open), []);
+  const openNav = useCallback(() => setNavOpen(true), []);
+  const closeNav = useCallback(() => setNavOpen(false), []);
 
   useEffect(() => {
-    if (!mobileOpen) return;
+    if (!navOpen) return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    if (!mq.matches) return;
+
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prev;
     };
-  }, [mobileOpen]);
+  }, [navOpen]);
 
   return (
-    <AdminNavContext.Provider value={{ mobileOpen, openMobileNav, closeMobileNav }}>
+    <AdminNavContext.Provider value={{ navOpen, toggleNav, openNav, closeNav }}>
       {children}
     </AdminNavContext.Provider>
   );

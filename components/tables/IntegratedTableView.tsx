@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAdminNavOptional } from "@/components/admin/AdminNavContext";
+import { AdminNavToggle } from "@/components/admin/AdminNavToggle";
 import { StartGameModal } from "@/components/games/StartGameModal";
 import { IntegratedTableCard } from "@/components/tables/IntegratedTableCard";
 import { TableAZoomOverlay } from "@/components/tables/TableAZoomOverlay";
@@ -30,8 +30,6 @@ export function IntegratedTableView({
   defaultBuyIn,
   staffMode,
 }: Props) {
-  const adminNav = useAdminNavOptional();
-  const openMobileNav = staffMode ? undefined : adminNav?.openMobileNav;
   const defaultPresetId = presets[0]?.id;
   const [startGameTableId, setStartGameTableId] = useState<string | null>(null);
   const [tableAExpanded, setTableAExpanded] = useState(false);
@@ -59,16 +57,7 @@ export function IntegratedTableView({
     <div className="integrated-table-view flex-1 flex flex-col min-h-0 overflow-hidden px-2 py-3 md:px-3 md:py-4 w-full">
       <div className="flex flex-wrap justify-between items-center gap-2 mb-2 border-b border-white/5 pb-2 shrink-0">
         <div className="flex items-start gap-2 min-w-0 flex-1">
-          {!staffMode && openMobileNav && (
-            <button
-              type="button"
-              onClick={openMobileNav}
-              className="md:hidden shrink-0 p-2 rounded-lg border border-white/10 bg-surface-container-low/60 hover:bg-white/10"
-              aria-label="메뉴 열기"
-            >
-              <span className="material-symbols-outlined text-2xl">menu</span>
-            </button>
-          )}
+          {!staffMode && <AdminNavToggle className="shrink-0 p-2 rounded-lg border border-white/10 bg-surface-container-low/60 hover:bg-white/10" />}
           <div className="min-w-0">
             <h1 className="text-lg md:text-xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">
               {staffMode ? "테이블" : "통합 테이블 관제 뷰"}
