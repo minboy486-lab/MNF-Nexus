@@ -16,6 +16,23 @@ function defaultFromTo(): { from: string; to: string } {
   return { from: `${y}-${m}-01`, to: `${y}-${m}-${String(last).padStart(2, "0")}` };
 }
 
+export function previousMonthRange(): { from: string; to: string } {
+  const now = new Date();
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const y = prev.getFullYear();
+  const m = prev.getMonth() + 1;
+  const last = new Date(y, m, 0).getDate();
+  return {
+    from: `${y}-${String(m).padStart(2, "0")}-01`,
+    to: `${y}-${String(m).padStart(2, "0")}-${String(last).padStart(2, "0")}`,
+  };
+}
+
+export function formatMonthLabel(from: string): string {
+  const [y, m] = from.split("-");
+  return `${y.slice(2)}년 ${Number(m)}월`;
+}
+
 export function currentMonthRange() {
   return defaultFromTo();
 }

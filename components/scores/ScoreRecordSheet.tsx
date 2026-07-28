@@ -660,9 +660,15 @@ function GameBlock({
           <tr>
             <th className="score-sheet-th score-sheet-th-num" aria-label="번호" />
             <th className="score-sheet-th">닉네임</th>
-            <th className="score-sheet-th">바이인</th>
-            <th className="score-sheet-th">리바인</th>
-            <th className="score-sheet-th">머니인</th>
+            <th className="score-sheet-th score-sheet-th-score" title="바이인">
+              바이
+            </th>
+            <th className="score-sheet-th score-sheet-th-score" title="리바인">
+              리바
+            </th>
+            <th className="score-sheet-th score-sheet-th-score" title="머니인">
+              머니
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -704,7 +710,7 @@ function GameBlock({
                   )}
                 </div>
               </td>
-              <td className="score-sheet-td p-0">
+              <td className="score-sheet-td score-sheet-td-score p-0">
                 <input
                   type="number"
                   min={0}
@@ -713,13 +719,13 @@ function GameBlock({
                   data-game={gameNo}
                   data-row={rowIndex}
                   data-col="buyIn"
-                  className="score-sheet-input text-right tabular-nums"
+                  className="score-sheet-input score-sheet-input-score tabular-nums"
                   onChange={(e) => onUpdate(row.id, { buyIn: e.target.value })}
                   onKeyDown={(e) => onCellKeyDown(e, rowIndex, "buyIn")}
                   {...focusProps}
                 />
               </td>
-              <td className="score-sheet-td p-0">
+              <td className="score-sheet-td score-sheet-td-score p-0">
                 <input
                   type="number"
                   min={0}
@@ -728,13 +734,13 @@ function GameBlock({
                   data-game={gameNo}
                   data-row={rowIndex}
                   data-col="rebuy"
-                  className="score-sheet-input text-right tabular-nums"
+                  className="score-sheet-input score-sheet-input-score tabular-nums"
                   onChange={(e) => onUpdate(row.id, { rebuy: e.target.value })}
                   onKeyDown={(e) => onCellKeyDown(e, rowIndex, "rebuy")}
                   {...focusProps}
                 />
               </td>
-              <td className="score-sheet-td p-0">
+              <td className="score-sheet-td score-sheet-td-score p-0">
                 <input
                   type="number"
                   min={0}
@@ -743,7 +749,7 @@ function GameBlock({
                   data-game={gameNo}
                   data-row={rowIndex}
                   data-col="moneyIn"
-                  className="score-sheet-input text-right tabular-nums"
+                  className="score-sheet-input score-sheet-input-score tabular-nums"
                   onChange={(e) => onUpdate(row.id, { moneyIn: e.target.value })}
                   onKeyDown={(e) => onCellKeyDown(e, rowIndex, "moneyIn")}
                   {...focusProps}

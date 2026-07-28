@@ -13,7 +13,7 @@ const ADMIN_PREFIX = "/admin";
 const STAFF_PREFIX = "/staff";
 const COUNTER_PREFIX = "/counter";
 const GUEST_PREFIX = "/guest";
-const PUBLIC = ["/login", "/"];
+const PUBLIC = ["/login", "/", "/ranking"];
 
 async function getRole(supabase: ReturnType<typeof createServerClient>, userId: string) {
   const { data: profile } = await supabase
