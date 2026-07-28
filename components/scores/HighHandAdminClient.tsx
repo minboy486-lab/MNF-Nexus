@@ -127,59 +127,51 @@ export function HighHandAdminClient({ playDate, hasDateInUrl, entries, members }
           </div>
         )}
 
-        <div className="flex-1 min-h-0 overflow-auto score-list-table-wrap">
-          <table className="score-list-table w-full text-sm">
-            <thead>
-              <tr>
-                <th className="text-left w-28">핸드</th>
-                <th className="text-right w-16">MP</th>
-                <th className="text-left">닉네임</th>
-                <th className="text-right w-32">처리</th>
-              </tr>
-            </thead>
-            <tbody>
-              {HIGH_HAND_TYPES.map((hand) => {
-                const saved = entries.find((e) => e.hand_type === hand.id);
-                return (
-                  <tr key={hand.id}>
-                    <td className="font-semibold">{hand.label}</td>
-                    <td className="text-right text-primary font-bold tabular-nums">{hand.mp}</td>
-                    <td>
-                      <NicknameAutocomplete
-                        members={members}
-                        value={drafts[hand.id]}
-                        onChange={(v) => setDrafts((prev) => ({ ...prev, [hand.id]: v }))}
+        <div className="flex-1 min-h-0 overflow-auto highhand-admin-list-wrap">
+          <ul className="highhand-admin-list">
+            {HIGH_HAND_TYPES.map((hand) => {
+              const saved = entries.find((e) => e.hand_type === hand.id);
+              return (
+                <li key={hand.id} className="highhand-admin-row">
+                  <div className="highhand-admin-row-head">
+                    <span className="highhand-admin-hand">{hand.label}</span>
+                    <span className="highhand-admin-mp">{hand.mp} MP</span>
+                  </div>
+                  <div className="highhand-admin-row-input">
+                    <NicknameAutocomplete
+                      members={members}
+                      value={drafts[hand.id]}
+                      onChange={(v) => setDrafts((prev) => ({ ...prev, [hand.id]: v }))}
+                      disabled={pending}
+                      id={`highhand-${hand.id}`}
+                      enterSubmits
+                      onEnter={() => void handleSave(hand.id)}
+                    />
+                  </div>
+                  <div className="highhand-admin-actions">
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => void handleSave(hand.id)}
+                      className="highhand-admin-save"
+                    >
+                      저장
+                    </button>
+                    {saved && (
+                      <button
+                        type="button"
                         disabled={pending}
-                        id={`highhand-${hand.id}`}
-                      />
-                    </td>
-                    <td className="text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => void handleSave(hand.id)}
-                          className="score-list-toolbar-apply"
-                        >
-                          저장
-                        </button>
-                        {saved && (
-                          <button
-                            type="button"
-                            disabled={pending}
-                            onClick={() => void handleClear(hand.id)}
-                            className="px-2 py-1 rounded-md text-xs text-on-surface-variant border border-white/10 hover:bg-white/5"
-                          >
-                            삭제
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        onClick={() => void handleClear(hand.id)}
+                        className="highhand-admin-clear"
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       </section>
     </div>

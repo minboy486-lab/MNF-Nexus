@@ -58,7 +58,6 @@ export function LoginForm() {
                 type="text"
                 required
                 autoComplete="username"
-                placeholder="admin"
                 className="login-input w-full pl-11 pr-4"
                 minLength={3}
                 maxLength={32}

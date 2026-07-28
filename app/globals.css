@@ -1178,18 +1178,6 @@ body {
     box-shadow 0.2s ease;
 }
 
-.bingo-admin-cell-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  margin: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  border-radius: inherit;
-}
-
 .bingo-admin-cell-body {
   position: relative;
   z-index: 1;
@@ -1198,11 +1186,9 @@ body {
   flex: 1;
   min-height: 0;
   width: 100%;
-  pointer-events: none;
 }
 
 .bingo-admin-cell-foot {
-  pointer-events: auto;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
@@ -1259,15 +1245,17 @@ body {
   text-align: left;
   width: 100%;
   flex-shrink: 0;
+  margin: 0;
   border: none;
   padding: 0;
   background: transparent;
   color: inherit;
   font: inherit;
+  cursor: pointer;
 }
 
-.bingo-admin-cell-open .bingo-admin-cell-head {
-  cursor: pointer;
+.bingo-admin-cell-head:hover .bingo-admin-cell-label {
+  color: var(--primary);
 }
 
 .bingo-admin-cell-no {
@@ -1470,14 +1458,23 @@ body {
 
 .bingo-admin-add-inline {
   margin-top: 0;
-  gap: 0.2rem;
+  gap: 0.35rem;
+  align-items: stretch;
 }
 
 .bingo-admin-add-inline .login-input {
-  height: 1.5rem;
-  min-height: 1.5rem;
-  font-size: 0.5625rem;
-  padding: 0 0.35rem;
+  height: 2rem;
+  min-height: 2rem;
+  font-size: 0.8125rem;
+  padding: 0 0.5rem;
+}
+
+.bingo-admin-add-btn {
+  height: 2rem;
+  padding: 0 0.625rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .bingo-admin-cell-foot .bingo-admin-mission-btn {
@@ -1514,6 +1511,32 @@ body {
 
 .bingo-admin-detail-modal .bingo-admin-add {
   margin-top: 1.25rem;
+}
+
+@media (max-width: 639px) {
+  .bingo-admin-marks-preview {
+    display: none;
+  }
+
+  .bingo-admin-cell-label {
+    -webkit-line-clamp: 2;
+    font-size: 0.625rem;
+  }
+
+  .bingo-admin-cell {
+    padding: 0.35rem;
+  }
+
+  .bingo-admin-add-inline {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .bingo-admin-add-btn {
+    width: 100%;
+    height: 1.75rem;
+    font-size: 0.6875rem;
+  }
 }
 
 @media (min-width: 640px) {
@@ -1556,6 +1579,12 @@ body {
     font-size: 0.625rem;
   }
 
+  .bingo-admin-add-btn {
+    height: 1.65rem;
+    padding: 0 0.5rem;
+    font-size: 0.625rem;
+  }
+
   .bingo-admin-mission-btn {
     font-size: 0.6875rem;
     padding: 0.4rem 0.5rem;
@@ -1571,6 +1600,128 @@ body {
   .score-list-toolbar-meta {
     flex: 1 1 100%;
     text-align: right;
+  }
+}
+
+/* 하이핸드 관리 — 모바일 우선 카드 */
+.highhand-admin-list-wrap {
+  padding: 0.75rem;
+}
+
+.highhand-admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.highhand-admin-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: 0.625rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.highhand-admin-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.highhand-admin-hand {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--on-surface);
+}
+
+.highhand-admin-mp {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.highhand-admin-row-input .login-input {
+  height: 2.5rem;
+  min-height: 2.5rem;
+  font-size: 1rem;
+  padding: 0 0.75rem;
+}
+
+.highhand-admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.highhand-admin-save {
+  height: 2.25rem;
+  padding: 0 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 1px solid rgba(255, 198, 218, 0.4);
+  color: var(--primary);
+  background: transparent;
+  transition: background 0.2s ease;
+}
+
+.highhand-admin-save:hover:not(:disabled) {
+  background: rgba(255, 198, 218, 0.1);
+}
+
+.highhand-admin-clear {
+  height: 2.25rem;
+  padding: 0 0.875rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  transition: background 0.2s ease;
+}
+
+.highhand-admin-clear:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+@media (min-width: 640px) {
+  .highhand-admin-row {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .highhand-admin-row-head {
+    flex: 0 0 7rem;
+  }
+
+  .highhand-admin-row-input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .highhand-admin-row-input .login-input {
+    height: 2rem;
+    min-height: 2rem;
+    font-size: 0.875rem;
+  }
+
+  .highhand-admin-actions {
+    flex-shrink: 0;
+  }
+
+  .highhand-admin-save,
+  .highhand-admin-clear {
+    height: 2rem;
+    font-size: 0.75rem;
   }
 }
 

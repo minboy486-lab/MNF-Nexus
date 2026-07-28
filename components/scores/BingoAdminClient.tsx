@@ -293,25 +293,23 @@ export function BingoAdminClient({ sheet, members }: Props) {
                     marks.length > 0 ? "bingo-admin-cell-done" : ""
                   } ${active ? "bingo-admin-cell-active" : ""}`}
                 >
-                  <button
-                    type="button"
-                    className="bingo-admin-cell-overlay"
-                    onClick={() => openCell(cellNo)}
-                    aria-label={`${labels[i]} · 칸 열기`}
-                    aria-expanded={active}
-                  />
-
                   <div className="bingo-admin-cell-body">
-                    <div className="bingo-admin-cell-head">
+                    <button
+                      type="button"
+                      className="bingo-admin-cell-head"
+                      onClick={() => openCell(cellNo)}
+                      aria-label={`${labels[i]} · 미션 편집`}
+                      aria-expanded={active}
+                    >
                       <span className="bingo-admin-cell-no">{cellNo}</span>
                       <span className="bingo-admin-cell-label">{labels[i]}</span>
                       {marks.length > 0 && (
                         <span className="bingo-admin-cell-count">{marks.length}</span>
                       )}
-                    </div>
+                    </button>
 
                     {marks.length > 0 && (
-                      <ul className="bingo-admin-marks-preview">
+                      <ul className="bingo-admin-marks-preview" aria-hidden="true">
                         {marks.map((mark) => (
                           <li key={mark.id}>{mark.nickname}</li>
                         ))}
@@ -333,7 +331,7 @@ export function BingoAdminClient({ sheet, members }: Props) {
                           type="button"
                           disabled={pending || !inlineNick.trim()}
                           onClick={() => void handleAddMark(cellNo)}
-                          className="btn-primary px-2 py-1 rounded-md text-[10px] font-semibold disabled:opacity-50 shrink-0"
+                          className="bingo-admin-add-btn btn-primary disabled:opacity-50 shrink-0"
                         >
                           등록
                         </button>
