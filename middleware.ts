@@ -14,18 +14,61 @@ const STAFF_PREFIX = "/staff";
 const COUNTER_PREFIX = "/counter";
 const GUEST_PREFIX = "/guest";
 const PUBLIC = ["/login", "/", "/ranking"];
+const MIDDLEWARE_SUPABASE_TIMEOUT_MS = 4_000;
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC.includes(pathname) || pathname.startsWith("/ranking/");
 }
 
-async function getRole(supabase: ReturnType<typeof createServerClient>, userId: string) {
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", userId)
-    .single();
-  return profile?.role ?? null;
+function needsAuthPath(pathname: string): boolean {
+  return (
+    pathname.startsWith(ADMIN_PREFIX) ||
+    pathname.startsWith(STAFF_PREFIX) ||
+    pathname.startsWith(COUNTER_PREFIX) ||
+    pathname.startsWith(GUEST_PREFIX)
+  );
+}
+
+/** Supabase 세션 쿠키가 없으면 getUser() 호출 불필요 */
+function hasSupabaseSessionCookie(request: NextRequest): boolean {
+  return request.cookies.getAll().some(
+    (cookie) => cookie.name.includes("-auth-token") || cookie.name.startsWith("sb-"),
+  );
+}
+
+async function withTimeout<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), MIDDLEWARE_SUPABASE_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function getAuthUser(
+  supabase: ReturnType<typeof createServerClient>,
+): Promise<{ id: string } | null> {
+  const result = await withTimeout<Awaited<ReturnType<typeof supabase.auth.getUser>> | null>(
+    supabase.auth.getUser(),
+    null,
+  );
+  return result?.data.user ?? null;
+}
+
+async function getRole(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string,
+): Promise<string | null> {
+  const result = await withTimeout<
+    Awaited<ReturnType<ReturnType<typeof supabase.from>["select"]>> | null
+  >(supabase.from("profiles").select("role").eq("id", userId).single(), null);
+  const role = result?.data?.role;
+  return typeof role === "string" ? role : null;
 }
 
 export async function middleware(request: NextRequest) {
@@ -33,6 +76,18 @@ export async function middleware(request: NextRequest) {
   const userAgent = request.headers.get("user-agent");
 
   if (!isSupabaseConfigured()) {
+    return NextResponse.next();
+  }
+
+  const hasSession = hasSupabaseSessionCookie(request);
+  const needsAuth = needsAuthPath(pathname);
+
+  // Supabase 장애·잘못된 URL 시 hang 방지: 인증 불필요 + 세션 없음 → 바로 통과
+  if (!needsAuth && !hasSession) {
+    return NextResponse.next();
+  }
+
+  if (isPublicPath(pathname) && !hasSession) {
     return NextResponse.next();
   }
 
@@ -59,15 +114,7 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const needsAuth =
-    pathname.startsWith(ADMIN_PREFIX) ||
-    pathname.startsWith(STAFF_PREFIX) ||
-    pathname.startsWith(COUNTER_PREFIX) ||
-    pathname.startsWith(GUEST_PREFIX);
+  const user = await getAuthUser(supabase);
 
   if (needsAuth && !user) {
     const url = request.nextUrl.clone();

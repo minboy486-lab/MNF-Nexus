@@ -148,7 +148,6 @@ export function ScoreRecordSheet({
   hasDateInUrl,
 }: Props) {
   const router = useRouter();
-  const dateInputRef = useRef<HTMLInputElement>(null);
   const maxSavedGame = useMemo(
     () => savedRows.reduce((max, r) => Math.max(max, r.game_no ?? 1), 0),
     [savedRows],
@@ -523,25 +522,21 @@ export function ScoreRecordSheet({
     <section className="score-record-panel glass-panel rounded-xl flex-1 min-h-0 flex flex-col overflow-hidden">
       <div className="score-record-toolbar shrink-0 px-3 py-1.5 border-b border-white/10 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => dateInputRef.current?.showPicker?.()}
-            className="score-record-date group inline-flex items-center gap-1.5"
-          >
-            <span className="text-sm font-bold text-primary group-hover:underline">
+          <label className="score-record-date group inline-flex items-center gap-1.5 relative cursor-pointer">
+            <span className="text-sm font-bold text-primary group-hover:underline pointer-events-none">
               {formatDateKo(playDate)}
             </span>
-            <span className="text-[10px] text-on-surface-variant">날짜 변경</span>
-          </button>
-          <input
-            ref={dateInputRef}
-            type="date"
-            value={playDate}
-            onChange={(e) => navigateDate(e.target.value)}
-            className="sr-only"
-            tabIndex={-1}
-            aria-label="날짜"
-          />
+            <span className="text-[10px] text-on-surface-variant pointer-events-none">
+              날짜 변경
+            </span>
+            <input
+              type="date"
+              value={playDate}
+              onChange={(e) => navigateDate(e.target.value)}
+              className="score-record-date-input"
+              aria-label="날짜"
+            />
+          </label>
           <span className="text-[10px] text-on-surface-variant hidden sm:inline">
             · 다른 게임 클릭 시 해당 게임 저장
           </span>

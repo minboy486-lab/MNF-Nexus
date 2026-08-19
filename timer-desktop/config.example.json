@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "controlDisplayId": 0,
+  "mappings": [
+    {
+      "displayId": 0,
+      "tableNumber": 1,
+      "label": "External Monitor 1",
+      "bounds": { "x": 1920, "y": 0, "width": 1920, "height": 1080 }
+    }
+  ]
+}

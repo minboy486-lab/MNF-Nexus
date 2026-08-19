@@ -1,0 +1,290 @@
+/* ── Base ─────────────────────────────────────────────────── */
+:root {
+  color-scheme: dark;
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Segoe UI", Inter, sans-serif;
+
+  --bg:        #05070c;
+  --primary:   #ffb6c9;
+  --secondary: #b7b0ff;
+  --text:      #e8e6ef;
+  --muted:     rgba(196,176,196,0.5);
+  --border:    rgba(255,255,255,0.07);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Shell ─────────────────────────────────────────────────── */
+.ds {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 배경 로고 ───────────────────────────────────────────── */
+.ds-bg-logo {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(82vw, 82vh);
+  height: min(82vw, 82vh);
+  object-fit: contain;
+  opacity: 0.07;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  filter: grayscale(1);
+}
+
+/* ── Glow ──────────────────────────────────────────────────── */
+.ds-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(140px);
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 1.2s;
+}
+.ds-glow--a {
+  width: 70vw; height: 70vw;
+  top: -25vw; left: -15vw;
+  background: rgba(255,182,201,0.13);
+  opacity: 0.5;
+}
+.ds-glow--b {
+  width: 55vw; height: 55vw;
+  bottom: -20vw; right: -12vw;
+  background: rgba(112,0,255,0.11);
+  opacity: 0.5;
+}
+.ds--running .ds-glow--a { opacity: 1; }
+.ds--paused  .ds-glow--a { opacity: 0.25; }
+.ds--idle    .ds-glow--a { opacity: 0.15; }
+
+/* ── 게임 이름 (상단 중앙 고정) ────────────────────────────── */
+.ds-title-bar {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  text-align: center;
+  padding: 32px 0 0;
+  flex-shrink: 0;
+}
+.ds-game-name {
+  display: inline-block;
+  font-size: clamp(2rem, 4vw, 4rem);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  /* letter-spacing은 마지막 글자 뒤에도 적용돼 우측으로 밀려 보이므로 margin으로 보정 */
+  margin-left: 0.18em;
+  text-transform: uppercase;
+  color: rgba(232,230,239,0.97);
+  /* 세련된 느낌을 위한 미세 그림자 */
+  text-shadow: 0 2px 24px rgba(176,131,255,0.18), 0 1px 0 rgba(0,0,0,0.4);
+}
+
+/* ── Idle ──────────────────────────────────────────────────── */
+.ds-idle {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.ds-idle__text {
+  font-size: clamp(2rem, 3.5vw, 3rem);
+  font-weight: 300;
+  letter-spacing: 0.3em;
+  color: var(--muted);
+}
+.ds-idle__sub {
+  font-size: 0.9rem;
+  letter-spacing: 0.2em;
+  color: rgba(255,255,255,0.12);
+}
+
+/* ── 3-column layout ───────────────────────────────────────── */
+.ds-layout {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2.6fr) minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── 좌측 패널 ─────────────────────────────────────────────── */
+.ds-left {
+  border-right: 1px solid var(--border);
+  padding: 40px 28px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+.ds-left__placeholder { flex: 1; }
+
+/* ── 중앙 패널 ─────────────────────────────────────────────── */
+.ds-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 40px 36px;
+  gap: 0;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.ds-level {
+  font-size: clamp(2rem, 4.5vw, 5rem);
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  color: var(--primary);
+  opacity: 0.85;
+  margin-bottom: 4px;
+}
+
+.ds-timer {
+  font-size: clamp(120px, 28vw, 340px);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: rgba(232,230,239,0.3);
+  transition: color 0.6s, text-shadow 0.6s;
+  margin-bottom: 20px;
+}
+.ds-timer--running {
+  color: var(--primary);
+  text-shadow: 0 0 140px rgba(255,182,201,0.3);
+}
+.ds-timer--paused {
+  color: rgba(232,230,239,0.2);
+}
+
+/* 현재 블라인드 */
+.ds-blinds {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.ds-blinds__label {
+  font-size: clamp(1rem, 1.8vw, 1.8rem);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+}
+.ds-blinds__val {
+  font-size: clamp(2.2rem, 5vw, 5.5rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.ds-blinds__sep { color: var(--muted); margin: 0 6px; }
+.ds-blinds__val--break {
+  font-size: clamp(1.8rem, 4vw, 4rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  opacity: 0.9;
+}
+
+/* 다음 레벨 */
+.ds-next {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 14px 32px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.ds-next__label {
+  font-size: clamp(0.9rem, 1.5vw, 1.6rem);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ds-next__val {
+  font-size: clamp(1.4rem, 2.6vw, 3rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: rgba(232,230,239,0.55);
+}
+.ds-next__ante {
+  color: var(--muted);
+  font-size: 0.88em;
+}
+
+/* ── 우측 패널 ─────────────────────────────────────────────── */
+.ds-right {
+  border-left: 1px solid var(--border);
+  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.ds-right__div {
+  height: 1px;
+  background: var(--border);
+  margin: 14px 0;
+}
+
+.ds-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 3px 0;
+}
+.ds-stat__label {
+  font-size: clamp(0.65rem, 1vw, 1rem);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ds-stat__val {
+  font-size: clamp(1.3rem, 2.4vw, 2.6rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ds-stat__val--hi {
+  font-size: clamp(1.6rem, 3vw, 3.2rem);
+  color: var(--primary);
+}
+.ds-stat__val--muted {
+  color: var(--muted);
+}
+.ds-stat__val--mono {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  font-size: clamp(1.1rem, 2vw, 2.2rem);
+}
