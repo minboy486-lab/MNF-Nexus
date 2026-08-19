@@ -32,6 +32,7 @@ export function App() {
   const [popup, setPopup] = useState<Popup>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quitConfirm, setQuitConfirm] = useState(false);
+  const [updaterStatus, setUpdaterStatus] = useState<{ status: string; version?: string; percent?: number; message?: string } | null>(null);
 
   const [displays, setDisplays] = useState<DisplayInfo[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -68,11 +69,13 @@ export function App() {
     const unsubSetup = window.controlApi.onSetupRequired(() => setView({ kind: "setup" }));
     const unsubSnap = window.controlApi.onSnapshot(setSnapshot);
     const unsubTimers = window.controlApi.onTimerUpdate(setTimers);
+    const unsubUpdater = window.controlApi.onUpdaterStatus(setUpdaterStatus);
 
     return () => {
       unsubSetup();
       unsubSnap();
       unsubTimers();
+      unsubUpdater();
     };
   }, [refresh]);
 
@@ -99,7 +102,8 @@ export function App() {
       if (settingsOpen) {
         const menuActions: (() => void)[] = [
           () => { setSettingsOpen(false); setView({ kind: "setup" }); },   // 1: 모니터 설정
-          () => { setSettingsOpen(false); setQuitConfirm(true); },          // 2: 프로그램 종료
+          () => { /* 업데이트 — 상태에 따라 동작 */ },                      // 2: 업데이트 (별도 처리)
+          () => { setSettingsOpen(false); setQuitConfirm(true); },          // 3: 프로그램 종료
         ];
         const idx = parseInt(e.key, 10) - 1;
         if (idx >= 0 && idx < menuActions.length) {
@@ -536,8 +540,24 @@ export function App() {
       {/* 전체화면 모니터 미리보기 */}
 
       {settingsOpen && (() => {
+        const updaterLabel = (() => {
+          if (!updaterStatus) return "업데이트 확인";
+          if (updaterStatus.status === "checking") return "확인 중...";
+          if (updaterStatus.status === "available") return `업데이트 다운로드 (v${updaterStatus.version})`;
+          if (updaterStatus.status === "downloading") return `다운로드 중... ${updaterStatus.percent ?? 0}%`;
+          if (updaterStatus.status === "downloaded") return `재시작하여 설치 (v${updaterStatus.version})`;
+          if (updaterStatus.status === "not-available") return "최신 버전입니다 ✓";
+          if (updaterStatus.status === "error") return "업데이트 오류 (재시도)";
+          return "업데이트 확인";
+        })();
+        const updaterAction = () => {
+          if (updaterStatus?.status === "available") { void window.controlApi.downloadUpdate(); return; }
+          if (updaterStatus?.status === "downloaded") { void window.controlApi.installUpdate(); return; }
+          void window.controlApi.checkUpdate();
+        };
         const menuItems: { label: string; variant?: string; action: () => void }[] = [
           { label: "모니터 설정", action: () => { setSettingsOpen(false); setView({ kind: "setup" }); } },
+          { label: updaterLabel, action: () => { updaterAction(); } },
           { label: "프로그램 종료", variant: "danger", action: () => { setSettingsOpen(false); setQuitConfirm(true); } },
         ];
         return (

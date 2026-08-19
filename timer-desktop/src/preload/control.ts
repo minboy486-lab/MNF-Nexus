@@ -31,6 +31,11 @@ export type ControlApi = {
   updateCounters: (gameId: number, patch: { players?: number; entries?: number; rebuys?: number[]; addon?: number; bonusChip?: number }) => Promise<{ ok: true } | { ok: false; error: string }>;
   openExternal: (url: string) => void;
   quit: () => void;
+  // 업데이터
+  checkUpdate: () => Promise<void>;
+  downloadUpdate: () => Promise<void>;
+  installUpdate: () => Promise<void>;
+  onUpdaterStatus: (cb: (info: { status: string; version?: string; percent?: number; message?: string }) => void) => () => void;
 };
 
 const api: ControlApi = {
@@ -65,6 +70,14 @@ const api: ControlApi = {
     ipcRenderer.invoke("session:counters", { gameId, ...patch }),
   openExternal: (url) => void shell.openExternal(url),
   quit: () => void ipcRenderer.invoke("app:quit"),
+  checkUpdate: () => ipcRenderer.invoke("updater:check"),
+  downloadUpdate: () => ipcRenderer.invoke("updater:download"),
+  installUpdate: () => ipcRenderer.invoke("updater:install"),
+  onUpdaterStatus: (cb) => {
+    const h = (_e: Electron.IpcRendererEvent, info: Parameters<typeof cb>[0]) => cb(info);
+    ipcRenderer.on("updater:status", h);
+    return () => ipcRenderer.removeListener("updater:status", h);
+  },
 };
 
 contextBridge.exposeInMainWorld("controlApi", api);

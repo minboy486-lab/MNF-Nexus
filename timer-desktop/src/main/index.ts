@@ -21,6 +21,7 @@ import { enrichMappingsWithCurrentDisplays } from "./screen/displayMapper";
 import { registerIpcHandlers } from "./ipc/handlers";
 import { TimerHub } from "./timer/timerHub";
 import { WindowManager } from "./windows/windowManager";
+import { setupAutoUpdater } from "./updater";
 
 const windowManager = new WindowManager();
 const timerHub = new TimerHub({
@@ -46,6 +47,7 @@ function registerScreenEvents(): void {
 
 app.whenReady().then(async () => {
   registerIpcHandlers(windowManager, timerHub);
+  setupAutoUpdater();
   registerScreenEvents();
 
   const saved = loadConfig();
