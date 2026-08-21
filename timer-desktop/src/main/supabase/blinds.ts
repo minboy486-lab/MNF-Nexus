@@ -9,12 +9,16 @@ const path = require("path") as typeof import("path");
 /** .env에서 값 직접 읽기 */
 function readEnvFile(): Record<string, string> {
   const candidates = [
-    path.resolve(__dirname, "../../.env"),        // out/main → timer-desktop/.env  (prod)
-    path.resolve(__dirname, "../../../.env"),      // 더 깊은 경우
-    path.resolve(__dirname, "../../../../.env"),   // dev: src/main → timer-desktop/.env
-    path.resolve(process.cwd(), ".env"),           // cwd 기준 (npm run dev 시 timer-desktop/)
-    path.resolve(process.cwd(), "timer-desktop/.env"), // cwd가 monorepo root인 경우
-  ];
+    // electron-builder extraResources → resources/.env (설치된 exe)
+    typeof process.resourcesPath === "string"
+      ? path.join(process.resourcesPath, ".env")
+      : "",
+    path.resolve(__dirname, "../../.env"),             // out/main → timer-desktop/.env
+    path.resolve(__dirname, "../../../.env"),
+    path.resolve(__dirname, "../../../../.env"),
+    path.resolve(process.cwd(), ".env"),
+    path.resolve(process.cwd(), "timer-desktop/.env"),
+  ].filter(Boolean);
   for (const p of candidates) {
     try {
       if (!fs.existsSync(p)) continue;

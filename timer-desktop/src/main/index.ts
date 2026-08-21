@@ -1,9 +1,14 @@
-// dev 모드에서 vite define이 main process에 주입 안 되므로 직접 .env 로드
+// .env 로드 (dev: 프로젝트 루트 / prod: resources/.env)
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 (function loadDotEnv() {
-  const p = resolve(__dirname, "../../.env");
-  if (!existsSync(p)) return;
+  const candidates = [
+    typeof process.resourcesPath === "string" ? join(process.resourcesPath, ".env") : "",
+    resolve(__dirname, "../../.env"),
+    resolve(process.cwd(), ".env"),
+  ].filter(Boolean);
+  const p = candidates.find((c) => existsSync(c));
+  if (!p) return;
   for (const line of readFileSync(p, "utf-8").split("\n")) {
     const t = line.trim();
     if (!t || t.startsWith("#")) continue;

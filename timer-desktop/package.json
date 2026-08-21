@@ -9,7 +9,8 @@
     "preview": "env -u ELECTRON_RUN_AS_NODE electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "dist:win": "electron-vite build && electron-builder --win --x64",
-    "dist:mac": "electron-vite build && electron-builder --mac"
+    "dist:mac": "electron-vite build && electron-builder --mac",
+    "release:tag": "node -e \"const v=require('./package.json').version; console.log('다음 실행:\\ngit tag v'+v+'\\ngit push origin v'+v)\""
   },
   "build": {
     "appId": "com.mnf.timer",
