@@ -539,6 +539,7 @@ export async function punchMeIn(): Promise<{ success: true; already: boolean } |
     venue_session_id: session?.id ?? null,
   });
   if (error) return { error: error.message };
+  revalidatePath("/staff", "layout");
   revalidatePath("/staff");
   revalidatePath("/staff/attendance");
   revalidatePath("/admin/staff");
@@ -565,6 +566,7 @@ export async function punchMeOut(): Promise<{ success: true } | { error: string 
     .update({ checked_out_at: new Date().toISOString() })
     .eq("id", shift.id);
   if (error) return { error: error.message };
+  revalidatePath("/staff", "layout");
   revalidatePath("/staff");
   revalidatePath("/staff/attendance");
   revalidatePath("/admin/staff");

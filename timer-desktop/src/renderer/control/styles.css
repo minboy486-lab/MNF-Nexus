@@ -92,10 +92,24 @@ body::after {
   display: block;
 }
 
+.header-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
 .header-title {
   font-size: 1.15rem;
   font-weight: 700;
   color: var(--text);
+}
+
+.header-version {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-soft);
+  user-select: none;
 }
 
 .header-actions {

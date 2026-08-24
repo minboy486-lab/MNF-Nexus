@@ -266,6 +266,10 @@ export function App() {
           >
             ← 게임 목록
           </button>
+        ) : websiteUrl("/staff") ? (
+          <a className="games-list-btn" href={websiteUrl("/staff") ?? "/staff"}>
+            ← 뒤로
+          </a>
         ) : (
           <>
             <img src={logoUrl} alt="MNF" className="remote-logo" />

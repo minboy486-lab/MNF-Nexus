@@ -8,6 +8,7 @@ import {
   normalizeUiTheme,
   UI_THEME_OPTIONS,
 } from "../../shared/types";
+import { APP_VERSION, APP_VERSION_LABEL } from "../../shared/appVersion";
 import { AssignPopup } from "./AssignPopup";
 import { BlindSelectView } from "./BlindSelectView";
 import { FloorPlanView } from "./FloorPlanView";
@@ -453,14 +454,19 @@ export function App() {
             >
               <img src="./mnf-logo.png" alt="MNF" className="header-logo" />
             </button>
-            <span className="header-title">
-              {view.kind === "setup"
-                ? "모니터 설정"
-                : view.kind === "blind-select"
-                  ? "블라인드 선택"
-                  : view.kind === "game-control"
-                    ? `Game ${currentSession?.gameId}`
-                    : "매장 컨트롤"}
+            <span className="header-heading">
+              <span className="header-title">
+                {view.kind === "setup"
+                  ? "모니터 설정"
+                  : view.kind === "blind-select"
+                    ? "블라인드 선택"
+                    : view.kind === "game-control"
+                      ? `Game ${currentSession?.gameId}`
+                      : "매장 컨트롤"}
+              </span>
+              <span className="header-version" title={APP_VERSION}>
+                {APP_VERSION_LABEL}
+              </span>
             </span>
           </div>
           {view.kind === "main" && (
