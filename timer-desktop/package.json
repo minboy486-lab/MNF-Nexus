@@ -1,6 +1,6 @@
 {
   "name": "mnf-timer-desktop",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "main": "./out/main/index.js",
   "scripts": {
@@ -28,6 +28,10 @@
       {
         "from": ".env",
         "to": ".env"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
       }
     ],
     "win": {

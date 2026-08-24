@@ -1,4 +1,5 @@
 import { BrowserWindow } from "electron";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { DisplayInfo } from "../../shared/types";
 
@@ -8,6 +9,14 @@ function isDevRuntime(): boolean {
 
 function preloadPath(name: "control" | "display"): string {
   return join(__dirname, `../preload/${name}.js`);
+}
+
+function windowIcon(): string | undefined {
+  const candidates = [
+    join(__dirname, "../../build/icon.png"),
+    join(process.resourcesPath, "icon.png"),
+  ];
+  return candidates.find((p) => existsSync(p));
 }
 
 function centerOnDisplay(display: DisplayInfo, width: number, height: number) {
@@ -28,6 +37,8 @@ export function createControlWindow(display: DisplayInfo): BrowserWindow {
     show: false,
     autoHideMenuBar: true,
     title: "MNF Timer Control",
+    icon: windowIcon(),
+    backgroundColor: "#0a0b10",
     webPreferences: {
       preload: preloadPath("control"),
       contextIsolation: true,
@@ -76,6 +87,7 @@ export function createDisplayWindow(display: DisplayInfo, monitorSlot: number): 
     fullscreen: true,
     autoHideMenuBar: true,
     title: `MNF Monitor ${monitorSlot}`,
+    icon: windowIcon(),
     webPreferences: {
       preload: preloadPath("display"),
       contextIsolation: true,

@@ -6,7 +6,8 @@
 #
 # 필요 Secrets (repo Settings → Secrets and variables → Actions):
 #   SUPABASE_URL
-#   SUPABASE_ANON_KEY  (또는 SUPABASE_SERVICE_ROLE_KEY)
+#   SUPABASE_SERVICE_ROLE_KEY
+#   SUPABASE_ANON_KEY  (선택)
 
 name: Timer Desktop Windows Release
 
@@ -56,19 +57,17 @@ jobs:
             echo "Missing secret SUPABASE_URL"
             exit 1
           fi
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Missing secret SUPABASE_SERVICE_ROLE_KEY (직원 QR 출근에 필요)"
+            exit 1
+          fi
           {
             echo "SUPABASE_URL=$SUPABASE_URL"
-            if [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-              echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY"
-            fi
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY"
             if [ -n "$SUPABASE_ANON_KEY" ]; then
               echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
             fi
           } > .env
-          if [ -z "$SUPABASE_ANON_KEY" ] && [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "Need SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY secret"
-            exit 1
-          fi
 
       - name: Sync version from tag
         shell: bash
