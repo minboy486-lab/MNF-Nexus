@@ -18,7 +18,7 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
         <form action={signOut}>
           <button
             type="submit"
-            className="text-xs text-on-surface-variant hover:text-primary transition-colors"
+            className="h-9 px-3.5 rounded-lg text-xs font-semibold border border-white/20 bg-white/10 text-on-surface shadow-sm active:scale-[0.94] active:bg-white/20 transition-transform"
           >
             로그아웃
           </button>

@@ -7,6 +7,7 @@ import { StaffQrScanner } from "@/components/staff/StaffQrScanner";
 import {
   parseControllerQr,
   saveTimerPairing,
+  markLanNavigation,
   timerRemoteHref,
 } from "@/lib/staff/timer-pairing";
 
@@ -39,6 +40,12 @@ export function StaffClockInClient({ loginId, nextHref = "home" }: Props) {
         return;
       }
       if (nextHref === "timer") {
+        if (!navigator.onLine) {
+          setBusy(false);
+          setError("와이파이 연결을 확인해주세요");
+          return;
+        }
+        markLanNavigation();
         window.location.assign(timerRemoteHref(pairing));
         return;
       }

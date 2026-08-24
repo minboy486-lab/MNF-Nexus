@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { punchMeOut, type MyShiftRow } from "@/lib/actions/staff";
 import { formatDateTimeKST, formatTimeHHmmKST } from "@/lib/utils/format";
 
@@ -24,9 +25,13 @@ export function StaffAttendanceClient({
   shifts,
 }: Props) {
   const router = useRouter();
+  const [busy, setBusy] = useState(false);
 
   async function checkout() {
+    if (busy) return;
+    setBusy(true);
     const r = await punchMeOut();
+    setBusy(false);
     if ("error" in r) alert(r.error);
     else router.refresh();
   }
@@ -54,16 +59,6 @@ export function StaffAttendanceClient({
         </div>
       </section>
 
-      {working && (
-        <button
-          type="button"
-          onClick={() => void checkout()}
-          className="w-full h-12 rounded-xl border border-white/15 text-sm font-semibold"
-        >
-          퇴근하기
-        </button>
-      )}
-
       <section className="space-y-2">
         <h2 className="text-sm font-bold text-on-surface-variant">출퇴근</h2>
         {shifts.length === 0 && (
@@ -83,6 +78,17 @@ export function StaffAttendanceClient({
           </div>
         ))}
       </section>
+
+      {working && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void checkout()}
+          className="w-full h-12 rounded-xl bg-red-600 text-white text-sm font-bold active:scale-[0.97] active:bg-red-700 transition-transform disabled:opacity-50"
+        >
+          {busy ? "처리 중..." : "퇴근"}
+        </button>
+      )}
     </div>
   );
 }

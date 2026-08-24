@@ -410,12 +410,16 @@ export class RemoteServer {
 
   private serveManifest(res: ServerResponse): void {
     const body = JSON.stringify({
-      name: "MNF Timer Remote",
-      short_name: "MNF 리모컨",
+      name: "MNF HOLDEM",
+      short_name: "MNF HOLDEM",
       start_url: "/remote/?source=pwa",
       display: "standalone",
       background_color: "#0d0b12",
       theme_color: "#0d0b12",
+      icons: [
+        { src: "/remote/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+        { src: "/remote/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      ],
     });
     res.writeHead(200, { "Content-Type": "application/manifest+json; charset=utf-8" });
     res.end(body);

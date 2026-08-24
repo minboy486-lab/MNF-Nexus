@@ -13,6 +13,7 @@ import logoUrl from "./mnf-logo.png";
 
 const LS_LOGIN = "mnf-remote-login-id";
 const LS_SESSION = "mnf-remote-session";
+const LS_FROM = "mnf-web-origin";
 
 const EMPTY_SNAP: AppSnapshot = {
   sessions: [],
@@ -20,49 +21,14 @@ const EMPTY_SNAP: AppSnapshot = {
   tableAssignments: {},
 };
 
-function pairingFromSearch(search: string): { pin: string; tok: string; loginId: string } {
+function pairingFromSearch(search: string): { pin: string; tok: string; loginId: string; from: string } {
   const q = new URLSearchParams(search);
   return {
     pin: q.get("pin")?.trim() ?? "",
     tok: q.get("tok")?.trim() ?? "",
     loginId: (q.get("id") ?? q.get("login") ?? "").trim().toLowerCase(),
+    from: q.get("from")?.trim() ?? "",
   };
-}
-
-function parseQrPayload(text: string): { pin?: string; tok?: string } {
-  try {
-    const u = new URL(text.trim());
-    return {
-      pin: u.searchParams.get("pin") ?? undefined,
-      tok: u.searchParams.get("tok") ?? undefined,
-    };
-  } catch {
-    const t = text.trim();
-    if (/^[A-Za-z0-9_-]{8,}$/.test(t)) return { tok: t };
-    return {};
-  }
-}
-
-async function decodeQrFile(file: File): Promise<string | null> {
-  const bmp = await createImageBitmap(file);
-  try {
-    const Detector = (window as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => { detect: (src: ImageBitmap) => Promise<Array<{ rawValue?: string }>> } }).BarcodeDetector;
-    if (Detector) {
-      const codes = await new Detector({ formats: ["qr_code"] }).detect(bmp);
-      if (codes[0]?.rawValue) return codes[0].rawValue;
-    }
-  } catch {
-    /* jsQR fallback */
-  }
-  const canvas = document.createElement("canvas");
-  canvas.width = bmp.width;
-  canvas.height = bmp.height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  ctx.drawImage(bmp, 0, 0);
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const { default: jsQR } = await import("jsqr");
-  return jsQR(imageData.data, imageData.width, imageData.height)?.data ?? null;
 }
 
 function statusLabel(status: TableTimerState["status"] | undefined): string {
@@ -121,17 +87,15 @@ export function App() {
   const [pin, setPin] = useState(initial.pin);
   const [tok, setTok] = useState(initial.tok);
   const [pinOk, setPinOk] = useState(false);
-  const [loginId, setLoginId] = useState(
+  const [loginId] = useState(
     () => initial.loginId || localStorage.getItem(LS_LOGIN) || "",
   );
-  const [password, setPassword] = useState("");
   const [staff, setStaff] = useState<RemoteStaffState | null>(null);
   const [staffAuth, setStaffAuth] = useState<boolean | null>(null);
   const [snapshot, setSnapshot] = useState<AppSnapshot>(EMPTY_SNAP);
   const [timers, setTimers] = useState<TableTimerState[]>([]);
   const [gameId, setGameId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [, setTick] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
@@ -141,6 +105,12 @@ export function App() {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
   }, []);
+
+  function websiteUrl(path: string): string | null {
+    const origin = (initial.from || localStorage.getItem(LS_FROM) || "").replace(/\/$/, "");
+    if (!origin) return null;
+    return `${origin}${path}`;
+  }
 
   const connect = useCallback((nextPin: string) => {
     if (!nextPin) return;
@@ -203,11 +173,17 @@ export function App() {
         setError(msg.error);
       }
     };
+    ws.onerror = () => {
+      setError("와이파이 연결을 확인해주세요");
+    };
     ws.onclose = () => {
       const wasOk = pinOkRef.current;
       pinOkRef.current = false;
       setPinOk(false);
-      if (!wasOk) return;
+      if (!wasOk) {
+        setError((prev) => prev || "와이파이 연결을 확인해주세요");
+        return;
+      }
       window.setTimeout(() => {
         if (wsRef.current === ws) connect(nextPin);
       }, 1200);
@@ -220,6 +196,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (initial.from) localStorage.setItem(LS_FROM, initial.from);
     if (initial.pin) connect(initial.pin);
     return () => {
       const ws = wsRef.current;
@@ -250,49 +227,23 @@ export function App() {
     connect(pin);
   }
 
-  function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    send({ type: "login", loginId, password });
-    window.setTimeout(() => setBusy(false), 800);
-  }
-
-  async function handleScanFile(file: File | undefined) {
-    if (!file) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const raw = await decodeQrFile(file);
-      if (!raw) {
-        setError("QR을 읽지 못했습니다. 다시 촬영해 주세요.");
-        return;
-      }
-      const parsed = parseQrPayload(raw);
-      if (parsed.pin && parsed.pin !== pin) {
-        setPin(parsed.pin);
-        connect(parsed.pin);
-      }
-      if (parsed.tok) setTok(parsed.tok);
-      else setError("출근용 QR이 아닙니다.");
-    } catch {
-      setError("QR 인식에 실패했습니다.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   function checkout() {
     send({ type: "checkout" });
     setGameId(null);
     setTok("");
+    const url = websiteUrl("/staff");
+    if (url) window.location.assign(url);
   }
 
   function logout() {
     send({ type: "logout" });
     localStorage.removeItem(LS_SESSION);
+    const url = websiteUrl("/login");
+    if (url) {
+      window.location.assign(url);
+      return;
+    }
     setStaff(null);
-    setPassword("");
     setGameId(null);
     setTok("");
   }
@@ -304,17 +255,32 @@ export function App() {
   return (
     <div className="remote">
       <header className="remote-header">
-        <img src={logoUrl} alt="MNF" className="remote-logo" />
-        <div>
-          <p className="remote-kicker">매장 리모컨</p>
-          <p className="remote-staff">
-            {staffAuth === false
-              ? "PIN 연결됨"
-              : staff
-                ? `${staff.name}${staff.canControl ? " · 출근" : ""}`
-                : "직원 로그인"}
-          </p>
-        </div>
+        {ready && gameId != null ? (
+          <button
+            type="button"
+            className="games-list-btn"
+            onClick={() => {
+              setGameId(null);
+              setMoreOpen(false);
+            }}
+          >
+            ← 게임 목록
+          </button>
+        ) : (
+          <>
+            <img src={logoUrl} alt="MNF" className="remote-logo" />
+            <div>
+              <p className="remote-kicker">매장 리모컨</p>
+              <p className="remote-staff">
+                {staffAuth === false
+                  ? "PIN 연결됨"
+                  : staff
+                    ? `${staff.name}${staff.canControl ? " · 출근" : ""}`
+                    : "직원 로그인"}
+              </p>
+            </div>
+          </>
+        )}
         {staff && staffAuth !== false && (
           <button type="button" className="text-btn" onClick={staff.canControl ? checkout : logout}>
             {staff.canControl ? "퇴근" : "로그아웃"}
@@ -344,46 +310,30 @@ export function App() {
         </form>
       )}
 
-      {pinOk && staffAuth && !staff && (
-        <form className="card" onSubmit={handleLogin}>
-          <p className="card-title">직원 로그인</p>
-          <input
-            className="field"
-            autoComplete="username"
-            value={loginId}
-            onChange={(e) => setLoginId(e.target.value)}
-            placeholder="아이디"
-          />
-          <input
-            className="field"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="비밀번호"
-          />
-          <button type="submit" className="primary-btn" disabled={busy}>
-            로그인
-          </button>
-        </form>
+      {pinOk && staffAuth && !staff && tok && loginId && (
+        <p className="muted">출근 처리 중...</p>
+      )}
+
+      {pinOk && staffAuth && !staff && !(tok && loginId) && (
+        <div className="card">
+          <p className="card-title">웹에서 출근 등록</p>
+          <p className="muted">직원 웹에 로그인한 뒤 컨트롤러 QR을 스캔하면 연결됩니다.</p>
+          {websiteUrl("/login") && (
+            <a className="primary-btn" href={websiteUrl("/login") ?? "/login"}>
+              로그인 화면으로
+            </a>
+          )}
+        </div>
       )}
 
       {pinOk && staffAuth && staff && !staff.canControl && (
         <div className="card">
-          <p className="card-title">출근 QR 스캔</p>
-          <p className="muted">컨트롤러 왼쪽 위 MNF 로고를 눌러 띄운 QR을 촬영하세요.</p>
-          <label className="primary-btn scan-label">
-            QR 촬영
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              hidden
-              onChange={(e) => void handleScanFile(e.target.files?.[0])}
-            />
-          </label>
-          {staff.checkedIn && (
-            <p className="muted">이미 출근 상태입니다. QR을 찍으면 리모컨 권한이 부여됩니다.</p>
+          <p className="card-title">웹에서 출근 등록</p>
+          <p className="muted">직원 웹의 출근 등록에서 컨트롤러 QR을 카메라로 스캔하세요.</p>
+          {websiteUrl("/staff/clock-in") && (
+            <a className="primary-btn" href={websiteUrl("/staff/clock-in") ?? "/staff/clock-in"}>
+              출근 등록으로
+            </a>
           )}
         </div>
       )}
@@ -418,10 +368,6 @@ export function App() {
           session={session}
           timer={timer}
           moreOpen={moreOpen}
-          onBack={() => {
-            setGameId(null);
-            setMoreOpen(false);
-          }}
           onMore={() => setMoreOpen((v) => !v)}
           onCommand={(action, sec) => send({ type: "command", gameId: session.gameId, action, sec })}
           onCounter={(op, rebuyIndex) => send({ type: "counters", gameId: session.gameId, op, rebuyIndex })}
@@ -441,7 +387,6 @@ function GamePad({
   session,
   timer,
   moreOpen,
-  onBack,
   onMore,
   onCommand,
   onCounter,
@@ -451,7 +396,6 @@ function GamePad({
   session: GameSession;
   timer: TableTimerState | undefined;
   moreOpen: boolean;
-  onBack: () => void;
   onMore: () => void;
   onCommand: (action: RemoteTimerAction, sec?: number) => void;
   onCounter: (op: RemoteCounterOp, rebuyIndex?: number) => void;
@@ -464,9 +408,6 @@ function GamePad({
 
   return (
     <div className="pad">
-      <button type="button" className="text-btn back" onClick={onBack}>
-        ← 게임 목록
-      </button>
       <div className="status">
         <p className="status-name">
           G{session.gameId} {session.structureName}

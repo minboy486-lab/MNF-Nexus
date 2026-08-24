@@ -18,8 +18,10 @@ export type ControlApi = {
   listLocalBlinds: () => Promise<BlindStructureOption[]>;
   // 스냅샷
   getSnapshot: () => Promise<AppSnapshot>;
+  getTimers: () => Promise<TableTimerState[]>;
   onSnapshot: (cb: (snap: AppSnapshot) => void) => () => void;
   onTimerUpdate: (cb: (timers: TableTimerState[]) => void) => () => void;
+  onTimerPatch: (cb: (timer: TableTimerState) => void) => () => void;
   // 게임
   createGame: (structure: BlindStructureOption) => Promise<{ ok: true; session: GameSession } | { ok: false; error: string }>;
   deleteGame: (gameId: number) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -60,6 +62,7 @@ const api: ControlApi = {
   listBlinds: () => ipcRenderer.invoke("blinds:list"),
   listLocalBlinds: () => ipcRenderer.invoke("blinds:local:list"),
   getSnapshot: () => ipcRenderer.invoke("app:snapshot"),
+  getTimers: () => ipcRenderer.invoke("timer:getAll"),
   onSnapshot: (cb) => {
     const h = (_e: Electron.IpcRendererEvent, snap: AppSnapshot) => cb(snap);
     ipcRenderer.on("app:snapshot:push", h);
@@ -69,6 +72,11 @@ const api: ControlApi = {
     const h = (_e: Electron.IpcRendererEvent, timers: TableTimerState[]) => cb(timers);
     ipcRenderer.on("timer:snapshot", h);
     return () => ipcRenderer.removeListener("timer:snapshot", h);
+  },
+  onTimerPatch: (cb) => {
+    const h = (_e: Electron.IpcRendererEvent, timer: TableTimerState) => cb(timer);
+    ipcRenderer.on("timer:update", h);
+    return () => ipcRenderer.removeListener("timer:update", h);
   },
   createGame: (structure) => ipcRenderer.invoke("game:create", structure),
   deleteGame: (gameId) => ipcRenderer.invoke("game:delete", gameId),

@@ -310,6 +310,10 @@ export class TimerHub {
     const payload = state ?? this.timers.get(gameId);
     if (!payload) return;
     const session = this.sessions.get(gameId) ?? null;
+    const control = this.getControlWindow();
+    if (control && !control.isDestroyed()) {
+      control.webContents.send("timer:update", payload);
+    }
     for (const [slot, gid] of this.monitorAssignments.entries()) {
       if (gid !== gameId) continue;
       const wins = this.getDisplayWindowsForSlot(slot);

@@ -180,17 +180,21 @@ export function GameControlView({
 
   // 게임 전환 시 로컬 상태 리셋
   useEffect(() => {
-    setPlayers(session.players);
-    setEntries(session.entries);
-    setRebuys([...session.rebuys]);
-    setAddon(session.addon);
-    setBonusChip(session.bonusChip);
     const html = session.leftNotice?.html ?? "";
     setNoticeDraft(html);
     setAppliedNotice(html);
     pendingNoticeSaveRef.current = null;
     setNoticeOpen(false);
   }, [session.gameId]);
+
+  // 리모컨·다른 창에서 바꾼 카운터를 컨트롤 화면에 바로 반영
+  useEffect(() => {
+    setPlayers(session.players);
+    setEntries(session.entries);
+    setRebuys([...session.rebuys]);
+    setAddon(session.addon);
+    setBonusChip(session.bonusChip);
+  }, [session.gameId, session.players, session.entries, session.addon, session.bonusChip, session.rebuys]);
 
   // 스냅샷 leftNotice 동기화 (편집 중·저장 대기 중이면 덮지 않음)
   useEffect(() => {

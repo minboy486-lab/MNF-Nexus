@@ -18,18 +18,6 @@ function getDetector(): DetectorCtor | null {
   );
 }
 
-async function decodeBitmapWithJsQr(bmp: ImageBitmap): Promise<string | null> {
-  const canvas = document.createElement("canvas");
-  canvas.width = bmp.width;
-  canvas.height = bmp.height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  ctx.drawImage(bmp, 0, 0);
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const { default: jsQR } = await import("jsqr");
-  return jsQR(imageData.data, imageData.width, imageData.height)?.data ?? null;
-}
-
 export function StaffQrScanner({ hint, paused, onResult }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -62,7 +50,7 @@ export function StaffQrScanner({ hint, paused, onResult }: Props) {
         video.srcObject = stream;
         await video.play();
       } catch {
-        setCamError("카메라를 열 수 없습니다. 아래 버튼으로 촬영해 주세요.");
+        setCamError("카메라를 열 수 없습니다. 카메라 권한을 허용해 주세요.");
         return;
       }
 
@@ -119,37 +107,6 @@ export function StaffQrScanner({ hint, paused, onResult }: Props) {
         <div className="pointer-events-none absolute inset-0 border-2 border-primary/40 rounded-2xl" />
       </div>
       <p className="text-sm text-on-surface-variant text-center">{camError ?? hint}</p>
-      <label className="btn-primary h-12 rounded-xl text-sm flex items-center justify-center cursor-pointer">
-        사진으로 QR 스캔
-        <input
-          type="file"
-          accept="image/*"
-          capture="environment"
-          hidden
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            e.target.value = "";
-            if (!file) return;
-            try {
-              const bmp = await createImageBitmap(file);
-              const Detector = getDetector();
-              if (Detector) {
-                const codes = await new Detector({ formats: ["qr_code"] }).detect(bmp);
-                const raw = codes[0]?.rawValue;
-                if (raw) {
-                  onResult(raw);
-                  return;
-                }
-              }
-              const fromJs = await decodeBitmapWithJsQr(bmp);
-              if (fromJs) onResult(fromJs);
-              else setCamError("QR을 읽지 못했습니다. 다시 촬영해 주세요.");
-            } catch {
-              setCamError("QR 인식에 실패했습니다.");
-            }
-          }}
-        />
-      </label>
     </div>
   );
 }

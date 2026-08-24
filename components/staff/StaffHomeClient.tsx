@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { punchMeOut } from "@/lib/actions/staff";
 import { formatTimeHHmmKST } from "@/lib/utils/format";
 import {
   clearTimerPairing,
+  consumeFailedLanNavigation,
+  markLanNavigation,
   readTimerPairing,
   readTimerPairingRaw,
   subscribeTimerPairing,
@@ -19,15 +23,42 @@ type Props = {
 };
 
 export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [wifiError, setWifiError] = useState(false);
   const hasPairing = useSyncExternalStore(
     subscribeTimerPairing,
     readTimerPairingRaw,
     () => null,
   ) != null;
 
+  async function checkout() {
+    if (busy) return;
+    setBusy(true);
+    const r = await punchMeOut();
+    setBusy(false);
+    if ("error" in r) alert(r.error);
+    else router.refresh();
+  }
+
+  useEffect(() => {
+    if (consumeFailedLanNavigation()) setWifiError(true);
+    function onShow() {
+      if (consumeFailedLanNavigation()) setWifiError(true);
+    }
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, []);
+
   function openTimer() {
+    if (!navigator.onLine) {
+      setWifiError(true);
+      return;
+    }
     const pairing = readTimerPairing();
     if (pairing) {
+      setWifiError(false);
+      markLanNavigation();
       window.location.assign(timerRemoteHref({ ...pairing, loginId: pairing.loginId || loginId }));
       return;
     }
@@ -47,6 +78,10 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
           <p className="text-sm text-on-surface-variant mt-1">아직 출근 전입니다</p>
         )}
       </section>
+
+      {wifiError && (
+        <p className="text-sm text-error bg-error/10 rounded-xl px-3 py-2">와이파이 연결을 확인해주세요</p>
+      )}
 
       {!working ? (
         <Link
@@ -92,6 +127,17 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
         <p className="text-lg font-bold mt-1">근무 기록</p>
         <p className="text-sm text-on-surface-variant mt-1">이번 달 근무시간과 출퇴근 시각</p>
       </Link>
+
+      {working && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void checkout()}
+          className="w-full h-12 rounded-xl bg-red-600 text-white text-sm font-bold active:scale-[0.97] active:bg-red-700 transition-transform disabled:opacity-50"
+        >
+          {busy ? "처리 중..." : "퇴근"}
+        </button>
+      )}
     </div>
   );
 }

@@ -62,15 +62,17 @@ export function App() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [disp, cfg, snap, remote] = await Promise.all([
+      const [disp, cfg, snap, remote, allTimers] = await Promise.all([
         window.controlApi.getDisplays(),
         window.controlApi.getConfig(),
         window.controlApi.getSnapshot(),
         window.controlApi.getRemoteInfo().catch(() => null),
+        window.controlApi.getTimers().catch(() => [] as TableTimerState[]),
       ]);
       setDisplays(disp);
       setConfig(cfg);
       setSnapshot(snap);
+      setTimers(allTimers);
       if (remote) setRemoteInfo(remote);
       const nextTheme = normalizeUiTheme(cfg?.theme);
       setTheme(nextTheme);
@@ -87,6 +89,15 @@ export function App() {
     const unsubSetup = window.controlApi.onSetupRequired(() => setView({ kind: "setup" }));
     const unsubSnap = window.controlApi.onSnapshot(setSnapshot);
     const unsubTimers = window.controlApi.onTimerUpdate(setTimers);
+    const unsubTimerPatch = window.controlApi.onTimerPatch((timer) => {
+      setTimers((prev) => {
+        const i = prev.findIndex((t) => t.tableId === timer.tableId);
+        if (i < 0) return [...prev, timer];
+        const next = prev.slice();
+        next[i] = timer;
+        return next;
+      });
+    });
     const unsubUpdater = window.controlApi.onUpdaterStatus(setUpdaterStatus);
     const unsubTheme = window.controlApi.onThemeUpdate((t) => {
       const next = normalizeUiTheme(t);
@@ -98,6 +109,7 @@ export function App() {
       unsubSetup();
       unsubSnap();
       unsubTimers();
+      unsubTimerPatch();
       unsubUpdater();
       unsubTheme();
     };
@@ -397,6 +409,15 @@ export function App() {
     const result = await window.controlApi.timerCommand(gameId, action, options);
     setPending(false);
     if (!result.ok) setError(result.error);
+    else {
+      setTimers((prev) => {
+        const i = prev.findIndex((t) => t.tableId === result.state.tableId);
+        if (i < 0) return [...prev, result.state];
+        const next = prev.slice();
+        next[i] = result.state;
+        return next;
+      });
+    }
   }
 
   // ── 테이블/모니터 연결 ──────────────────────────────────────

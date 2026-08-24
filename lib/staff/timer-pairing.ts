@@ -49,10 +49,28 @@ export function subscribeTimerPairing(onChange: () => void): () => void {
   return () => window.removeEventListener("storage", onChange);
 }
 
+export const STAFF_LAN_NAV_KEY = "mnf-staff-lan-nav";
+
+export function markLanNavigation(): void {
+  sessionStorage.setItem(STAFF_LAN_NAV_KEY, String(Date.now()));
+}
+
+/** 컨트롤러 연결에 실패하고 바로 돌아온 경우 */
+export function consumeFailedLanNavigation(windowMs = 15000): boolean {
+  const raw = sessionStorage.getItem(STAFF_LAN_NAV_KEY);
+  if (!raw) return false;
+  const t = Number(raw);
+  sessionStorage.removeItem(STAFF_LAN_NAV_KEY);
+  return Number.isFinite(t) && Date.now() - t < windowMs;
+}
+
 export function timerRemoteHref(pairing: StaffTimerPairing): string {
   try {
     const u = new URL(pairing.url);
     if (pairing.loginId) u.searchParams.set("id", pairing.loginId);
+    if (typeof window !== "undefined" && window.location.origin) {
+      u.searchParams.set("from", window.location.origin);
+    }
     return u.toString();
   } catch {
     return pairing.url;
