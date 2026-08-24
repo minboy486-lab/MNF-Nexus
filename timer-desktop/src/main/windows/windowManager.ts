@@ -1,5 +1,6 @@
 import { BrowserWindow, screen } from "electron";
-import type { AppConfig, MonitorSlot } from "../../shared/types";
+import type { AppConfig, MonitorSlot, UiThemeId } from "../../shared/types";
+import { normalizeUiTheme } from "../../shared/types";
 import { configNeedsSetup, getDisplayMappings } from "../config/configStore";
 import {
   enrichMappingsWithCurrentDisplays,
@@ -72,6 +73,23 @@ export class WindowManager {
   async applyConfig(config: AppConfig): Promise<void> {
     this.config = enrichMappingsWithCurrentDisplays(config);
     await this.syncWindows();
+    this.broadcastTheme();
+  }
+
+  getTheme(): UiThemeId {
+    return normalizeUiTheme(this.config?.theme);
+  }
+
+  broadcastTheme(): void {
+    const theme = this.getTheme();
+    if (this.controlWindow && !this.controlWindow.isDestroyed()) {
+      this.controlWindow.webContents.send("theme:update", theme);
+    }
+    for (const entry of this.displayWindows.values()) {
+      if (!entry.win.isDestroyed()) {
+        entry.win.webContents.send("theme:update", theme);
+      }
+    }
   }
 
   async syncWindows(): Promise<void> {
@@ -108,6 +126,9 @@ export class WindowManager {
     this.controlWindow = createControlWindow(display);
     this.controlWindow.webContents.on("did-finish-load", () => {
       this.timerHub?.pushSnapshotToControl();
+      if (this.controlWindow && !this.controlWindow.isDestroyed()) {
+        this.controlWindow.webContents.send("theme:update", this.getTheme());
+      }
     });
     this.controlWindow.on("closed", () => {
       this.controlWindow = null;
@@ -173,6 +194,9 @@ export class WindowManager {
 
     win.webContents.on("did-finish-load", () => {
       this.timerHub?.hydrateNewDisplay(monitorSlot);
+      if (!win.isDestroyed()) {
+        win.webContents.send("theme:update", this.getTheme());
+      }
     });
 
     win.on("closed", () => {

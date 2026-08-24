@@ -8,6 +8,7 @@ import {
 import type { BlindStructureOption, TableTimerState, TimerAction } from "@mnf/timer/types";
 import type { AppSnapshot, GameSession, MonitorSlot, TableSlot } from "../../shared/types";
 import { MONITOR_SLOTS } from "../../shared/types";
+import type { RemoteCounterOp } from "../../shared/remote";
 
 export class TimerHub {
   /** gameId → 타이머 상태 */
@@ -23,6 +24,7 @@ export class TimerHub {
   private getDisplayWindowsForSlot: (slot: MonitorSlot) => BrowserWindow[];
   private getControlWindow: () => BrowserWindow | null;
   private autoAdvanceInterval: ReturnType<typeof setInterval> | null = null;
+  private remoteListeners = new Set<() => void>();
 
   constructor(deps: {
     getDisplayWindowsForSlot: (slot: MonitorSlot) => BrowserWindow[];
@@ -31,6 +33,36 @@ export class TimerHub {
     this.getDisplayWindowsForSlot = deps.getDisplayWindowsForSlot;
     this.getControlWindow = deps.getControlWindow;
     this.startAutoAdvance();
+  }
+
+  private syncTotalPlayTime(
+    gameId: number,
+    prevStatus: string,
+    nextStatus: string,
+    action?: TimerAction,
+  ): void {
+    const session = this.sessions.get(gameId);
+    if (!session) return;
+    const now = Date.now();
+    const wasRunning = prevStatus === "running";
+    const isRunning = nextStatus === "running";
+    if (action === "reset") {
+      session.totalElapsedMs = 0;
+      session.totalRunningAt = isRunning ? now : null;
+      session.startedAt = isRunning ? now : 0;
+      return;
+    }
+    if (!wasRunning && isRunning) {
+      if (!session.startedAt) session.startedAt = now;
+      if (!session.totalRunningAt) session.totalRunningAt = now;
+      return;
+    }
+    if (wasRunning && !isRunning) {
+      if (session.totalRunningAt) {
+        session.totalElapsedMs += Math.max(0, now - session.totalRunningAt);
+        session.totalRunningAt = null;
+      }
+    }
   }
 
   private startAutoAdvance() {
@@ -47,6 +79,7 @@ export class TimerHub {
           // 마지막 레벨 — 정지
           const stopped = applyTimerAction(state, "stop", undefined, now);
           this.timers.set(gameId, stopped);
+          this.syncTotalPlayTime(gameId, state.status, stopped.status);
         } else {
           this.timers.set(gameId, next);
         }
@@ -84,12 +117,15 @@ export class TimerHub {
       addonChip: structure.addonChip ?? 0,
       hasBonusChip: structure.hasBonusChip ?? false,
       bonusChipAmount: structure.bonusChipAmount ?? 0,
-      startedAt: Date.now(),
+      startedAt: 0,
+      totalElapsedMs: 0,
+      totalRunningAt: null,
       players: 0,
       entries: 0,
       rebuys: Array.from({ length: rebuyCount }, () => 0),
       addon: 0,
       bonusChip: 0,
+      leftNotice: null,
     };
     this.sessions.set(gameId, session);
     this.pushSnapshotToControl();
@@ -98,7 +134,7 @@ export class TimerHub {
 
   updateSessionCounters(
     gameId: number,
-    patch: Partial<Pick<GameSession, "players" | "entries" | "rebuys" | "addon" | "bonusChip">>,
+    patch: Partial<Pick<GameSession, "players" | "entries" | "rebuys" | "addon" | "bonusChip" | "leftNotice">>,
   ): void {
     const session = this.sessions.get(gameId);
     if (!session) return;
@@ -130,7 +166,73 @@ export class TimerHub {
     this.pushSnapshotToControl();
   }
 
-  // ── 테이블/모니터 연결 ─────────────────────────────────────
+  onRemotePush(fn: () => void): () => void {
+    this.remoteListeners.add(fn);
+    return () => this.remoteListeners.delete(fn);
+  }
+
+  private notifyRemote(): void {
+    for (const fn of this.remoteListeners) fn();
+  }
+
+  applyRemoteCounter(gameId: number, op: RemoteCounterOp, rebuyIndex?: number): boolean {
+    const session = this.sessions.get(gameId);
+    if (!session) return false;
+    switch (op) {
+      case "player+": {
+        if (session.entries > 0 && session.players >= session.entries) return true;
+        session.players += 1;
+        break;
+      }
+      case "player-":
+        if (session.players <= 0) return true;
+        session.players -= 1;
+        break;
+      case "entry+":
+        session.entries += 1;
+        session.players += 1;
+        break;
+      case "entry-":
+        if (session.entries <= 0) return true;
+        session.entries -= 1;
+        session.players = Math.max(0, session.players - 1);
+        break;
+      case "rebuy+": {
+        const i = rebuyIndex ?? 0;
+        if (i < 0 || i >= session.rebuys.length) return false;
+        session.rebuys = session.rebuys.map((v, idx) => (idx === i ? v + 1 : v));
+        break;
+      }
+      case "rebuy-": {
+        const i = rebuyIndex ?? 0;
+        if (i < 0 || i >= session.rebuys.length) return false;
+        if ((session.rebuys[i] ?? 0) <= 0) return true;
+        session.rebuys = session.rebuys.map((v, idx) => (idx === i ? Math.max(0, v - 1) : v));
+        break;
+      }
+      case "addon+":
+        if (!session.hasAddon) return false;
+        session.addon += 1;
+        break;
+      case "addon-":
+        if (!session.hasAddon || session.addon <= 0) return true;
+        session.addon -= 1;
+        break;
+      case "bonus+":
+        if (!session.hasBonusChip) return false;
+        session.bonusChip += 1;
+        break;
+      case "bonus-":
+        if (!session.hasBonusChip || session.bonusChip <= 0) return true;
+        session.bonusChip -= 1;
+        break;
+      default:
+        return false;
+    }
+    this.pushToGame(gameId);
+    this.pushSnapshotToControl();
+    return true;
+  }
 
   assignTable(tableSlot: TableSlot, gameId: number | null): void {
     // 이전 연결 해제
@@ -172,6 +274,7 @@ export class TimerHub {
     if (!current) return null;
     const next = applyTimerAction(current, action, options);
     this.timers.set(gameId, next);
+    this.syncTotalPlayTime(gameId, current.status, next.status, action);
     this.pushToGame(gameId, next);
     this.pushSnapshotToControl();
     return next;
@@ -236,9 +339,11 @@ export class TimerHub {
 
   pushSnapshotToControl(): void {
     const win = this.getControlWindow();
-    if (!win || win.isDestroyed()) return;
-    win.webContents.send("app:snapshot:push", this.getSnapshot());
-    win.webContents.send("timer:snapshot", this.getAllTimers());
+    if (win && !win.isDestroyed()) {
+      win.webContents.send("app:snapshot:push", this.getSnapshot());
+      win.webContents.send("timer:snapshot", this.getAllTimers());
+    }
+    this.notifyRemote();
   }
 
   hydrateNewDisplay(slot: MonitorSlot): void {

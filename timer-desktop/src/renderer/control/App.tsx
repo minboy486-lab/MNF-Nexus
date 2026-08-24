@@ -1,13 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import type { BlindStructureOption, TableTimerState } from "@mnf/timer/types";
-import type { AppConfig, AppSnapshot, DisplayInfo, GameSession } from "../../shared/types";
+import type { AppConfig, AppSnapshot, DisplayInfo, GameSession, UiThemeId } from "../../shared/types";
+import type { RemotePairingInfo } from "../../shared/remote";
+import {
+  applyDocumentTheme,
+  DEFAULT_UI_THEME,
+  normalizeUiTheme,
+  UI_THEME_OPTIONS,
+} from "../../shared/types";
 import { AssignPopup } from "./AssignPopup";
 import { BlindSelectView } from "./BlindSelectView";
 import { FloorPlanView } from "./FloorPlanView";
 import { GameControlView } from "./GameControlView";
 import { GameListView } from "./GameListView";
+import { MonitorPreviewView } from "./MonitorPreviewView";
 import { SetupScreen } from "./SetupScreen";
-import logoDisplayUrl from "./mnf-logo-display.png";
 
 type View =
   | { kind: "main" }
@@ -31,8 +38,14 @@ export function App() {
   const [view, setView] = useState<View>({ kind: "main" });
   const [popup, setPopup] = useState<Popup>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [remoteInfo, setRemoteInfo] = useState<RemotePairingInfo | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrSrc, setQrSrc] = useState<string | null>(null);
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [quitConfirm, setQuitConfirm] = useState(false);
   const [updaterStatus, setUpdaterStatus] = useState<{ status: string; version?: string; percent?: number; message?: string } | null>(null);
+  const [theme, setTheme] = useState<UiThemeId>(DEFAULT_UI_THEME);
 
   const [displays, setDisplays] = useState<DisplayInfo[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -49,14 +62,19 @@ export function App() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [disp, cfg, snap] = await Promise.all([
+      const [disp, cfg, snap, remote] = await Promise.all([
         window.controlApi.getDisplays(),
         window.controlApi.getConfig(),
         window.controlApi.getSnapshot(),
+        window.controlApi.getRemoteInfo().catch(() => null),
       ]);
       setDisplays(disp);
       setConfig(cfg);
       setSnapshot(snap);
+      if (remote) setRemoteInfo(remote);
+      const nextTheme = normalizeUiTheme(cfg?.theme);
+      setTheme(nextTheme);
+      applyDocumentTheme(nextTheme);
       if (!cfg) setView({ kind: "setup" });
     } finally {
       setLoading(false);
@@ -70,18 +88,98 @@ export function App() {
     const unsubSnap = window.controlApi.onSnapshot(setSnapshot);
     const unsubTimers = window.controlApi.onTimerUpdate(setTimers);
     const unsubUpdater = window.controlApi.onUpdaterStatus(setUpdaterStatus);
+    const unsubTheme = window.controlApi.onThemeUpdate((t) => {
+      const next = normalizeUiTheme(t);
+      setTheme(next);
+      applyDocumentTheme(next);
+    });
 
     return () => {
       unsubSetup();
       unsubSnap();
       unsubTimers();
       unsubUpdater();
+      unsubTheme();
     };
   }, [refresh]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const openRemoteQr = useCallback(async () => {
+    setQrOpen(true);
+    setQrLoading(true);
+    try {
+      const api = window.controlApi;
+      const info = api.refreshRemoteQr
+        ? await api.refreshRemoteQr()
+        : await api.getRemoteInfo();
+      setRemoteInfo(info);
+    } catch (e) {
+      try {
+        const info = await window.controlApi.getRemoteInfo();
+        setRemoteInfo(info);
+      } catch {
+        setError(e instanceof Error ? e.message : "QR을 만들 수 없습니다.");
+      }
+    } finally {
+      setQrLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!qrOpen) return;
+    const target = remoteInfo?.urls[0];
+    if (!target) {
+      setQrSrc(null);
+      return;
+    }
+    let cancelled = false;
+    void import("qrcode")
+      .then(({ default: QRCode }) =>
+        QRCode.toDataURL(target, {
+          margin: 1,
+          width: 280,
+          color: { dark: "#111111", light: "#ffffff" },
+        }),
+      )
+      .then((url) => {
+        if (!cancelled) setQrSrc(url);
+      })
+      .catch((err) => {
+        console.warn("[remote] QR 렌더 실패", err);
+        if (!cancelled) setQrSrc(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [qrOpen, remoteInfo?.urls, remoteInfo?.punchToken]);
+
+  const handleSetTheme = useCallback(async (next: UiThemeId) => {
+    applyDocumentTheme(next);
+    setTheme(next);
+    setConfig((prev) => (prev ? { ...prev, theme: next } : prev));
+    const result = await window.controlApi.setTheme(next);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setThemeMenuOpen(false);
+    setSettingsOpen(false);
+  }, []);
 
   // ESC → 뒤로가기 / M → 선택된 모니터 미리보기
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const typing =
+        t instanceof HTMLInputElement ||
+        t instanceof HTMLTextAreaElement ||
+        t?.isContentEditable === true ||
+        !!t?.closest?.('[contenteditable="true"]');
+
       // 종료 확인 단축키
       if (quitConfirm) {
         if (e.key === "Escape" || e.key === "2" || e.key === "n" || e.key === "N") { setQuitConfirm(false); return; }
@@ -90,25 +188,53 @@ export function App() {
       }
 
       if (e.key === "Escape") {
+        if (qrOpen) { setQrOpen(false); return; }
+        if (themeMenuOpen) { setThemeMenuOpen(false); return; }
         if (settingsOpen) { setSettingsOpen(false); return; }
         if (popup) { setPopup(null); return; }
+        if (typing) return; // 문구 편집 중 ESC는 GameControlView에서 처리
         if (view.kind !== "main") { setView({ kind: "main" }); return; }
         // main 화면에서 ESC → 설정 메뉴
         setSettingsOpen(true);
         return;
       }
 
+      if (typing) return;
+
+      // 테마 메뉴 단축키
+      if (themeMenuOpen) {
+        const idx = parseInt(e.key, 10) - 1;
+        if (idx >= 0 && idx < UI_THEME_OPTIONS.length) {
+          e.preventDefault();
+          void handleSetTheme(UI_THEME_OPTIONS[idx]!.id);
+        }
+        return;
+      }
+
       // 설정 메뉴 숫자 단축키
       if (settingsOpen) {
-        const menuActions: (() => void)[] = [
-          () => { setSettingsOpen(false); setView({ kind: "setup" }); },   // 1: 모니터 설정
-          () => { /* 업데이트 — 상태에 따라 동작 */ },                      // 2: 업데이트 (별도 처리)
-          () => { setSettingsOpen(false); setQuitConfirm(true); },          // 3: 프로그램 종료
-        ];
         const idx = parseInt(e.key, 10) - 1;
-        if (idx >= 0 && idx < menuActions.length) {
+        if (idx === 0) {
           e.preventDefault();
-          menuActions[idx]();
+          setSettingsOpen(false);
+          setView({ kind: "setup" });
+          return;
+        }
+        if (idx === 1) {
+          e.preventDefault();
+          setThemeMenuOpen(true);
+          return;
+        }
+        if (idx === 2) {
+          e.preventDefault();
+          document.querySelector<HTMLButtonElement>("[data-settings-update]")?.click();
+          return;
+        }
+        if (idx === 3) {
+          e.preventDefault();
+          setSettingsOpen(false);
+          setQuitConfirm(true);
+          return;
         }
         return;
       }
@@ -130,12 +256,7 @@ export function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [view, popup, settingsOpen, quitConfirm]);
-
-  useEffect(() => {
-    const id = window.setInterval(() => setTick((t) => t + 1), 1000);
-    return () => window.clearInterval(id);
-  }, []);
+  }, [view, popup, settingsOpen, themeMenuOpen, quitConfirm, qrOpen, handleSetTheme]);
 
   // ── 플로어 단축키 (main 뷰 + 팝업 없을 때) ───────────────────
   useEffect(() => {
@@ -162,9 +283,15 @@ export function App() {
     }
 
     const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const t = e.target as HTMLElement | null;
+      if (
+        t instanceof HTMLInputElement ||
+        t instanceof HTMLTextAreaElement ||
+        t?.isContentEditable === true ||
+        !!t?.closest?.('[contenteditable="true"]')
+      ) return;
       if (view.kind !== "main") return;
-      if (popup || settingsOpen || quitConfirm) return;
+      if (popup || settingsOpen || quitConfirm || qrOpen) return;
 
       // 한글이면 영문으로 변환
       const raw = e.key.length === 1 ? e.key.toLowerCase() : e.key;
@@ -206,7 +333,7 @@ export function App() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [view, popup, settingsOpen, quitConfirm, snapshot]);
+  }, [view, popup, settingsOpen, quitConfirm, qrOpen, snapshot]);
 
   // ── 게임 생성 ───────────────────────────────────────────────
 
@@ -296,7 +423,15 @@ export function App() {
       {view.kind !== "monitor-preview" && (
         <header className="shell-header compact-header">
           <div className="header-brand">
-            <img src="./mnf-logo.png" alt="MNF" className="header-logo" />
+            <button
+              type="button"
+              className="header-logo-btn"
+              onClick={() => void openRemoteQr()}
+              title="직원 리모컨 QR"
+              aria-label="직원 리모컨 QR 생성"
+            >
+              <img src="./mnf-logo.png" alt="MNF" className="header-logo" />
+            </button>
             <span className="header-title">
               {view.kind === "setup"
                 ? "모니터 설정"
@@ -308,9 +443,11 @@ export function App() {
             </span>
           </div>
           {view.kind === "main" && (
-            <button type="button" className="icon-btn" onClick={() => setSettingsOpen(true)}>
-              ⚙
-            </button>
+            <div className="header-actions">
+              <button type="button" className="icon-btn" onClick={() => setSettingsOpen(true)}>
+                ⚙
+              </button>
+            </div>
           )}
         </header>
       )}
@@ -357,151 +494,21 @@ export function App() {
         />
       )}
 
-      {!loading && view.kind === "monitor-preview" && (() => {
-        const slot = view.slot;
-        const gameId = snapshot.monitorAssignments[slot] ?? null;
-        const session = gameId !== null ? snapshot.sessions.find((s) => s.gameId === gameId) ?? null : null;
-        const timerState = gameId !== null ? timers.find((t) => t.tableId === gameId) ?? null : null;
-        const isRunning = timerState?.status === "running";
-        const isPaused = timerState?.status === "paused";
-        const hasGame = !!timerState?.blindStructureId;
-        const ms = timerState
-          ? isRunning && timerState.endsAt
-            ? Math.max(0, timerState.endsAt - Date.now())
-            : timerState.remainingMs ?? 0
-          : 0;
-        const sec = Math.ceil(ms / 1000);
-        const timeStr = !timerState || timerState.status === "stopped"
-          ? "--:--"
-          : `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
-        const currentLevel = timerState?.blindLevel ?? 1;
-        const mpSortedLevels = timerState?.levels ? [...timerState.levels].sort((a,b) => a.level - b.level) : [];
-        const mpCurIdx = mpSortedLevels.findIndex(l => l.level === currentLevel);
-        const nextLevel = mpCurIdx >= 0 ? (mpSortedLevels[mpCurIdx + 1] ?? null) : null;
-        const mpIsBreak = (timerState?.bigBlind ?? -1) === 0 && (timerState?.smallBlind ?? -1) === 0 && hasGame;
-        const totalRebuy = session ? session.rebuys.reduce((a, b) => a + b, 0) : 0;
-        const totalChip = session
-          ? session.entries * session.entryChip
-            + session.rebuys.reduce((sum, cnt, i) => sum + cnt * (session.rebuyChips[i] ?? 0), 0)
-            + session.addon * session.addonChip
-            + session.bonusChip * session.bonusChipAmount
-          : 0;
-        const avgChip = session && session.players > 0 ? Math.round(totalChip / session.players) : 0;
-        function fmtChip(n: number) { return n.toLocaleString(); }
-        // 다음 브레이크까지 남은 시간
-        const nextBreakText = (() => {
-          if (!timerState?.levels) return "—";
-          let secSum = Math.ceil(ms / 1000);
-          let found = false;
-          for (const lv of timerState.levels) {
-            if (lv.level <= currentLevel) continue;
-            if (lv.small === 0 && lv.big === 0) { found = true; break; }
-            secSum += lv.durationSec;
+      {!loading && view.kind === "monitor-preview" && (
+        <MonitorPreviewView
+          slot={view.slot}
+          session={
+            (snapshot.monitorAssignments[view.slot] ?? null) !== null
+              ? snapshot.sessions.find((s) => s.gameId === snapshot.monitorAssignments[view.slot]) ?? null
+              : null
           }
-          if (!found) return "—";
-          const h = Math.floor(secSum / 3600);
-          const m = Math.floor((secSum % 3600) / 60);
-          const s = secSum % 60;
-          if (h > 0) return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
-          return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
-        })();
-        // 경과 시간 (세션 startedAt 기준)
-        const mpStartedAt = session?.startedAt;
-        const mpElapsedSec = (mpStartedAt && isFinite(mpStartedAt))
-          ? Math.max(0, Math.floor((Date.now() - mpStartedAt) / 1000))
-          : 0;
-        const mpTotalTimeText = (mpStartedAt && isFinite(mpStartedAt))
-          ? `${String(Math.floor(mpElapsedSec / 3600)).padStart(2,"0")}:${String(Math.floor((mpElapsedSec % 3600) / 60)).padStart(2,"0")}:${String(mpElapsedSec % 60).padStart(2,"0")}`
-          : "—";
-
-        return (
-          <div className={`mpreview-shell${isRunning ? " mpreview--running" : ""}${isPaused ? " mpreview--paused" : ""}`}>
-            <div className="mpreview-glow mpreview-glow--a" />
-            <div className="mpreview-glow mpreview-glow--b" />
-            <img src={logoDisplayUrl} className="mpreview-bg-logo" alt="" aria-hidden="true" />
-
-            {!hasGame ? (
-              <div className="mpreview-idle-wrap">
-                <p className="mpreview-idle">대기 중</p>
-                <p className="mpreview-idle-sub">M{slot}</p>
-              </div>
-            ) : (
-              <>
-              <div className="mpreview-title-bar">
-                <p className="mpreview-name">{timerState?.blindStructureName ?? "MNF HOLDEM"}</p>
-              </div>
-
-              <div className="mpreview-layout">
-                {/* 좌측 */}
-                <aside className="mpreview-left" />
-
-                {/* 중앙 */}
-                <main className="mpreview-center">
-                  <p className="mpreview-level-badge">{mpIsBreak ? "BREAK" : `LEVEL ${timerState?.blindLevel ?? 1}`}</p>
-                  <p className={`mpreview-timer${isRunning ? " mpreview-timer--running" : ""}${isPaused ? " mpreview-timer--paused" : ""}`}>
-                    {timeStr}
-                  </p>
-                  {mpIsBreak ? (
-                    <div className="mpreview-blinds-row">
-                      <span className="mpreview-blinds-val mpreview-blinds-val--break">BREAK TIME</span>
-                    </div>
-                  ) : (
-                    <div className="mpreview-blinds-row">
-                      <span className="mpreview-blinds-label">BLINDS</span>
-                      <span className="mpreview-blinds-val">
-                        {(timerState?.smallBlind ?? 0).toLocaleString()} / {(timerState?.bigBlind ?? 0).toLocaleString()}
-                      </span>
-                      {(timerState?.ante ?? 0) > 0 && (
-                        <>
-                          <span className="mpreview-blinds-sep">·</span>
-                          <span className="mpreview-blinds-label">ANTE</span>
-                          <span className="mpreview-blinds-val">{(timerState?.ante ?? 0).toLocaleString()}</span>
-                        </>
-                      )}
-                    </div>
-                  )}
-                  {nextLevel && (
-                    <div className="mpreview-next">
-                      {nextLevel.big === 0 ? (
-                        <>
-                          <span className="mpreview-next-label">NEXT</span>
-                          <span className="mpreview-next-val">BREAK ({Math.round(nextLevel.durationSec / 60)}min)</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="mpreview-next-label">NEXT LV.{nextLevel.level}</span>
-                          <span className="mpreview-next-val">
-                            {nextLevel.small.toLocaleString()} / {nextLevel.big.toLocaleString()}
-                            {nextLevel.ante > 0 && <span className="mpreview-next-ante"> · Ante {nextLevel.ante.toLocaleString()}</span>}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </main>
-
-                {/* 우측 */}
-                <aside className="mpreview-right">
-                  <MpStat label="TOTAL TIME" value={mpTotalTimeText} />
-                  <div className="mpreview-div" />
-                  <MpStat label="PLAYER" value={`${session?.players ?? 0} / ${session?.entries ?? 0}`} hi />
-                  <div className="mpreview-div" />
-                  <MpStat label="ENTRY" value={String(session?.entries ?? 0)} />
-                  <MpStat label="REBUY" value={String(totalRebuy)} />
-                  <div className="mpreview-div" />
-                  <MpStat label="TOTAL CHIP" value={fmtChip(totalChip)} />
-                  <MpStat label="AVG CHIP" value={fmtChip(avgChip)} />
-                  <div className="mpreview-div" />
-                  <MpStat label="NEXT BREAK" value={nextBreakText} muted={nextBreakText === "—"} />
-                </aside>
-              </div>
-              </>
-            )}
-
-            <p className="mpreview-hint">ESC — 돌아가기</p>
-          </div>
-        );
-      })()}
+          timerState={
+            (snapshot.monitorAssignments[view.slot] ?? null) !== null
+              ? timers.find((t) => t.tableId === snapshot.monitorAssignments[view.slot]) ?? null
+              : null
+          }
+        />
+      )}
 
       {!loading && view.kind === "setup" && (
         <SetupScreen
@@ -555,18 +562,78 @@ export function App() {
           if (updaterStatus?.status === "downloaded") { void window.controlApi.installUpdate(); return; }
           void window.controlApi.checkUpdate();
         };
-        const menuItems: { label: string; variant?: string; action: () => void }[] = [
+        const themeLabel =
+          UI_THEME_OPTIONS.find((o) => o.id === theme)?.label ?? "Black Pink";
+
+        if (themeMenuOpen) {
+          const swatches: Record<UiThemeId, string> = {
+            "black-pink": "#ffb6c9",
+            "mnf-original": "linear-gradient(135deg, #8b46f0, #e83d6e)",
+            "cherry-blossom": "linear-gradient(135deg, #c9a4e8, #f2a8c4)",
+          };
+          return (
+            <div
+              className="settings-overlay"
+              onClick={() => setThemeMenuOpen(false)}
+            >
+              <div className="settings-popup" onClick={(e) => e.stopPropagation()}>
+                <h3 className="settings-popup__title">테마</h3>
+                {UI_THEME_OPTIONS.map((opt, i) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`settings-popup__btn${theme === opt.id ? " settings-popup__btn--active" : ""}`}
+                    onClick={() => void handleSetTheme(opt.id)}
+                  >
+                    <span className="settings-popup__num">{i + 1}</span>
+                    <span
+                      className="settings-popup__swatch"
+                      style={{ background: swatches[opt.id] }}
+                      aria-hidden
+                    />
+                    {opt.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="settings-popup__btn settings-popup__btn--cancel"
+                  onClick={() => setThemeMenuOpen(false)}
+                >
+                  뒤로
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        const menuItems: { label: string; variant?: string; action: () => void; update?: boolean }[] = [
           { label: "모니터 설정", action: () => { setSettingsOpen(false); setView({ kind: "setup" }); } },
-          { label: updaterLabel, action: () => { updaterAction(); } },
+          { label: `테마 · ${themeLabel}`, action: () => { setThemeMenuOpen(true); } },
+          { label: updaterLabel, action: () => { updaterAction(); }, update: true },
           { label: "프로그램 종료", variant: "danger", action: () => { setSettingsOpen(false); setQuitConfirm(true); } },
         ];
         return (
-          <div className="settings-overlay" onClick={() => setSettingsOpen(false)}>
+          <div
+            className="settings-overlay"
+            onClick={() => { setSettingsOpen(false); setThemeMenuOpen(false); }}
+          >
             <div className="settings-popup" onClick={(e) => e.stopPropagation()}>
               <h3 className="settings-popup__title">설정</h3>
+              <button
+                type="button"
+                className="settings-popup__btn"
+                onClick={() => {
+                  setSettingsOpen(false);
+                  void openRemoteQr();
+                }}
+              >
+                리모컨 QR
+              </button>
               {menuItems.map((item, i) => (
                 <button
                   key={i}
+                  type="button"
+                  data-settings-update={item.update ? "" : undefined}
                   className={`settings-popup__btn${item.variant ? ` settings-popup__btn--${item.variant}` : ""}`}
                   onClick={item.action}
                 >
@@ -575,8 +642,9 @@ export function App() {
                 </button>
               ))}
               <button
+                type="button"
                 className="settings-popup__btn settings-popup__btn--cancel"
-                onClick={() => setSettingsOpen(false)}
+                onClick={() => { setSettingsOpen(false); setThemeMenuOpen(false); }}
               >
                 닫기
               </button>
@@ -584,6 +652,38 @@ export function App() {
           </div>
         );
       })()}
+
+      {qrOpen && (
+        <div className="settings-overlay" onClick={() => setQrOpen(false)}>
+          <div className="qr-popup" onClick={(e) => e.stopPropagation()}>
+            <h3 className="qr-popup__title">직원 출근 등록</h3>
+            <div className="qr-popup__frame">
+              {qrLoading && !qrSrc && <p className="muted">QR 생성 중...</p>}
+              {qrSrc && <img src={qrSrc} alt="직원 출근 QR" className="qr-popup__img" />}
+              {!qrLoading && !qrSrc && (
+                <p className="error">QR을 만들지 못했습니다. 새로고침을 눌러 주세요.</p>
+              )}
+            </div>
+            {remoteInfo && (
+              <p className="qr-popup__ttl">
+                {Math.max(0, Math.ceil((remoteInfo.expiresAt - Date.now()) / 1000))}초 후 만료
+              </p>
+            )}
+            <div className="qr-popup__actions">
+              <button type="button" className="settings-popup__btn" onClick={() => void openRemoteQr()}>
+                QR 새로고침
+              </button>
+              <button
+                type="button"
+                className="settings-popup__btn settings-popup__btn--cancel"
+                onClick={() => setQrOpen(false)}
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {quitConfirm && (
         <div className="settings-overlay">
@@ -608,17 +708,6 @@ export function App() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function MpStat({ label, value, hi, muted }: { label: string; value: string; hi?: boolean; muted?: boolean }) {
-  return (
-    <div className="mpreview-stat">
-      <span className="mpreview-stat-label">{label}</span>
-      <span className={`mpreview-stat-val${hi ? " mpreview-stat-val--hi" : ""}${muted ? " mpreview-stat-val--muted" : ""}`}>
-        {value}
-      </span>
     </div>
   );
 }

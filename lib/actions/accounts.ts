@@ -14,6 +14,7 @@ import {
 } from "@/lib/auth/staff-login";
 import type { UserRole } from "@/lib/types";
 import { PROFILE_ROLES } from "@/lib/auth/roles";
+import { ensureVenueStaffRow } from "@/lib/staff/ensure-row";
 
 export type AccountRow = {
   id: string;
@@ -148,6 +149,16 @@ export async function createAccount(payload: {
 
   if (profileError) return { error: profileError.message };
 
+  if (role === "staff" || role === "manager") {
+    const staffErr = await ensureVenueStaffRow(admin, {
+      profileId: created.user.id,
+      name: displayName || loginId,
+      role: role === "manager" ? "manager" : "staff",
+    });
+    if (staffErr.error) return { error: staffErr.error };
+    revalidatePath("/admin/staff");
+  }
+
   revalidatePath("/admin/accounts");
   return { success: true };
 }
@@ -192,6 +203,15 @@ export async function updateAccount(payload: {
     .eq("id", userId);
 
   if (profileError) return { error: profileError.message };
+
+  if (role === "staff" || role === "manager") {
+    await ensureVenueStaffRow(admin, {
+      profileId: userId,
+      name: display_name.trim() || "직원",
+      role: role === "manager" ? "manager" : "staff",
+    });
+    revalidatePath("/admin/staff");
+  }
 
   revalidatePath("/admin/accounts");
   return { success: true };

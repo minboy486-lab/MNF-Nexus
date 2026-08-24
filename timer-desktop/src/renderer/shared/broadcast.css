@@ -1,0 +1,379 @@
+/* 송출·컨트롤러 미리보기 공통 레이아웃 (ds-stage 기준 cqw/cqh) */
+
+.ds {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-gradient, none), var(--bg, #05070c);
+  display: flex;
+  flex-direction: column;
+  color: var(--text, #e8e6ef);
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Segoe UI", Inter, sans-serif;
+}
+
+.ds-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  container-type: size;
+  container-name: ds-stage;
+}
+
+.ds-bg-logo {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(98cqw, 98cqh);
+  height: min(98cqw, 98cqh);
+  object-fit: contain;
+  opacity: var(--logo-opacity, 0.07);
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  filter: var(--logo-filter, grayscale(1));
+}
+
+.ds-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(140px);
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 1.2s;
+}
+.ds-glow--a {
+  width: 70cqw;
+  height: 70cqw;
+  top: -25cqw;
+  left: -15cqw;
+  background: var(--ds-glow-a, rgba(255, 182, 201, 0.13));
+  opacity: 0.5;
+}
+.ds-glow--b {
+  width: 55cqw;
+  height: 55cqw;
+  bottom: -20cqw;
+  right: -12cqw;
+  background: var(--ds-glow-b, rgba(112, 0, 255, 0.11));
+  opacity: 0.5;
+}
+.ds--running .ds-glow--a { opacity: 1; }
+.ds--paused .ds-glow--a { opacity: 0.25; }
+.ds--idle .ds-glow--a { opacity: 0.15; }
+
+.ds-title-bar {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  text-align: center;
+  padding: 32px 0 0;
+  flex-shrink: 0;
+}
+.ds-game-name {
+  display: inline-block;
+  font-size: clamp(2rem, 4cqw, 4rem);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  margin-left: 0.18em;
+  text-transform: uppercase;
+  color: var(--text, #e8e6ef);
+  text-shadow: var(--title-shadow, 0 2px 24px rgba(176, 131, 255, 0.18), 0 1px 0 rgba(0, 0, 0, 0.4));
+}
+
+.ds-idle {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.ds-idle__text {
+  font-size: clamp(2rem, 3.5cqw, 3rem);
+  font-weight: 300;
+  letter-spacing: 0.3em;
+  color: var(--muted, rgba(196, 176, 196, 0.5));
+}
+.ds-idle__sub {
+  font-size: 0.9rem;
+  letter-spacing: 0.2em;
+  color: var(--text-faint, rgba(255, 255, 255, 0.12));
+}
+
+.ds-layout {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  /* 좌·우 살짝 축소 → 가운데 여유 (컨트롤러·송출 동일) */
+  display: grid;
+  grid-template-columns: minmax(0, 0.88fr) minmax(0, 2.9fr) minmax(0, 0.88fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ds-left {
+  border-right: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+  padding: 24px 28px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-width: 0;
+}
+.ds-left__placeholder { flex: 0; }
+
+.ds-left__notice-html {
+  width: 100%;
+  max-width: 100%;
+  color: var(--text, rgba(232, 230, 239, 0.95));
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+  overflow: hidden;
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Segoe UI", Inter, sans-serif;
+}
+.ds-left__notice-html *,
+.ds-left__notice-html p,
+.ds-left__notice-html div,
+.ds-left__notice-html span,
+.ds-left__notice-html font {
+  max-width: 100% !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  white-space: pre-wrap !important;
+  box-sizing: border-box;
+  font-family: inherit !important;
+}
+.ds-left__notice-html p,
+.ds-left__notice-html div {
+  margin: 0 0 0.12em;
+}
+.ds-left__notice-html :last-child {
+  margin-bottom: 0;
+}
+
+.ds-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* 좌·우 여유 — 타이머가 보조라인에 붙지 않게 */
+  padding: 20px clamp(48px, 5.5cqw, 96px) 36px;
+  gap: 0;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.ds-level {
+  font-size: clamp(2rem, 4.5cqw, 5rem);
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  color: var(--level-pill-fg, var(--primary, #ffb6c9));
+  background: var(--level-pill-bg, transparent);
+  opacity: 0.85;
+  margin-bottom: 4px;
+  padding: 0.12em 0.7em;
+  border-radius: 999px;
+  line-height: 1.15;
+}
+[data-theme="black-pink"] .ds-level {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+[data-theme="mnf-original"] .ds-level,
+[data-theme="cherry-blossom"] .ds-level {
+  opacity: 1;
+  font-size: clamp(1.35rem, 2.6cqw, 2.6rem);
+  letter-spacing: 0.2em;
+  margin-bottom: 12px;
+}
+
+.ds-timer {
+  font-size: clamp(100px, 24cqw, 300px);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--text-faint, rgba(232, 230, 239, 0.3));
+  transition: color 0.6s, text-shadow 0.6s;
+  margin-bottom: 20px;
+  font-family: inherit;
+}
+button.ds-timer {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: block;
+}
+button.ds-timer:hover {
+  background: var(--primary-bg, rgba(255, 255, 255, 0.04));
+  border-radius: 8px;
+}
+.ds-timer--running {
+  color: var(--primary, #ffb6c9);
+  text-shadow: 0 0 140px var(--primary-glow, rgba(255, 182, 201, 0.3));
+}
+[data-theme="mnf-original"] .ds-timer--running,
+[data-theme="cherry-blossom"] .ds-timer--running {
+  color: transparent;
+  background-image: var(--timer-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 8px 28px var(--primary-glow));
+}
+.ds-timer--paused {
+  color: var(--text-faint, rgba(232, 230, 239, 0.2));
+}
+
+.ds-blinds {
+  --blinds-scale: 1;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+.ds-blinds__inner {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 14px;
+  max-width: 100%;
+}
+.ds-blinds--stacked .ds-blinds__inner {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.ds-blinds--stacked .ds-blinds__label {
+  min-width: 7.4em;
+}
+.ds-blinds__row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ds-blinds__label {
+  font-size: calc(clamp(1rem, 1.8cqw, 1.8rem) * var(--blinds-scale));
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--muted-strong, rgba(196, 176, 196, 0.5));
+  white-space: nowrap;
+}
+.ds-blinds__val {
+  font-size: calc(clamp(2.2rem, 5cqw, 5.5rem) * var(--blinds-scale));
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text, #e8e6ef);
+  white-space: nowrap;
+}
+.ds-blinds__sep { color: var(--muted-strong, rgba(196, 176, 196, 0.5)); margin: 0 6px; }
+.ds-blinds__val--break {
+  font-size: clamp(1.8rem, 4cqw, 4rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent, #eab308);
+  opacity: 0.9;
+  white-space: nowrap;
+}
+
+.ds-next {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 14px 32px;
+  background: var(--surface-glass, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+  border-radius: 14px;
+}
+.ds-next__label {
+  font-size: clamp(0.9rem, 1.5cqw, 1.6rem);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--muted-strong, rgba(196, 176, 196, 0.5));
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ds-next__val {
+  font-size: clamp(1.4rem, 2.6cqw, 3rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-soft, rgba(232, 230, 239, 0.55));
+}
+.ds-next__ante {
+  color: var(--muted-strong, rgba(196, 176, 196, 0.5));
+  font-size: 0.88em;
+}
+
+.ds-right {
+  border-left: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+  padding: 24px 28px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 4px;
+  overflow: hidden;
+  min-width: 0;
+}
+.ds-right__div {
+  height: 1px;
+  background: var(--border, rgba(255, 255, 255, 0.07));
+  margin: 14px 0;
+}
+
+.ds-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+.ds-stat__label {
+  font-size: clamp(0.85rem, 1.35cqw, 1.35rem);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-strong, rgba(196, 176, 196, 0.5));
+}
+.ds-stat__val {
+  /* 좌측 문구 기본(~48px)에 가깝게 */
+  font-size: clamp(1.6rem, 2.5cqw, 3rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text, #e8e6ef);
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.ds-stat__val--hi {
+  font-size: clamp(1.8rem, 2.8cqw, 3.3rem);
+  color: var(--primary, #ffb6c9);
+}
+.ds-stat__val--muted {
+  color: var(--muted-strong, rgba(196, 176, 196, 0.5));
+}
+.ds-stat__val--mono {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  font-size: clamp(1.5rem, 2.4cqw, 2.85rem);
+}

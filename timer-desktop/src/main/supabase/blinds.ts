@@ -1,67 +1,5 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { BlindStructureOption } from "@mnf/timer/types";
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const fs = require("fs") as typeof import("fs");
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const path = require("path") as typeof import("path");
-
-/** .env에서 값 직접 읽기 */
-function readEnvFile(): Record<string, string> {
-  const candidates = [
-    // electron-builder extraResources → resources/.env (설치된 exe)
-    typeof process.resourcesPath === "string"
-      ? path.join(process.resourcesPath, ".env")
-      : "",
-    path.resolve(__dirname, "../../.env"),             // out/main → timer-desktop/.env
-    path.resolve(__dirname, "../../../.env"),
-    path.resolve(__dirname, "../../../../.env"),
-    path.resolve(process.cwd(), ".env"),
-    path.resolve(process.cwd(), "timer-desktop/.env"),
-  ].filter(Boolean);
-  for (const p of candidates) {
-    try {
-      if (!fs.existsSync(p)) continue;
-      const env: Record<string, string> = {};
-      for (const line of fs.readFileSync(p, "utf-8").split("\n")) {
-        const t = line.trim();
-        if (!t || t.startsWith("#")) continue;
-        const idx = t.indexOf("=");
-        if (idx < 0) continue;
-        const k = t.slice(0, idx).trim();
-        const v = t.slice(idx + 1).trim().replace(/^["']|["']$/g, "");
-        env[k] = v;
-      }
-      console.log("[blinds] .env 로드 성공:", p);
-      return env;
-    } catch (e) {
-      console.warn("[blinds] .env 읽기 실패:", p, e);
-    }
-  }
-  console.warn("[blinds] .env 없음, 검색:", candidates);
-  return {};
-}
-
-let client: SupabaseClient | null = null;
-
-function getClient(): SupabaseClient | null {
-  // 매번 새로 시도 (null 캐시 방지)
-  const env = readEnvFile();
-  const url = (process.env.SUPABASE_URL || env["SUPABASE_URL"] || "").trim();
-  const key = (
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    env["SUPABASE_SERVICE_ROLE_KEY"] ||
-    process.env.SUPABASE_ANON_KEY ||
-    env["SUPABASE_ANON_KEY"] ||
-    ""
-  ).trim();
-
-  console.log("[blinds] getClient — URL:", url ? url.slice(0, 30) + "..." : "MISSING", "KEY:", key ? "OK" : "MISSING");
-
-  if (!url || !key) return null;
-  if (!client) client = createClient(url, key);
-  return client;
-}
+import { getSupabase } from "./client";
 
 type RawBlindRow = {
   kind?: "level" | "break";
@@ -88,7 +26,7 @@ type RawPreset = {
 };
 
 export async function listBlindStructures(): Promise<BlindStructureOption[]> {
-  const supabase = getClient();
+  const supabase = getSupabase();
   if (!supabase) {
     throw new Error("[blinds] Supabase 클라이언트 없음 (env 미설정)");
   }
@@ -120,13 +58,17 @@ export async function listBlindStructures(): Promise<BlindStructureOption[]> {
         row.kind === "level" || (!row.kind && (row.big ?? 0) > 0);
 
       // 원본 배열 순서를 유지하며 level 번호 할당
-      // 브레이크 행은 level 필드가 없으므로 원본 index 기반으로 소수 level 부여 (ex: 4.5)
+      // 브레이크 행은 직전 플레이 레벨과 다음 레벨 사이 (예: 4 → 4.01 → 5)
       const rawRows = p.blind_structure ?? [];
+      let lastPlayLevel = 0;
+      let breakSeq = 0;
       const levels = rawRows
-        .map((row, rawIdx) => {
+        .map((row) => {
           if (isBreak(row)) {
+            breakSeq += 1;
             return {
-              level: rawIdx + 0.5, // 앞 레벨과 뒤 레벨 사이에 위치
+              // 직전 플레이 레벨과 다음 레벨 사이 (4 → 4.01 브레이크 → 5)
+              level: Number((lastPlayLevel + breakSeq / 100).toFixed(2)),
               small: 0,
               big: 0,
               ante: 0,
@@ -134,8 +76,10 @@ export async function listBlindStructures(): Promise<BlindStructureOption[]> {
             };
           }
           if (!isLevel(row)) return null;
+          breakSeq = 0;
+          lastPlayLevel = row.level ?? lastPlayLevel + 1;
           return {
-            level: row.level ?? rawIdx + 1,
+            level: lastPlayLevel,
             small: row.small ?? 0,
             big: row.big ?? 0,
             ante: row.ante ?? 0,

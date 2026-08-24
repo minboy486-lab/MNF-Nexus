@@ -5,9 +5,11 @@ import {
   CONFIG_VERSION,
   MONITOR_SLOTS,
   MAX_MONITORS,
+  normalizeUiTheme,
   type AppConfig,
   type MonitorMapping,
   type MonitorSlot,
+  type UiThemeId,
 } from "../../shared/types";
 
 export function getConfigPath(): string {
@@ -81,7 +83,10 @@ export function loadConfig(): AppConfig | null {
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8")) as AppConfig;
     if (validateConfig(parsed)) return null;
-    return parsed;
+    return {
+      ...parsed,
+      theme: normalizeUiTheme(parsed.theme),
+    };
   } catch {
     return null;
   }
@@ -112,7 +117,9 @@ export function parseConfigInput(raw: unknown): { config: AppConfig } | { error:
     mappings.push(mapping);
   }
 
-  const config: AppConfig = { version: CONFIG_VERSION, controlDisplayId, mappings };
+  const theme: UiThemeId = normalizeUiTheme(input.theme);
+
+  const config: AppConfig = { version: CONFIG_VERSION, controlDisplayId, mappings, theme };
   const err = validateConfig(config);
   if (err) return { error: err };
   return { config };

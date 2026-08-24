@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { TableTimerState } from "@mnf/timer/types";
-import type { GameSession } from "../shared/types";
+import type { GameSession, UiThemeId } from "../shared/types";
 
 function readMonitorSlot(): number {
   const params = new URLSearchParams(window.location.search);
@@ -15,8 +15,34 @@ function readMonitorSlot(): number {
   return 1;
 }
 
+function readDisplayLabel(): string {
+  const params = new URLSearchParams(window.location.search);
+  const fromQuery = params.get("displayLabel");
+  if (fromQuery) {
+    try {
+      return decodeURIComponent(fromQuery);
+    } catch {
+      return fromQuery;
+    }
+  }
+  const arg = process.argv.find((a) => a.startsWith("--display-label="));
+  if (!arg) return "";
+  try {
+    return Buffer.from(arg.slice("--display-label=".length), "base64").toString("utf8");
+  } catch {
+    return "";
+  }
+}
+
 contextBridge.exposeInMainWorld("displayApi", {
   getMonitorSlot: () => readMonitorSlot(),
+  getDisplayLabel: () => readDisplayLabel(),
+  getTheme: () => ipcRenderer.invoke("theme:get") as Promise<UiThemeId>,
+  onThemeUpdate: (cb: (theme: UiThemeId) => void) => {
+    const h = (_e: Electron.IpcRendererEvent, theme: UiThemeId) => cb(theme);
+    ipcRenderer.on("theme:update", h);
+    return () => ipcRenderer.removeListener("theme:update", h);
+  },
   onTimerUpdate: (cb: (state: TableTimerState) => void) => {
     const h = (_e: Electron.IpcRendererEvent, state: TableTimerState) => cb(state);
     ipcRenderer.on("timer:update", h);
@@ -33,6 +59,9 @@ declare global {
   interface Window {
     displayApi: {
       getMonitorSlot: () => number;
+      getDisplayLabel: () => string;
+      getTheme: () => Promise<UiThemeId>;
+      onThemeUpdate: (cb: (theme: UiThemeId) => void) => () => void;
       onTimerUpdate: (cb: (state: TableTimerState) => void) => () => void;
       onSessionUpdate: (cb: (session: GameSession | null) => void) => () => void;
     };

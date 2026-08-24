@@ -8,6 +8,12 @@ export {
   GAME_NUMBERS,
   TABLE_NUMBERS,
   createEmptyConfig,
+  DEFAULT_UI_THEME,
+  UI_THEME_IDS,
+  UI_THEME_OPTIONS,
+  applyDocumentTheme,
+  isUiThemeId,
+  normalizeUiTheme,
   type AppConfig,
   type AppSnapshot,
   type DisplayBounds,
@@ -18,4 +24,5 @@ export {
   type TableSlot,
   type GameNumber,
   type TableNumber,
+  type UiThemeId,
 } from "../../shared/types";

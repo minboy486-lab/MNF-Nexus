@@ -170,7 +170,7 @@ export async function middleware(request: NextRequest) {
 
       if (!canAccessAdminArea(role) && !staffAllowedAdmin) {
         const url = request.nextUrl.clone();
-        url.pathname = role === "staff" ? "/staff/tables" : getHomePath(role);
+        url.pathname = role === "staff" ? "/staff" : getHomePath(role);
         return NextResponse.redirect(url);
       }
     }
@@ -178,7 +178,7 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith(GUEST_PREFIX)) {
       if (role === "staff") {
         const url = request.nextUrl.clone();
-        url.pathname = "/staff/tables";
+        url.pathname = "/staff";
         return NextResponse.redirect(url);
       }
       if (isManagerOrAdmin(role) || role === "admin") {

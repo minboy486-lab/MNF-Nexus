@@ -1,6 +1,6 @@
 {
   "name": "mnf-timer-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "main": "./out/main/index.js",
   "scripts": {
@@ -62,12 +62,17 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
     "electron-updater": "^6.8.9",
+    "jsqr": "^1.4.0",
+    "qrcode": "^1.5.4",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.5.2",
     "electron": "^36.4.0",
     "electron-builder": "^26.15.3",

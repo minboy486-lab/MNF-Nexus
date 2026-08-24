@@ -28,4 +28,18 @@ export function formatDateTimeKST(iso: string): string {
   return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
 }
 
+export function formatTimeHHmmKST(iso: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(iso));
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  let hour = get("hour");
+  if (hour === "24") hour = "00";
+  return `${hour}:${get("minute")}`;
+}
+
 export { formatMp } from "@/lib/utils/mp";

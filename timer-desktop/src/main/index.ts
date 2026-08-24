@@ -27,6 +27,9 @@ import { registerIpcHandlers } from "./ipc/handlers";
 import { TimerHub } from "./timer/timerHub";
 import { WindowManager } from "./windows/windowManager";
 import { setupAutoUpdater } from "./updater";
+import { RemoteServer } from "./remote/server";
+
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
 const windowManager = new WindowManager();
 const timerHub = new TimerHub({
@@ -35,6 +38,7 @@ const timerHub = new TimerHub({
 });
 
 windowManager.setTimerHub(timerHub);
+const remoteServer = new RemoteServer();
 
 function registerScreenEvents(): void {
   const refresh = (): void => {
@@ -51,9 +55,14 @@ function registerScreenEvents(): void {
 }
 
 app.whenReady().then(async () => {
-  registerIpcHandlers(windowManager, timerHub);
+  registerIpcHandlers(windowManager, timerHub, remoteServer);
   setupAutoUpdater();
   registerScreenEvents();
+  try {
+    await remoteServer.start(timerHub);
+  } catch (e) {
+    console.error("[remote] 서버 시작 실패", e);
+  }
 
   const saved = loadConfig();
   if (saved) {
@@ -69,7 +78,10 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on("before-quit", () => windowManager.setQuitting(true));
+app.on("before-quit", () => {
+  windowManager.setQuitting(true);
+  remoteServer.stop();
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

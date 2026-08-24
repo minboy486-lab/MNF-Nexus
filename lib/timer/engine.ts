@@ -1,4 +1,4 @@
-import { getLevelDef, getNextLevelDef, getPrevLevelDef, resolveLevels } from "./levels";
+import { getLevelDef, getNextLevelDef, getPrevLevelDef, resolveLevels, sortedBlindLevels } from "./levels";
 import type { BlindLevelDef, BlindStructureOption, TableTimerState, TimerAction, TimerStatus } from "./types";
 
 export function createInitialTimerState(tableId: number): TableTimerState {
@@ -18,7 +18,7 @@ export function createInitialTimerState(tableId: number): TableTimerState {
 }
 
 export function openTableGame(tableId: number, structure: BlindStructureOption): TableTimerState {
-  const first = resolveLevels(structure.levels)[0];
+  const first = sortedBlindLevels(structure.levels)[0];
   return {
     tableId,
     status: "stopped",
@@ -51,6 +51,33 @@ export function formatRemainingMs(ms: number): string {
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
+export function formatNextBreakRemaining(
+  levels: BlindLevelDef[] | undefined,
+  currentLevel: number,
+  remainingMs: number,
+): string {
+  if (!levels?.length) return "—";
+  const sorted = [...levels].sort((a, b) => a.level - b.level);
+  let secSum = Math.ceil(remainingMs / 1000);
+  let found = false;
+  for (const lv of sorted) {
+    if (lv.level <= currentLevel) continue;
+    if (lv.small === 0 && lv.big === 0) {
+      found = true;
+      break;
+    }
+    secSum += lv.durationSec;
+  }
+  if (!found) return "—";
+  const h = Math.floor(secSum / 3600);
+  const m = Math.floor((secSum % 3600) / 60);
+  const s = secSum % 60;
+  if (h > 0) {
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 function applyLevel(state: TableTimerState, levelNum: number): TableTimerState {
   const level = getLevelDef(state.levels, levelNum);
   return {
@@ -74,7 +101,7 @@ function toRunning(state: TableTimerState, durationMs: number, now = Date.now())
 function patchCurrentLevelDuration(state: TableTimerState, minutes: number): TableTimerState {
   const durationSec = Math.max(1, minutes) * 60;
   const levels = resolveLevels(state.levels).map((level) =>
-    level.level === state.blindLevel ? { ...level, durationSec } : level,
+    Math.abs(level.level - state.blindLevel) < 1e-6 ? { ...level, durationSec } : level,
   );
   return { ...state, levels };
 }
@@ -148,7 +175,7 @@ export function applyTimerAction(
     }
     case "reset": {
       if (!state.blindStructureId) return createInitialTimerState(state.tableId);
-      const first = resolveLevels(state.levels)[0];
+      const first = sortedBlindLevels(state.levels)[0];
       return {
         ...state,
         status: "stopped" as TimerStatus,

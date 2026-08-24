@@ -33,8 +33,11 @@ export function createControlWindow(display: DisplayInfo): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      backgroundThrottling: false,
     },
   });
+
+  allowWindowAudio(win);
 
   win.on("ready-to-show", () => {
     win.show();
@@ -50,7 +53,18 @@ export function createControlWindow(display: DisplayInfo): BrowserWindow {
   return win;
 }
 
+function allowWindowAudio(win: BrowserWindow): void {
+  const session = win.webContents.session;
+  const allow = (permission: string) =>
+    permission === "media" || permission === "fullscreen" || permission === "speaker-selection";
+  session.setPermissionCheckHandler((_wc, permission) => allow(permission));
+  session.setPermissionRequestHandler((_wc, permission, callback) => {
+    callback(allow(permission));
+  });
+}
+
 export function createDisplayWindow(display: DisplayInfo, monitorSlot: number): BrowserWindow {
+  const labelB64 = Buffer.from(display.label ?? "", "utf8").toString("base64");
   const win = new BrowserWindow({
     x: display.bounds.x,
     y: display.bounds.y,
@@ -67,22 +81,26 @@ export function createDisplayWindow(display: DisplayInfo, monitorSlot: number): 
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
-      additionalArguments: [`--monitor=${monitorSlot}`],
+      backgroundThrottling: false,
+      additionalArguments: [`--monitor=${monitorSlot}`, `--display-label=${labelB64}`],
     },
   });
+
+  allowWindowAudio(win);
 
   win.on("ready-to-show", () => {
     win.show();
     win.setFullScreen(true);
   });
 
+  const displayLabelQuery = encodeURIComponent(display.label ?? "");
   if (isDevRuntime() && process.env.ELECTRON_RENDERER_URL) {
     void win.loadURL(
-      `${process.env.ELECTRON_RENDERER_URL}/display/index.html?monitor=${monitorSlot}`,
+      `${process.env.ELECTRON_RENDERER_URL}/display/index.html?monitor=${monitorSlot}&displayLabel=${displayLabelQuery}`,
     );
   } else {
     void win.loadFile(join(__dirname, "../renderer/display/index.html"), {
-      query: { monitor: String(monitorSlot) },
+      query: { monitor: String(monitorSlot), displayLabel: display.label ?? "" },
     });
   }
 

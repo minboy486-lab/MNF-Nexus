@@ -1,10 +1,6 @@
 import { contextBridge, ipcRenderer, shell } from "electron";
 import type { BlindStructureOption, TableTimerState, TimerAction } from "@mnf/timer/types";
-import type { AppConfig, AppSnapshot, DisplayInfo, GameSession } from "../shared/types";
-
-type IpcResult<T = void> = T extends void
-  ? { ok: true } | { ok: false; error: string }
-  : { ok: true } & T | { ok: false; error: string };
+import type { AppConfig, AppSnapshot, DisplayInfo, GameSession, UiThemeId } from "../shared/types";
 
 export type ControlApi = {
   // 디스플레이/설정
@@ -12,6 +8,11 @@ export type ControlApi = {
   getConfig: () => Promise<AppConfig | null>;
   saveConfig: (config: AppConfig) => Promise<{ ok: true } | { ok: false; error: string }>;
   onSetupRequired: (cb: () => void) => () => void;
+  getTheme: () => Promise<UiThemeId>;
+  setTheme: (theme: UiThemeId) => Promise<{ ok: true; theme: UiThemeId } | { ok: false; error: string }>;
+  onThemeUpdate: (cb: (theme: UiThemeId) => void) => () => void;
+  getRemoteInfo: () => Promise<import("../shared/remote").RemotePairingInfo>;
+  refreshRemoteQr: () => Promise<import("../shared/remote").RemotePairingInfo>;
   // 블라인드
   listBlinds: () => Promise<BlindStructureOption[]>;
   listLocalBlinds: () => Promise<BlindStructureOption[]>;
@@ -28,7 +29,7 @@ export type ControlApi = {
   // 타이머
   timerCommand: (gameId: number, action: TimerAction, options?: { minutes?: number; ms?: number; sec?: number }) => Promise<{ ok: true; state: TableTimerState } | { ok: false; error: string }>;
   // 세션 카운터
-  updateCounters: (gameId: number, patch: { players?: number; entries?: number; rebuys?: number[]; addon?: number; bonusChip?: number }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  updateCounters: (gameId: number, patch: { players?: number; entries?: number; rebuys?: number[]; addon?: number; bonusChip?: number; leftNotice?: import("../shared/types").LeftNotice | null }) => Promise<{ ok: true } | { ok: false; error: string }>;
   openExternal: (url: string) => void;
   quit: () => void;
   // 업데이터
@@ -47,6 +48,15 @@ const api: ControlApi = {
     ipcRenderer.on("config:setup-required", h);
     return () => ipcRenderer.removeListener("config:setup-required", h);
   },
+  getTheme: () => ipcRenderer.invoke("theme:get"),
+  setTheme: (theme) => ipcRenderer.invoke("theme:set", theme),
+  onThemeUpdate: (cb) => {
+    const h = (_e: Electron.IpcRendererEvent, theme: UiThemeId) => cb(theme);
+    ipcRenderer.on("theme:update", h);
+    return () => ipcRenderer.removeListener("theme:update", h);
+  },
+  getRemoteInfo: () => ipcRenderer.invoke("remote:info"),
+  refreshRemoteQr: () => ipcRenderer.invoke("remote:refreshQr"),
   listBlinds: () => ipcRenderer.invoke("blinds:list"),
   listLocalBlinds: () => ipcRenderer.invoke("blinds:local:list"),
   getSnapshot: () => ipcRenderer.invoke("app:snapshot"),
@@ -66,8 +76,19 @@ const api: ControlApi = {
   assignMonitor: (monitorSlot, gameId) => ipcRenderer.invoke("monitor:assign", { monitorSlot, gameId }),
   timerCommand: (gameId, action, options) =>
     ipcRenderer.invoke("timer:command", { gameId, action, ...options }),
-  updateCounters: (gameId, patch) =>
-    ipcRenderer.invoke("session:counters", { gameId, ...patch }),
+  updateCounters: (gameId, patch) => {
+    const payload: Record<string, unknown> = { gameId };
+    if (patch.players !== undefined) payload.players = patch.players;
+    if (patch.entries !== undefined) payload.entries = patch.entries;
+    if (patch.rebuys !== undefined) payload.rebuys = patch.rebuys;
+    if (patch.addon !== undefined) payload.addon = patch.addon;
+    if (patch.bonusChip !== undefined) payload.bonusChip = patch.bonusChip;
+    if (patch.leftNotice !== undefined) {
+      payload.leftNotice =
+        patch.leftNotice === null ? null : { html: String(patch.leftNotice.html ?? "") };
+    }
+    return ipcRenderer.invoke("session:counters", payload);
+  },
   openExternal: (url) => void shell.openExternal(url),
   quit: () => void ipcRenderer.invoke("app:quit"),
   checkUpdate: () => ipcRenderer.invoke("updater:check"),

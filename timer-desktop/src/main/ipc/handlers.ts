@@ -6,8 +6,10 @@ import { getAllDisplaysInfo } from "../screen/displayMapper";
 import { listBlindStructures } from "../supabase/blinds";
 import type { TimerHub } from "../timer/timerHub";
 import type { MonitorSlot, TableSlot } from "../../shared/types";
+import { normalizeUiTheme } from "../../shared/types";
 import type { BlindStructureOption, TimerAction } from "@mnf/timer/types";
 import type { WindowManager } from "../windows/windowManager";
+import type { RemoteServer } from "../remote/server";
 
 function localBlindsPath() {
   const dir = app.getPath("userData");
@@ -46,7 +48,7 @@ function isBlindStructure(v: unknown): v is BlindStructureOption {
   return typeof o.id === "string" && typeof o.name === "string" && Array.isArray(o.levels);
 }
 
-export function registerIpcHandlers(wm: WindowManager, hub: TimerHub): void {
+export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: RemoteServer): void {
   // ── 디스플레이 & 설정 ──────────────────────────────────────
   ipcMain.handle("displays:get", () => getAllDisplaysInfo());
   ipcMain.handle("config:get", () => loadConfig() ?? wm.getConfig());
@@ -58,6 +60,22 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub): void {
     await wm.applyConfig(parsed.config);
     return { ok: true as const };
   });
+  ipcMain.handle("theme:get", () => wm.getTheme());
+  ipcMain.handle("theme:set", async (_e, raw: unknown) => {
+    const theme = normalizeUiTheme(raw);
+    const current = loadConfig() ?? wm.getConfig();
+    if (!current) {
+      return { ok: false as const, error: "설정이 없습니다. 모니터 설정을 먼저 완료하세요." };
+    }
+    const next = { ...current, theme };
+    const saved = saveConfig(next);
+    if (!saved.ok) return saved;
+    await wm.applyConfig(next);
+    return { ok: true as const, theme };
+  });
+
+  ipcMain.handle("remote:info", () => remote.getInfo());
+  ipcMain.handle("remote:refreshQr", () => remote.refreshPairing());
 
   // ── 앱 제어 ───────────────────────────────────────────────
   ipcMain.handle("app:quit", () => {
@@ -68,10 +86,12 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub): void {
   // ── 블라인드 ──────────────────────────────────────────────
   ipcMain.handle("blinds:list", async () => {
     // 5초 타임아웃: 네트워크 지연으로 IPC가 무한 대기하는 현상 방지
-    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
-    let remote: Awaited<ReturnType<typeof listBlindStructures>> | null = null;
+    const timeout = new Promise<BlindStructureOption[] | null>((resolve) =>
+      setTimeout(() => resolve(null), 5000),
+    );
+    let remote: BlindStructureOption[] | null = null;
     try {
-      remote = await Promise.race([listBlindStructures(), timeout]) as typeof remote;
+      remote = await Promise.race([listBlindStructures(), timeout]);
     } catch (e) {
       console.error("[ipc] blinds:list 에러:", e);
     }
@@ -132,12 +152,57 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub): void {
   ipcMain.handle("session:counters", (_e, payload: unknown) => {
     const p = payload as Record<string, unknown>;
     if (!isGameId(p?.gameId)) return { ok: false as const, error: "유효하지 않은 게임 ID입니다." };
+
+    let leftNotice: { html: string } | null | undefined = undefined;
+    if (Object.prototype.hasOwnProperty.call(p, "leftNotice")) {
+      if (p.leftNotice === null) {
+        leftNotice = null;
+      } else if (typeof p.leftNotice === "string") {
+        const html = String(p.leftNotice)
+          .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+          .replace(/\son\w+\s*=\s*(['"]).*?\1/gi, "")
+          .replace(/\son\w+\s*=\s*[^\s>]+/gi, "")
+          .replace(/javascript:/gi, "");
+        const text = html.replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/\u200b/g, "").trim();
+        leftNotice = text ? { html } : null;
+      } else if (p.leftNotice && typeof p.leftNotice === "object" && !Array.isArray(p.leftNotice)) {
+        const n = p.leftNotice as Record<string, unknown>;
+        if (typeof n.html === "string") {
+          const html = n.html
+            .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+            .replace(/\son\w+\s*=\s*(['"]).*?\1/gi, "")
+            .replace(/\son\w+\s*=\s*[^\s>]+/gi, "")
+            .replace(/javascript:/gi, "");
+          const text = html.replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/\u200b/g, "").trim();
+          leftNotice = text ? { html } : null;
+        }
+      } else if (Array.isArray(p.leftNotice)) {
+        const parts = (p.leftNotice as unknown[])
+          .map((row) => {
+            if (!row || typeof row !== "object") return "";
+            const line = row as Record<string, unknown>;
+            if (typeof line.text !== "string" || !line.text.trim()) return "";
+            const size = typeof line.fontSize === "number" ? line.fontSize : 40;
+            const color = typeof line.color === "string" ? line.color : "#e8e6ef";
+            const escaped = line.text
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/\n/g, "<br/>");
+            return `<div style="font-size:${size}px;color:${color};text-align:center">${escaped}</div>`;
+          })
+          .filter(Boolean);
+        leftNotice = parts.length ? { html: parts.join("") } : null;
+      }
+    }
+
     hub.updateSessionCounters(p.gameId as number, {
       ...(typeof p.players === "number" ? { players: p.players } : {}),
       ...(typeof p.entries === "number" ? { entries: p.entries } : {}),
       ...(Array.isArray(p.rebuys) ? { rebuys: p.rebuys as number[] } : {}),
       ...(typeof p.addon === "number" ? { addon: p.addon } : {}),
       ...(typeof p.bonusChip === "number" ? { bonusChip: p.bonusChip } : {}),
+      ...(leftNotice !== undefined ? { leftNotice } : {}),
     });
     return { ok: true as const };
   });

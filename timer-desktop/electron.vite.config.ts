@@ -49,11 +49,13 @@ export default defineConfig({
     root: resolve(__dirname, "src/renderer"),
     resolve: { alias: timerAlias },
     plugins: [react()],
+    server: { host: true, allowedHosts: true },
     build: {
       rollupOptions: {
         input: {
           control: resolve(__dirname, "src/renderer/control/index.html"),
           display: resolve(__dirname, "src/renderer/display/index.html"),
+          remote: resolve(__dirname, "src/renderer/remote/index.html"),
         },
       },
     },

@@ -70,6 +70,7 @@ export function SetupScreen({ displays, initialConfig, onSaved }: Props) {
     const config: AppConfig = {
       version: CONFIG_VERSION,
       controlDisplayId: controlId,
+      theme: initialConfig?.theme,
       mappings: displays.map((d, i) => {
         const v = assignments[d.id] ?? "unused";
         const slot = d.id === controlId ? null : fromAssignValue(v);

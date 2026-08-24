@@ -5,6 +5,29 @@ export const TABLE_SLOTS = [1, 2, 3, 4, 5, 6] as const;
 export type MonitorSlot = (typeof MONITOR_SLOTS)[number];
 export type TableSlot = (typeof TABLE_SLOTS)[number];
 
+/** 송출·컨트롤러 UI 테마 */
+export const UI_THEME_IDS = ["black-pink", "mnf-original", "cherry-blossom"] as const;
+export type UiThemeId = (typeof UI_THEME_IDS)[number];
+export const DEFAULT_UI_THEME: UiThemeId = "black-pink";
+export const UI_THEME_OPTIONS: ReadonlyArray<{ id: UiThemeId; label: string }> = [
+  { id: "black-pink", label: "Black Pink" },
+  { id: "mnf-original", label: "MNF Original" },
+  { id: "cherry-blossom", label: "Cherry Blossom" },
+];
+
+export function isUiThemeId(value: unknown): value is UiThemeId {
+  return typeof value === "string" && (UI_THEME_IDS as readonly string[]).includes(value);
+}
+
+export function normalizeUiTheme(value: unknown): UiThemeId {
+  return isUiThemeId(value) ? value : DEFAULT_UI_THEME;
+}
+
+export function applyDocumentTheme(theme: UiThemeId): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.setAttribute("data-theme", theme);
+}
+
 // legacy compat
 export const MAX_GAMES = MAX_MONITORS;
 export const MAX_TABLE_DISPLAYS = MAX_MONITORS;
@@ -40,6 +63,8 @@ export interface AppConfig {
   version: typeof CONFIG_VERSION;
   controlDisplayId: number;
   mappings: MonitorMapping[];
+  /** UI 테마. 없으면 Black Pink */
+  theme?: UiThemeId;
 }
 
 export interface DisplayInfo {
@@ -51,6 +76,19 @@ export interface DisplayInfo {
   rotation: number;
   internal: boolean;
   isPrimary: boolean;
+}
+
+/** 송출 화면 좌측 문구 (리치 텍스트 HTML) */
+export interface LeftNotice {
+  html: string;
+}
+
+/** @deprecated 레거시 줄 단위 문구 — LeftNotice.html로 이전 */
+export interface LeftNoticeLine {
+  id: string;
+  text: string;
+  fontSize: number;
+  color: string;
 }
 
 /** Control 창에서 관리하는 진행 중인 게임 세션 */
@@ -68,8 +106,15 @@ export interface GameSession {
   addonChip: number;
   hasBonusChip: boolean;
   bonusChipAmount: number;
-  /** 게임 시작 Unix ms (Date.now()) */
+  /**
+   * 최초 시작 Unix ms. 0 = 아직 한 번도 시작 안 함.
+   * TOTAL TIME 표시용 기준(일시정지 반영은 totalElapsedMs / totalRunningAt).
+   */
   startedAt: number;
+  /** 일시정지 구간에 누적된 플레이 시간(ms) */
+  totalElapsedMs: number;
+  /** running 중이면 구간 시작 시각, 아니면 null */
+  totalRunningAt: number | null;
   // 게임 내 카운터
   /** 현재 남은 플레이어 수 */
   players: number;
@@ -79,6 +124,45 @@ export interface GameSession {
   rebuys: number[];
   addon: number;
   bonusChip: number;
+  /** 송출 좌측 패널 문구. null = 없음 */
+  leftNotice: LeftNotice | null;
+}
+
+/** 세션 TOTAL TIME 표시용 경과 ms (일시정지 반영) */
+export function getSessionTotalElapsedMs(session: Pick<GameSession, "totalElapsedMs" | "totalRunningAt">, now = Date.now()): number {
+  const base = session.totalElapsedMs ?? 0;
+  if (session.totalRunningAt && isFinite(session.totalRunningAt)) {
+    return base + Math.max(0, now - session.totalRunningAt);
+  }
+  return base;
+}
+
+export function formatTotalElapsedMs(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+/** 좌측 문구 HTML 살균 (스크립트/이벤트 제거) */
+export function sanitizeNoticeHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/\son\w+\s*=\s*(['"]).*?\1/gi, "")
+    .replace(/\son\w+\s*=\s*[^\s>]+/gi, "")
+    .replace(/javascript:/gi, "");
+}
+
+export function noticeHtmlIsEmpty(html: string | null | undefined): boolean {
+  if (!html) return true;
+  const text = html
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\u200b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.length === 0;
 }
 
 /** Control 창에 전달하는 전체 앱 상태 스냅샷 */
@@ -95,5 +179,6 @@ export function createEmptyConfig(controlDisplayId: number): AppConfig {
     version: CONFIG_VERSION,
     controlDisplayId,
     mappings: [],
+    theme: DEFAULT_UI_THEME,
   };
 }

@@ -38,6 +38,10 @@ export function GameListView({ snapshot, timers, onSelectGame, onNewGame }: Prop
           const isRunning = timer?.status === "running";
 
           const fKey = idx < 6 ? `F${idx + 1}` : null;
+          const isBreak =
+            !!timer?.blindStructureId && timer.smallBlind === 0 && timer.bigBlind === 0;
+          const levelLabel = isBreak ? "BREAK" : String(timer?.blindLevel ?? 1);
+          const rebuyTotal = session.rebuys.reduce((a, b) => a + b, 0);
           return (
             <li key={session.gameId} className={`game-card${isRunning ? " game-card--running" : ""}`} onClick={() => onSelectGame(session)}>
               <div className="game-card__id">
@@ -51,10 +55,29 @@ export function GameListView({ snapshot, timers, onSelectGame, onNewGame }: Prop
                   {statusLabel(timer?.status)}
                 </span>
               </div>
-              <div className="game-card__timer">
-                {isRunning || timer?.status === "paused"
-                  ? formatRemainingMs(remainingMs)
-                  : "—"}
+              <div className="game-card__stats">
+                <span className="game-card__stat">
+                  <span className="game-card__stat-label">엔트리</span>
+                  <span className="game-card__stat-val">{session.entries}</span>
+                </span>
+                <span className="game-card__stat">
+                  <span className="game-card__stat-label">리바인</span>
+                  <span className="game-card__stat-val">{rebuyTotal}</span>
+                </span>
+                <span className="game-card__pair">
+                  <span className="game-card__stat">
+                    <span className="game-card__stat-label">레벨</span>
+                    <span className="game-card__stat-val">{levelLabel}</span>
+                  </span>
+                  <span className="game-card__stat">
+                    <span className="game-card__stat-label">시간</span>
+                    <span className="game-card__stat-val game-card__timer">
+                      {isRunning || timer?.status === "paused"
+                        ? formatRemainingMs(remainingMs)
+                        : "—"}
+                    </span>
+                  </span>
+                </span>
               </div>
             </li>
           );

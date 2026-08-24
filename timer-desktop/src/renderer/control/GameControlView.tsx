@@ -1,7 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { TableTimerState, TimerAction } from "@mnf/timer/types";
-import type { GameSession } from "../../shared/types";
-import { formatRemainingMs, getDisplayRemainingMs } from "@mnf/timer/engine";
+import type { GameSession, LeftNotice } from "../../shared/types";
+import { formatTotalElapsedMs, getSessionTotalElapsedMs, noticeHtmlIsEmpty, sanitizeNoticeHtml } from "../../shared/types";
+import { formatNextBreakRemaining, formatRemainingMs, getDisplayRemainingMs } from "@mnf/timer/engine";
+import logoDisplayUrl from "./mnf-logo-display.png";
+import { NoticeRichEditor, type NoticeRichEditorHandle } from "./NoticeRichEditor";
+import { DsBlinds } from "../shared/DsBlinds";
+import { useTimerAnnounce } from "../shared/timerAnnounce";
+
+const BROADCAST_W = 1920;
+const BROADCAST_H = 1080;
 
 type Props = {
   session: GameSession;
@@ -139,6 +147,36 @@ export function GameControlView({
   const [rebuys, setRebuys] = useState<number[]>([...session.rebuys]);
   const [addon, setAddon] = useState(session.addon);
   const [bonusChip, setBonusChip] = useState(session.bonusChip);
+  const [noticeOpen, setNoticeOpen] = useState(false);
+  const [noticeDraft, setNoticeDraft] = useState(session.leftNotice?.html ?? "");
+  /** 저장된 문구 — 스냅샷 도착 전에도 미리보기 유지 */
+  const [appliedNotice, setAppliedNotice] = useState(session.leftNotice?.html ?? "");
+  const noticeEditorRef = useRef<NoticeRichEditorHandle>(null);
+  /** 저장 직후 스냅샷이 옛값으로 덮어쓰지 않게 */
+  const pendingNoticeSaveRef = useRef<string | null>(null);
+  const miniShellRef = useRef<HTMLDivElement>(null);
+  const [miniScale, setMiniScale] = useState(0.3);
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 250);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useLayoutEffect(() => {
+    const el = miniShellRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w < 1 || h < 1) return;
+      setMiniScale(Math.min(w / BROADCAST_W, h / BROADCAST_H) * 0.98);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // 게임 전환 시 로컬 상태 리셋
   useEffect(() => {
@@ -147,7 +185,27 @@ export function GameControlView({
     setRebuys([...session.rebuys]);
     setAddon(session.addon);
     setBonusChip(session.bonusChip);
+    const html = session.leftNotice?.html ?? "";
+    setNoticeDraft(html);
+    setAppliedNotice(html);
+    pendingNoticeSaveRef.current = null;
+    setNoticeOpen(false);
   }, [session.gameId]);
+
+  // 스냅샷 leftNotice 동기화 (편집 중·저장 대기 중이면 덮지 않음)
+  useEffect(() => {
+    if (noticeOpen) return;
+    const html = session.leftNotice?.html ?? "";
+    if (pendingNoticeSaveRef.current !== null) {
+      if (html === pendingNoticeSaveRef.current) {
+        pendingNoticeSaveRef.current = null;
+      } else {
+        return;
+      }
+    }
+    setAppliedNotice(html);
+    setNoticeDraft(html);
+  }, [session.leftNotice, noticeOpen]);
 
   // ESC — 팝업 열려있으면 팝업만 닫고 버블링 차단
   useEffect(() => {
@@ -159,22 +217,31 @@ export function GameControlView({
           return;
         }
         if (timerPopup) { e.stopImmediatePropagation(); setTimerPopup(null); return; }
+        if (noticeOpen) { e.stopImmediatePropagation(); setNoticeOpen(false); return; }
       }
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  }, [timerPopup, deleteConfirm]);
+  }, [timerPopup, deleteConfirm, noticeOpen]);
 
   // 게임 컨트롤 단축키
   useEffect(() => {
     const KO_TO_EN: Record<string, string> = {
-      ㅂ:"q", ㅈ:"w", ㄷ:"e", ㄱ:"r", ㅅ:"t", 㛧:"y", ㅕ:"u", ㅑ:"i", ㅐ:"o", ㅔ:"p",
+      ㅂ:"q", ㅈ:"w", ㄷ:"e", ㄱ:"r", ㅅ:"t", ㅛ:"y", ㅕ:"u", ㅑ:"i", ㅐ:"o", ㅔ:"p",
       ㅁ:"a", ㄴ:"s", ㅇ:"d", ㄹ:"f", ㅎ:"g", ㅗ:"h", ㅓ:"j", ㅏ:"k", ㅣ:"l",
       ㅋ:"z", ㅌ:"x", ㅊ:"c", ㅍ:"v", ㅠ:"b", ㅜ:"n", ㅡ:"m",
     };
 
     const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const t = e.target as HTMLElement | null;
+      const typing =
+        t instanceof HTMLInputElement ||
+        t instanceof HTMLTextAreaElement ||
+        t?.isContentEditable === true ||
+        !!t?.closest?.('[contenteditable="true"]');
+
+      // 좌측 문구 편집 중 / 입력 중이면 단축키 전부 무시 (ESC는 위 capture 핸들러)
+      if (noticeOpen || typing) return;
       if (timerPopup) return;
 
       // Insert: 리셋
@@ -235,7 +302,7 @@ export function GameControlView({
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [state, timerPopup, onCommand]);
+  }, [state, timerPopup, noticeOpen, onCommand, onDeleteGame]);
 
   // 최신 deleteConfirm 상태를 ref로 유지
   const deleteConfirmRef = useRef(deleteConfirm);
@@ -265,9 +332,48 @@ export function GameControlView({
     setTimerPopup(null);
   }
 
-  function push(patch: { players?: number; entries?: number; rebuys?: number[]; addon?: number; bonusChip?: number }) {
+  function push(patch: {
+    players?: number;
+    entries?: number;
+    rebuys?: number[];
+    addon?: number;
+    bonusChip?: number;
+    leftNotice?: LeftNotice | null;
+  }) {
     void window.controlApi.updateCounters(session.gameId, patch);
   }
+
+  function toggleNoticeEditor() {
+    if (!noticeOpen) {
+      setNoticeDraft(appliedNotice || session.leftNotice?.html || "");
+    }
+    setNoticeOpen((v) => !v);
+  }
+
+  function saveNotice() {
+    const raw = noticeEditorRef.current?.getHtml() ?? noticeDraft;
+    const html = sanitizeNoticeHtml(raw);
+    const empty = noticeHtmlIsEmpty(html);
+    const nextHtml = empty ? "" : html;
+    pendingNoticeSaveRef.current = nextHtml;
+    setNoticeDraft(nextHtml);
+    setAppliedNotice(nextHtml);
+    setNoticeOpen(false);
+    void window.controlApi.updateCounters(session.gameId, {
+      leftNotice: empty ? null : { html: nextHtml },
+    });
+  }
+
+  function clearNotice() {
+    pendingNoticeSaveRef.current = "";
+    setNoticeDraft("");
+    setAppliedNotice("");
+    void window.controlApi.updateCounters(session.gameId, { leftNotice: null });
+  }
+
+  // 미리보기: 편집 중이면 초안, 아니면 저장된(낙관적) 문구
+  const previewNoticeHtml = noticeOpen ? noticeDraft : appliedNotice;
+  const showPreviewNotice = !noticeHtmlIsEmpty(previewNoticeHtml);
 
   // 엔트리 +: 엔트리 +1, 플레이어 +1
   function addEntry() {
@@ -286,8 +392,9 @@ export function GameControlView({
     push({ entries: e, players: p });
   }
 
-  // 플레이어: 독립
+  // 플레이어: 독립 (엔트리 상한)
   function addPlayer() {
+    if (entries > 0 && players >= entries) return;
     const p = players + 1;
     setPlayers(p);
     push({ players: p });
@@ -350,6 +457,7 @@ export function GameControlView({
   const avgChip = players > 0 ? Math.round(totalChip / players) : 0;
 
   const remainingMs = state ? getDisplayRemainingMs(state) : 0;
+  useTimerAnnounce(state, remainingMs);
   const timerText = !state || state.status === "stopped" ? "—" : formatRemainingMs(remainingMs);
 
   // 다음 레벨 (break 포함)
@@ -359,32 +467,12 @@ export function GameControlView({
   const nextLevel = gcCurIdx >= 0 ? (gcSortedLevels[gcCurIdx + 1] ?? null) : null;
   const gcIsBreak = (state?.bigBlind ?? -1) === 0 && (state?.smallBlind ?? -1) === 0 && !!state?.blindStructureId;
 
-  // 총 경과 시간
-  const _startedAt = session.startedAt;
-  const totalElapsedSec = (_startedAt && isFinite(_startedAt))
-    ? Math.max(0, Math.floor((Date.now() - _startedAt) / 1000))
-    : 0;
-  const totalTimeText = (_startedAt && isFinite(_startedAt))
-    ? `${String(Math.floor(totalElapsedSec / 3600)).padStart(2,"0")}:${String(Math.floor((totalElapsedSec % 3600) / 60)).padStart(2,"0")}:${String(totalElapsedSec % 60).padStart(2,"0")}`
+  // 총 경과 시간 (최초 시작부터, 일시정지 시 멈춤)
+  const totalTimeText = session.startedAt
+    ? formatTotalElapsedMs(getSessionTotalElapsedMs(session))
     : "—";
 
-  // 다음 브레이크까지 남은 시간
-  const nextBreakText = (() => {
-    if (!state?.levels) return "—";
-    let secSum = Math.ceil(remainingMs / 1000);
-    let found = false;
-    for (const lv of state.levels) {
-      if (lv.level <= currentLevel) continue;
-      if (lv.small === 0 && lv.big === 0) { found = true; break; }
-      secSum += lv.durationSec;
-    }
-    if (!found) return "—";
-    const h = Math.floor(secSum / 3600);
-    const m = Math.floor((secSum % 3600) / 60);
-    const s = secSum % 60;
-    if (h > 0) return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
-    return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
-  })();
+  const nextBreakText = formatNextBreakRemaining(state?.levels, currentLevel, remainingMs);
   const statusText =
     state?.status === "running" ? "진행" : state?.status === "paused" ? "일시정지" : "정지";
 
@@ -407,84 +495,109 @@ export function GameControlView({
       <div className="gc-body">
         {/* 왼쪽: 타이머 + 조작 */}
         <div className="gc-left">
-          {/* 미니 송출 화면 — 3컬럼 */}
-          <div className={`mini-display mini-display--${state?.status ?? "stopped"}`}>
-            <div className="mini-display__glow" />
-            {/* 게임 이름 타이틀바 */}
-            <div className="mini-display__title">{session.structureName}</div>
-            <div className="mini-display__layout">
-              {/* 좌측 (비어있음) */}
-              <aside className="mini-display__left" />
-              {/* 중앙 */}
-              <main className="mini-display__center">
-                <div className="mini-display__center-top">
-                  <div className="mini-display__level">{gcIsBreak ? "BREAK" : `LEVEL ${currentLevel}`}</div>
-                  <button
-                    type="button"
-                    className="mini-display__timer"
-                    onClick={(e) => openTimerPopup(e)}
-                    title="클릭하여 시간 직접 설정"
-                  >
-                    {timerText}
-                  </button>
-                  {gcIsBreak ? (
-                    <div className="mini-display__blinds">
-                      <span className="mini-display__blinds-val mini-display__blinds-val--break">BREAK TIME</span>
-                    </div>
-                  ) : (
-                    <div className="mini-display__blinds">
-                      <span className="mini-display__blinds-label">BLINDS</span>
-                      <span className="mini-display__blinds-val">
-                        {(state?.smallBlind ?? 0).toLocaleString()} / {(state?.bigBlind ?? 0).toLocaleString()}
-                      </span>
-                      {(state?.ante ?? 0) > 0 && (
-                        <><span className="mini-display__blinds-sep">·</span>
-                        <span className="mini-display__blinds-label">ANTE</span>
-                        <span className="mini-display__blinds-val">{(state?.ante ?? 0).toLocaleString()}</span></>
-                      )}
-                    </div>
-                  )}
-                  {nextLevel && (
-                    <div className="mini-display__next">
-                      {nextLevel.big === 0 ? (
-                        <>
-                          <span className="mini-display__next-label">NEXT</span>
-                          <span className="mini-display__next-val">BREAK ({Math.round(nextLevel.durationSec / 60)}min)</span>
-                        </>
+          {/* 미니 송출 — 실제 Display와 동일 레이아웃을 축소 */}
+          <div
+            ref={miniShellRef}
+            className={`mini-display mini-display--${state?.status ?? "stopped"}`}
+          >
+            <div
+              className="mini-display__viewport"
+              style={{ width: BROADCAST_W * miniScale, height: BROADCAST_H * miniScale }}
+            >
+              <div
+                className={`ds${state?.status === "running" ? " ds--running" : ""}${state?.status === "paused" ? " ds--paused" : ""}`}
+                style={{
+                  width: BROADCAST_W,
+                  height: BROADCAST_H,
+                  transform: `scale(${miniScale})`,
+                  transformOrigin: "top left",
+                }}
+              >
+                <div className="ds-stage">
+                  <div className="ds-glow ds-glow--a" />
+                  <div className="ds-glow ds-glow--b" />
+                  <img src={logoDisplayUrl} className="ds-bg-logo" alt="" aria-hidden="true" />
+
+                  <div className="ds-title-bar">
+                    <p className="ds-game-name">{session.structureName}</p>
+                  </div>
+
+                  <div className="ds-layout">
+                    <aside className="ds-left">
+                      {showPreviewNotice ? (
+                        <div
+                          className="ds-left__notice-html"
+                          dangerouslySetInnerHTML={{ __html: sanitizeNoticeHtml(previewNoticeHtml) }}
+                        />
+                      ) : null}
+                    </aside>
+
+                    <main className="ds-center">
+                      <p className="ds-level">{gcIsBreak ? "BREAK" : `LEVEL ${currentLevel}`}</p>
+                      <button
+                        type="button"
+                        className={`ds-timer${state?.status === "running" ? " ds-timer--running" : ""}${state?.status === "paused" ? " ds-timer--paused" : ""}`}
+                        onClick={(e) => openTimerPopup(e)}
+                        title="클릭하여 시간 직접 설정"
+                      >
+                        {timerText}
+                      </button>
+                      {gcIsBreak ? (
+                        <DsBlinds isBreak small={0} big={0} ante={0} />
                       ) : (
-                        <>
-                          <span className="mini-display__next-label">NEXT LV.{nextLevel.level}</span>
-                          <span className="mini-display__next-val">
-                            {nextLevel.small.toLocaleString()} / {nextLevel.big.toLocaleString()}
-                            {nextLevel.ante > 0 && <span className="mini-display__next-ante"> · Ante {nextLevel.ante.toLocaleString()}</span>}
-                          </span>
-                        </>
+                        <DsBlinds
+                          small={state?.smallBlind ?? 0}
+                          big={state?.bigBlind ?? 0}
+                          ante={state?.ante ?? 0}
+                        />
                       )}
-                    </div>
-                  )}
+                      {nextLevel && (
+                        <div className="ds-next">
+                          {nextLevel.big === 0 ? (
+                            <>
+                              <span className="ds-next__label">NEXT</span>
+                              <span className="ds-next__val">BREAK ({Math.round(nextLevel.durationSec / 60)}min)</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="ds-next__label">NEXT LV.{nextLevel.level}</span>
+                              <span className="ds-next__val">
+                                {nextLevel.small.toLocaleString()} / {nextLevel.big.toLocaleString()}
+                                {nextLevel.ante > 0 && (
+                                  <span className="ds-next__ante"> · Ante {nextLevel.ante.toLocaleString()}</span>
+                                )}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </main>
+
+                    <aside className="ds-right">
+                      <MdStat label="TOTAL TIME" value={totalTimeText} />
+                      <div className="ds-right__div" />
+                      <MdStat label="PLAYER" value={`${players} / ${entries}`} hi />
+                      <div className="ds-right__div" />
+                      <MdStat label="ENTRY" value={String(entries)} />
+                      <MdStat label="REBUY" value={String(totalRebuy)} />
+                      <div className="ds-right__div" />
+                      <MdStat label="TOTAL CHIP" value={totalChip.toLocaleString()} />
+                      <MdStat label="AVG CHIP" value={avgChip.toLocaleString()} />
+                      <div className="ds-right__div" />
+                      <MdStat label="NEXT BREAK" value={nextBreakText} muted={nextBreakText === "—"} />
+                    </aside>
+                  </div>
                 </div>
-                <div className="mini-display__adj">
-                  <button type="button" className="mini-display__adj-btn" onClick={() => onCommand("adjustSec", { sec: -60 })}>−1분 <span className="time-adj-key">⇧-</span></button>
-                  <button type="button" className="mini-display__adj-btn" onClick={() => onCommand("adjustSec", { sec: -10 })}>−10초 <span className="time-adj-key">-</span></button>
-                  <button type="button" className="mini-display__adj-btn mini-display__adj-btn--plus" onClick={() => onCommand("adjustSec", { sec: 10 })}>+10초 <span className="time-adj-key">+</span></button>
-                  <button type="button" className="mini-display__adj-btn mini-display__adj-btn--plus" onClick={() => onCommand("adjustSec", { sec: 60 })}>+1분 <span className="time-adj-key">⇧+</span></button>
-                </div>
-              </main>
-              {/* 우측 */}
-              <aside className="mini-display__right">
-                <MdStat label="TOTAL TIME" value={totalTimeText} />
-                <div className="mini-display__div" />
-                <MdStat label="PLAYER" value={`${players} / ${entries}`} hi />
-                <div className="mini-display__div" />
-                <MdStat label="ENTRY" value={String(entries)} />
-                <MdStat label="REBUY" value={String(totalRebuy)} />
-                <div className="mini-display__div" />
-                <MdStat label="TOTAL CHIP" value={totalChip.toLocaleString()} />
-                <MdStat label="AVG CHIP" value={avgChip.toLocaleString()} />
-                <div className="mini-display__div" />
-                <MdStat label="NEXT BREAK" value={nextBreakText} muted={nextBreakText === "—"} />
-              </aside>
+              </div>
             </div>
+          </div>
+
+          {/* 시간 조정 — 미리보기 밖 (송출 화면에는 없음) */}
+          <div className="mini-display__adj">
+            <button type="button" className="mini-display__adj-btn" onClick={() => onCommand("adjustSec", { sec: -60 })}>−1분 <span className="time-adj-key">⇧-</span></button>
+            <button type="button" className="mini-display__adj-btn" onClick={() => onCommand("adjustSec", { sec: -10 })}>−10초 <span className="time-adj-key">-</span></button>
+            <button type="button" className="mini-display__adj-btn mini-display__adj-btn--plus" onClick={() => onCommand("adjustSec", { sec: 10 })}>+10초 <span className="time-adj-key">+</span></button>
+            <button type="button" className="mini-display__adj-btn mini-display__adj-btn--plus" onClick={() => onCommand("adjustSec", { sec: 60 })}>+1분 <span className="time-adj-key">⇧+</span></button>
           </div>
 
           {/* 시작 / 일시정지 */}
@@ -500,10 +613,39 @@ export function GameControlView({
           {/* 블라인드 레벨 −+ */}
           <CounterRow
             label="블라인드"
-            value={`Lv ${state?.blindLevel ?? 1}`}
+            value={gcIsBreak ? "BREAK" : `Lv ${state?.blindLevel ?? 1}`}
             onMinus={() => onCommand("levelDown")}
             onPlus={() => onCommand("levelUp")}
           />
+
+          <button
+            type="button"
+            className={`notice-btn${noticeOpen ? " notice-btn--open" : ""}`}
+            disabled={pending}
+            onClick={toggleNoticeEditor}
+          >
+            좌측 문구 등록
+            <span className="notice-btn__chev">{noticeOpen ? "▲" : "▼"}</span>
+            {!noticeHtmlIsEmpty(appliedNotice) ? <span className="notice-btn__dot" /> : null}
+          </button>
+
+          {noticeOpen && (
+            <div className="notice-panel">
+              <p className="notice-panel__hint">위 미리보기 화면에 실시간으로 반영됩니다. 저장하면 송출에도 적용됩니다.</p>
+              <NoticeRichEditor ref={noticeEditorRef} html={noticeDraft} onChange={setNoticeDraft} />
+              <div className="notice-editor__actions">
+                <button type="button" className="notice-editor__clear" onClick={clearNotice}>지우기</button>
+                <button
+                  type="button"
+                  className="notice-editor__apply"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={saveNotice}
+                >
+                  저장
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* 시간 설정 팝업 */}
           {timerPopup && <TimerSetPopup
@@ -638,9 +780,9 @@ export function GameControlView({
 
 function MdStat({ label, value, hi, muted }: { label: string; value: string; hi?: boolean; muted?: boolean }) {
   return (
-    <div className="md-stat">
-      <span className="md-stat__label">{label}</span>
-      <span className={`md-stat__val${hi ? " md-stat__val--hi" : ""}${muted ? " md-stat__val--muted" : ""}`}>{value}</span>
+    <div className="ds-stat">
+      <span className="ds-stat__label">{label}</span>
+      <span className={`ds-stat__val${hi ? " ds-stat__val--hi" : ""}${muted ? " ds-stat__val--muted" : ""}`}>{value}</span>
     </div>
   );
 }
