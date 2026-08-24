@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { punchMeOut } from "@/lib/actions/staff";
+import { StaffCheckoutConfirm } from "@/components/staff/StaffCheckoutConfirm";
 import { formatTimeHHmmKST } from "@/lib/utils/format";
 import {
   clearTimerPairing,
@@ -25,6 +26,7 @@ type Props = {
 export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [confirmOut, setConfirmOut] = useState(false);
   const [wifiError, setWifiError] = useState(false);
   const hasPairing = useSyncExternalStore(
     subscribeTimerPairing,
@@ -37,6 +39,7 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
     setBusy(true);
     const r = await punchMeOut();
     setBusy(false);
+    setConfirmOut(false);
     if ("error" in r) alert(r.error);
     else router.refresh();
   }
@@ -132,11 +135,21 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
         <button
           type="button"
           disabled={busy}
-          onClick={() => void checkout()}
+          onClick={() => setConfirmOut(true)}
           className="w-full h-12 rounded-xl bg-red-600 text-white text-sm font-bold active:scale-[0.97] active:bg-red-700 transition-transform disabled:opacity-50"
         >
           {busy ? "처리 중..." : "퇴근"}
         </button>
+      )}
+
+      {confirmOut && (
+        <StaffCheckoutConfirm
+          pending={busy}
+          onYes={() => void checkout()}
+          onNo={() => {
+            if (!busy) setConfirmOut(false);
+          }}
+        />
       )}
     </div>
   );

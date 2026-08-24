@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { punchMeOut, type MyShiftRow } from "@/lib/actions/staff";
+import { StaffCheckoutConfirm } from "@/components/staff/StaffCheckoutConfirm";
 import { formatDateTimeKST, formatTimeHHmmKST } from "@/lib/utils/format";
 
 type Props = {
@@ -26,12 +27,14 @@ export function StaffAttendanceClient({
 }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [confirmOut, setConfirmOut] = useState(false);
 
   async function checkout() {
     if (busy) return;
     setBusy(true);
     const r = await punchMeOut();
     setBusy(false);
+    setConfirmOut(false);
     if ("error" in r) alert(r.error);
     else router.refresh();
   }
@@ -83,11 +86,21 @@ export function StaffAttendanceClient({
         <button
           type="button"
           disabled={busy}
-          onClick={() => void checkout()}
+          onClick={() => setConfirmOut(true)}
           className="w-full h-12 rounded-xl bg-red-600 text-white text-sm font-bold active:scale-[0.97] active:bg-red-700 transition-transform disabled:opacity-50"
         >
           {busy ? "처리 중..." : "퇴근"}
         </button>
+      )}
+
+      {confirmOut && (
+        <StaffCheckoutConfirm
+          pending={busy}
+          onYes={() => void checkout()}
+          onNo={() => {
+            if (!busy) setConfirmOut(false);
+          }}
+        />
       )}
     </div>
   );

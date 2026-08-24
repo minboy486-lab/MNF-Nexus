@@ -97,6 +97,7 @@ export function App() {
   const [gameId, setGameId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [checkoutConfirm, setCheckoutConfirm] = useState(false);
   const [, setTick] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const pinOkRef = useRef(false);
@@ -229,6 +230,7 @@ export function App() {
 
   function checkout() {
     send({ type: "checkout" });
+    setCheckoutConfirm(false);
     setGameId(null);
     setTok("");
     const url = websiteUrl("/staff");
@@ -285,9 +287,14 @@ export function App() {
             </div>
           </>
         )}
-        {staff && staffAuth !== false && (
-          <button type="button" className="text-btn" onClick={staff.canControl ? checkout : logout}>
-            {staff.canControl ? "퇴근" : "로그아웃"}
+        {staff && staffAuth !== false && !staff.canControl && (
+          <button type="button" className="text-btn" onClick={logout}>
+            로그아웃
+          </button>
+        )}
+        {staff?.canControl && gameId != null && (
+          <button type="button" className="text-btn" onClick={() => setCheckoutConfirm(true)}>
+            퇴근
           </button>
         )}
       </header>
@@ -383,6 +390,22 @@ export function App() {
           }}
         />
       )}
+
+      {checkoutConfirm && (
+        <div className="confirm-overlay" role="dialog" aria-modal="true" onClick={() => setCheckoutConfirm(false)}>
+          <div className="confirm-card" onClick={(e) => e.stopPropagation()}>
+            <p>퇴근하시겠습니까?</p>
+            <div className="confirm-actions">
+              <button type="button" className="confirm-yes" onClick={checkout}>
+                예
+              </button>
+              <button type="button" className="confirm-no" onClick={() => setCheckoutConfirm(false)}>
+                아니오
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -409,6 +432,7 @@ function GamePad({
   const remaining = timer ? getDisplayRemainingMs(timer) : 0;
   const isBreak = !!timer?.blindStructureId && timer.smallBlind === 0 && timer.bigBlind === 0;
   const running = timer?.status === "running";
+  const rebuyTotal = (session.rebuys ?? []).reduce((sum, n) => sum + n, 0);
 
   return (
     <div className="pad">
@@ -416,7 +440,19 @@ function GamePad({
         <p className="status-name">
           G{session.gameId} {session.structureName}
         </p>
-        <p className="status-time">{formatRemainingMs(remaining)}</p>
+        <div className="status-time-row">
+          <p className="status-time">{formatRemainingMs(remaining)}</p>
+          <div className="status-side">
+            <div className="status-stat">
+              <span>엔트리</span>
+              <strong>{session.entries}</strong>
+            </div>
+            <div className="status-stat">
+              <span>리바인</span>
+              <strong>{rebuyTotal}</strong>
+            </div>
+          </div>
+        </div>
         <p className="muted">
           {statusLabel(timer?.status)} · {isBreak ? "BREAK" : `레벨 ${timer?.blindLevel ?? 1}`}
           {timer && !isBreak ? ` · ${timer.smallBlind}/${timer.bigBlind}` : ""}
