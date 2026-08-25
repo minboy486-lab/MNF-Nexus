@@ -3,7 +3,7 @@ import { createInitialTimerState } from "@mnf/timer/engine";
 import type { TableTimerState } from "@mnf/timer/types";
 import { REMOTE_PORT, type RemoteClientMsg, type RemoteServerMsg } from "../../shared/remote";
 import type { GameSession } from "../../shared/types";
-import type { LanViewState } from "../../shared/lanView";
+import { rebaseLanSession, rebaseLanTimer, type LanViewState } from "../../shared/lanView";
 import type { WindowManager } from "../windows/windowManager";
 
 type Listener = (state: LanViewState | null) => void;
@@ -131,18 +131,21 @@ export class LanViewClient {
   }
 
   private apply(timer: TableTimerState | null, session: GameSession | null, serverNow?: number): void {
-    const state = timer ?? createInitialTimerState(this.gameId);
-    this.wm.broadcastToAllDisplays(state, session);
+    const localNow = Date.now();
+    const remoteNow = typeof serverNow === "number" && Number.isFinite(serverNow) ? serverNow : localNow;
+    const nextTimer = timer ? rebaseLanTimer(timer, remoteNow, localNow) : null;
+    const nextSession = session ? rebaseLanSession(session, remoteNow, localNow) : null;
+    this.wm.broadcastToAllDisplays(nextTimer ?? createInitialTimerState(this.gameId), nextSession);
     this.emit({
       host: this.host,
       hostname: this.hostname,
       gameId: this.gameId,
-      structureName: session?.structureName ?? this.structureName,
-      timer,
-      session,
+      structureName: nextSession?.structureName ?? this.structureName,
+      timer: nextTimer,
+      session: nextSession,
       theme: this.theme,
       soundVolume: this.soundVolume,
-      serverNow,
+      serverNow: remoteNow,
     });
   }
 }
