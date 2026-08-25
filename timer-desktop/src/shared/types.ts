@@ -39,6 +39,14 @@ export function applyDocumentTheme(theme: UiThemeId): void {
   document.documentElement.setAttribute("data-theme", theme);
 }
 
+export const DEFAULT_SOUND_VOLUME = 100;
+
+export function normalizeSoundVolume(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_SOUND_VOLUME;
+  return Math.round(Math.min(100, Math.max(0, n)));
+}
+
 // legacy compat
 export const MAX_GAMES = MAX_MONITORS;
 export const MAX_TABLE_DISPLAYS = MAX_MONITORS;
@@ -76,6 +84,8 @@ export interface AppConfig {
   mappings: MonitorMapping[];
   /** UI 테마. 없으면 Black Pink */
   theme?: UiThemeId;
+  /** 타이머 효과음 볼륨 0–100. 없으면 100 */
+  soundVolume?: number;
 }
 
 export interface DisplayInfo {
@@ -191,5 +201,6 @@ export function createEmptyConfig(controlDisplayId: number): AppConfig {
     controlDisplayId,
     mappings: [],
     theme: DEFAULT_UI_THEME,
+    soundVolume: DEFAULT_SOUND_VOLUME,
   };
 }

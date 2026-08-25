@@ -1,6 +1,6 @@
 import { BrowserWindow, screen } from "electron";
 import type { AppConfig, MonitorSlot, UiThemeId } from "../../shared/types";
-import { normalizeUiTheme } from "../../shared/types";
+import { DEFAULT_SOUND_VOLUME, normalizeSoundVolume, normalizeUiTheme } from "../../shared/types";
 import { configNeedsSetup, getDisplayMappings } from "../config/configStore";
 import {
   enrichMappingsWithCurrentDisplays,
@@ -28,6 +28,7 @@ export class WindowManager {
   /** displayId → entry */
   private displayWindows = new Map<number, DisplayWindowEntry>();
   private config: AppConfig | null = null;
+  private soundVolume = DEFAULT_SOUND_VOLUME;
   private isQuitting = false;
   private setupRequiredListeners = new Set<SetupRequiredListener>();
   private timerHub: TimerHub | null = null;
@@ -71,13 +72,32 @@ export class WindowManager {
   }
 
   async applyConfig(config: AppConfig): Promise<void> {
-    this.config = enrichMappingsWithCurrentDisplays(config);
+    const next = enrichMappingsWithCurrentDisplays({
+      ...config,
+      soundVolume: normalizeSoundVolume(config.soundVolume),
+    });
+    this.config = next;
+    this.soundVolume = next.soundVolume ?? DEFAULT_SOUND_VOLUME;
     await this.syncWindows();
     this.broadcastTheme();
+    this.broadcastSoundVolume();
   }
 
   getTheme(): UiThemeId {
     return normalizeUiTheme(this.config?.theme);
+  }
+
+  getSoundVolume(): number {
+    return this.config
+      ? normalizeSoundVolume(this.config.soundVolume)
+      : this.soundVolume;
+  }
+
+  setSoundVolume(volume: number): void {
+    const next = normalizeSoundVolume(volume);
+    this.soundVolume = next;
+    if (this.config) this.config = { ...this.config, soundVolume: next };
+    this.broadcastSoundVolume();
   }
 
   broadcastTheme(): void {
@@ -88,6 +108,18 @@ export class WindowManager {
     for (const entry of this.displayWindows.values()) {
       if (!entry.win.isDestroyed()) {
         entry.win.webContents.send("theme:update", theme);
+      }
+    }
+  }
+
+  broadcastSoundVolume(): void {
+    const volume = this.getSoundVolume();
+    if (this.controlWindow && !this.controlWindow.isDestroyed()) {
+      this.controlWindow.webContents.send("soundVolume:update", volume);
+    }
+    for (const entry of this.displayWindows.values()) {
+      if (!entry.win.isDestroyed()) {
+        entry.win.webContents.send("soundVolume:update", volume);
       }
     }
   }
@@ -128,6 +160,7 @@ export class WindowManager {
       this.timerHub?.pushSnapshotToControl();
       if (this.controlWindow && !this.controlWindow.isDestroyed()) {
         this.controlWindow.webContents.send("theme:update", this.getTheme());
+        this.controlWindow.webContents.send("soundVolume:update", this.getSoundVolume());
       }
     });
     this.controlWindow.on("closed", () => {
@@ -196,6 +229,7 @@ export class WindowManager {
       this.timerHub?.hydrateNewDisplay(monitorSlot);
       if (!win.isDestroyed()) {
         win.webContents.send("theme:update", this.getTheme());
+        win.webContents.send("soundVolume:update", this.getSoundVolume());
       }
     });
 

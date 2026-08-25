@@ -7,6 +7,7 @@ import {
   saveTimerPairing,
   markLanNavigation,
   timerRemoteHref,
+  pairingUrlWithoutTok,
   consumeFailedLanNavigation,
   LAN_WIFI_ERROR,
 } from "@/lib/staff/timer-pairing";
@@ -48,10 +49,15 @@ export function StaffClockInClient({ loginId }: Props) {
       busyRef.current = true;
       setBusy(true);
       setError(null);
-      const pairing = { url: parsed.url, pin: parsed.pin, tok: parsed.tok, loginId };
-      saveTimerPairing(pairing);
+      const pairing = {
+        url: parsed.url,
+        pin: parsed.pin,
+        tok: parsed.tok,
+        loginId,
+      };
+      saveTimerPairing({ ...pairing, url: pairingUrlWithoutTok(parsed.url) });
       markLanNavigation();
-      window.location.assign(timerRemoteHref(pairing));
+      window.location.assign(timerRemoteHref(pairing, "clock-in"));
       return true;
     },
     [loginId],
@@ -62,7 +68,7 @@ export function StaffClockInClient({ loginId }: Props) {
       <div>
         <h1 className="text-xl font-bold">출근 등록</h1>
         <p className="text-sm text-on-surface-variant mt-1">
-          매장 와이파이에 연결된 다음, 컨트롤러 왼쪽 위 MNF 로고 QR을 스캔하세요.
+          매장 와이파이에서 컨트롤러 로고 QR을 한 번만 스캔하세요. 퇴근 전까지는 다시 찍지 않아도 됩니다.
         </p>
       </div>
       {error && (
@@ -77,7 +83,7 @@ export function StaffClockInClient({ loginId }: Props) {
         paused={busy}
         busy={busy}
         busyLabel="촬영됨 · 매장 와이파이 연결 중"
-        hint="매장 와이파이에서 QR을 네모 안에 맞추면 출근됩니다"
+        hint="한 번 맞추면 퇴근 전까지 다시 찍지 않아도 됩니다"
         onDetect={onDetect}
       />
     </div>

@@ -23,7 +23,7 @@ import { join, resolve } from "node:path";
 import { app, BrowserWindow, screen } from "electron";
 import { loadConfig } from "./config/configStore";
 import { enrichMappingsWithCurrentDisplays } from "./screen/displayMapper";
-import { registerIpcHandlers } from "./ipc/handlers";
+import { flushPendingSoundVolume, registerIpcHandlers } from "./ipc/handlers";
 import { TimerHub } from "./timer/timerHub";
 import { WindowManager } from "./windows/windowManager";
 import { setupAutoUpdater } from "./updater";
@@ -42,7 +42,7 @@ const remoteServer = new RemoteServer();
 
 function registerScreenEvents(): void {
   const refresh = (): void => {
-    const config = loadConfig();
+    const config = windowManager.getConfig() ?? loadConfig();
     if (!config) {
       void windowManager.syncWindows();
       return;
@@ -79,6 +79,7 @@ app.whenReady().then(async () => {
 });
 
 app.on("before-quit", () => {
+  flushPendingSoundVolume(windowManager);
   windowManager.setQuitting(true);
   remoteServer.stop();
 });

@@ -71,6 +71,7 @@ export function SetupScreen({ displays, initialConfig, onSaved }: Props) {
       version: CONFIG_VERSION,
       controlDisplayId: controlId,
       theme: initialConfig?.theme,
+      soundVolume: initialConfig?.soundVolume,
       mappings: displays.map((d, i) => {
         const v = assignments[d.id] ?? "unused";
         const slot = d.id === controlId ? null : fromAssignValue(v);

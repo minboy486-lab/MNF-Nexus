@@ -15,9 +15,10 @@ import {
   type RemoteStaffState,
 } from "../../shared/remote";
 import type { TimerHub } from "../timer/timerHub";
-import { clockInStaff, clockOutStaff, claimStaffByLoginId, loginStaff, type StaffAuthOk } from "../supabase/staffAuth";
+import { clockInStaff, clockOutStaff, claimStaffByLoginId, loginStaff, rejoinStaffByLoginId, refreshStaffClock, type StaffAuthOk } from "../supabase/staffAuth";
 import { getSupabase } from "../supabase/client";
 import { listLanIPv4 } from "./lan";
+import { loadRemoteAuth, saveRemoteAuth } from "./authStore";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -46,10 +47,6 @@ type SockState = {
   pinOk: boolean;
   session: RemoteSession | null;
 };
-
-function newPin(): string {
-  return String(1000 + Math.floor(Math.random() * 9000));
-}
 
 function newToken(bytes = 12): string {
   return randomBytes(bytes).toString("base64url");
@@ -80,7 +77,7 @@ function toStaffState(session: RemoteSession): RemoteStaffState {
 }
 
 export class RemoteServer {
-  readonly pin = newPin();
+  pin = "";
   readonly port = REMOTE_PORT;
   private http: HttpServer | null = null;
   private wss: WebSocketServer | null = null;
@@ -96,6 +93,11 @@ export class RemoteServer {
   async start(hub: TimerHub): Promise<void> {
     this.hub = hub;
     this.staffAuthEnabled = !!getSupabase();
+    const auth = loadRemoteAuth();
+    this.pin = auth.pin;
+    this.sessions.clear();
+    for (const s of auth.sessions) this.sessions.set(s.token, s);
+    this.persistAuth();
     this.unsubHub = hub.onRemotePush(() => this.broadcastSnapshot());
     this.rotatePunchToken();
 
@@ -212,6 +214,35 @@ export class RemoteServer {
     }
   }
 
+  private persistAuth(): void {
+    if (!this.pin) return;
+    saveRemoteAuth({
+      pin: this.pin,
+      sessions: [...this.sessions.values()],
+    });
+  }
+
+  private putSession(session: RemoteSession): void {
+    for (const [token, existing] of this.sessions) {
+      if (existing.staff.staffId === session.staff.staffId && token !== session.token) {
+        this.sessions.delete(token);
+      }
+    }
+    this.sessions.set(session.token, session);
+    this.persistAuth();
+  }
+
+  private dropSession(token: string): void {
+    this.sessions.delete(token);
+    this.persistAuth();
+  }
+
+  private bindSession(ws: WebSocket, state: SockState, session: RemoteSession): void {
+    state.session = session;
+    this.sendStaff(ws, session);
+    if (session.canControl) sendJson(ws, this.snapshotMsg());
+  }
+
   private sendStaff(ws: WebSocket, session: RemoteSession): void {
     sendJson(ws, { type: "staff", staff: toStaffState(session), sessionToken: session.token });
   }
@@ -262,10 +293,8 @@ export class RemoteServer {
         return;
       }
       const session: RemoteSession = { token: newToken(24), staff: result, canControl: true };
-      this.sessions.set(session.token, session);
-      state.session = session;
-      this.sendStaff(ws, session);
-      sendJson(ws, this.snapshotMsg());
+      this.putSession(session);
+      this.bindSession(ws, state, session);
       return;
     }
 
@@ -276,26 +305,39 @@ export class RemoteServer {
         return;
       }
       const session: RemoteSession = { token: newToken(24), staff: result, canControl: false };
-      this.sessions.set(session.token, session);
-      state.session = session;
-      this.sendStaff(ws, session);
+      this.putSession(session);
+      this.bindSession(ws, state, session);
       return;
     }
 
     if (msg.type === "resume") {
       const session = this.sessions.get(msg.sessionToken);
       if (!session) {
-        sendJson(ws, { type: "error", error: "세션이 만료되었습니다. 다시 로그인하세요." });
+        sendJson(ws, { type: "error", error: "세션이 만료되었습니다. 다시 연결합니다." });
         return;
       }
-      state.session = session;
-      this.sendStaff(ws, session);
-      if (session.canControl) sendJson(ws, this.snapshotMsg());
+      const staff = await refreshStaffClock(session.staff);
+      session.staff = staff;
+      session.canControl = staff.checkedIn;
+      this.putSession(session);
+      this.bindSession(ws, state, session);
+      return;
+    }
+
+    if (msg.type === "rejoin") {
+      const result = await rejoinStaffByLoginId(msg.loginId);
+      if ("error" in result) {
+        sendJson(ws, { type: "error", error: result.error });
+        return;
+      }
+      const session: RemoteSession = { token: newToken(24), staff: result, canControl: true };
+      this.putSession(session);
+      this.bindSession(ws, state, session);
       return;
     }
 
     if (msg.type === "logout") {
-      if (state.session) this.sessions.delete(state.session.token);
+      if (state.session) this.dropSession(state.session.token);
       state.session = null;
       return;
     }
@@ -317,8 +359,8 @@ export class RemoteServer {
       state.session.staff.checkedIn = true;
       state.session.staff.checkedInAt = punched.checkedInAt;
       state.session.canControl = true;
-      this.sendStaff(ws, state.session);
-      sendJson(ws, this.snapshotMsg());
+      this.putSession(state.session);
+      this.bindSession(ws, state, state.session);
       return;
     }
 
@@ -335,7 +377,9 @@ export class RemoteServer {
       state.session.staff.checkedIn = false;
       state.session.staff.checkedInAt = null;
       state.session.canControl = false;
+      this.dropSession(state.session.token);
       this.sendStaff(ws, state.session);
+      state.session = null;
       return;
     }
 
@@ -346,7 +390,7 @@ export class RemoteServer {
     const hub = this.hub;
     if (!hub) return;
     if (!this.canOperate(state)) {
-      sendJson(ws, { type: "error", error: this.staffAuthEnabled ? "출근 QR을 스캔해야 리모컨을 사용할 수 있습니다." : "PIN이 필요합니다." });
+      sendJson(ws, { type: "error", error: this.staffAuthEnabled ? "출근 연결이 필요합니다." : "PIN이 필요합니다." });
       return;
     }
 

@@ -6,6 +6,7 @@ import {
   MONITOR_SLOTS,
   MAX_MONITORS,
   normalizeUiTheme,
+  normalizeSoundVolume,
   type AppConfig,
   type MonitorMapping,
   type MonitorSlot,
@@ -86,6 +87,7 @@ export function loadConfig(): AppConfig | null {
     return {
       ...parsed,
       theme: normalizeUiTheme(parsed.theme),
+      soundVolume: normalizeSoundVolume(parsed.soundVolume),
     };
   } catch {
     return null;
@@ -118,8 +120,19 @@ export function parseConfigInput(raw: unknown): { config: AppConfig } | { error:
   }
 
   const theme: UiThemeId = normalizeUiTheme(input.theme);
+  const existing = loadConfig();
+  const soundVolume =
+    input.soundVolume === undefined
+      ? normalizeSoundVolume(existing?.soundVolume)
+      : normalizeSoundVolume(input.soundVolume);
 
-  const config: AppConfig = { version: CONFIG_VERSION, controlDisplayId, mappings, theme };
+  const config: AppConfig = {
+    version: CONFIG_VERSION,
+    controlDisplayId,
+    mappings,
+    theme,
+    soundVolume,
+  };
   const err = validateConfig(config);
   if (err) return { error: err };
   return { config };

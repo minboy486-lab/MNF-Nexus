@@ -11,6 +11,9 @@ export type ControlApi = {
   getTheme: () => Promise<UiThemeId>;
   setTheme: (theme: UiThemeId) => Promise<{ ok: true; theme: UiThemeId } | { ok: false; error: string }>;
   onThemeUpdate: (cb: (theme: UiThemeId) => void) => () => void;
+  getSoundVolume: () => Promise<number>;
+  setSoundVolume: (volume: number) => Promise<{ ok: true; volume: number }>;
+  onSoundVolumeUpdate: (cb: (volume: number) => void) => () => void;
   getRemoteInfo: () => Promise<import("../shared/remote").RemotePairingInfo>;
   refreshRemoteQr: () => Promise<import("../shared/remote").RemotePairingInfo>;
   // 블라인드
@@ -56,6 +59,13 @@ const api: ControlApi = {
     const h = (_e: Electron.IpcRendererEvent, theme: UiThemeId) => cb(theme);
     ipcRenderer.on("theme:update", h);
     return () => ipcRenderer.removeListener("theme:update", h);
+  },
+  getSoundVolume: () => ipcRenderer.invoke("soundVolume:get"),
+  setSoundVolume: (volume) => ipcRenderer.invoke("soundVolume:set", volume),
+  onSoundVolumeUpdate: (cb) => {
+    const h = (_e: Electron.IpcRendererEvent, volume: number) => cb(volume);
+    ipcRenderer.on("soundVolume:update", h);
+    return () => ipcRenderer.removeListener("soundVolume:update", h);
   },
   getRemoteInfo: () => ipcRenderer.invoke("remote:info"),
   refreshRemoteQr: () => ipcRenderer.invoke("remote:refreshQr"),

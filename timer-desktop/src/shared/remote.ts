@@ -32,6 +32,7 @@ export type RemoteClientMsg =
   | { type: "login"; loginId: string; password: string }
   | { type: "claim"; token: string; loginId: string }
   | { type: "resume"; sessionToken: string }
+  | { type: "rejoin"; loginId: string }
   | { type: "punch"; token: string }
   | { type: "checkout" }
   | { type: "logout" }

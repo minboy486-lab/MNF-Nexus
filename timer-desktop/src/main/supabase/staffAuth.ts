@@ -77,7 +77,7 @@ export async function loginStaff(loginId: string, password: string): Promise<Sta
   };
 }
 
-export async function claimStaffByLoginId(loginId: string): Promise<StaffAuthOk | { error: string }> {
+async function findActiveStaffByLoginId(loginId: string): Promise<StaffAuthOk | { error: string }> {
   const sb = getSupabase();
   if (!sb) return { error: "서버에 Supabase가 설정되지 않았습니다." };
   const id = loginId.trim().toLowerCase();
@@ -115,15 +115,45 @@ export async function claimStaffByLoginId(loginId: string): Promise<StaffAuthOk 
     staff = created;
   }
 
-  const punched = await clockInStaff(staff.id);
-  if ("error" in punched) return { error: punched.error };
+  const open = await getOpenShift(staff.id);
   return {
     userId: profile.id,
     staffId: staff.id,
     name: staff.name,
     loginId: profile.login_id ?? id,
+    checkedIn: !!open,
+    checkedInAt: open?.checked_in_at ?? null,
+  };
+}
+
+export async function claimStaffByLoginId(loginId: string): Promise<StaffAuthOk | { error: string }> {
+  const found = await findActiveStaffByLoginId(loginId);
+  if ("error" in found) return found;
+  const punched = await clockInStaff(found.staffId);
+  if ("error" in punched) return { error: punched.error };
+  return {
+    ...found,
     checkedIn: true,
     checkedInAt: punched.checkedInAt,
+  };
+}
+
+/** 이미 출근된 직원만 리모컨 재연결. QR 없이 PIN+아이디로 복구 */
+export async function rejoinStaffByLoginId(loginId: string): Promise<StaffAuthOk | { error: string }> {
+  const found = await findActiveStaffByLoginId(loginId);
+  if ("error" in found) return found;
+  if (!found.checkedIn) {
+    return { error: "출근되어 있지 않습니다. 컨트롤러 QR을 한 번 스캔해 주세요." };
+  }
+  return found;
+}
+
+export async function refreshStaffClock(staff: StaffAuthOk): Promise<StaffAuthOk> {
+  const open = await getOpenShift(staff.staffId);
+  return {
+    ...staff,
+    checkedIn: !!open,
+    checkedInAt: open?.checked_in_at ?? null,
   };
 }
 

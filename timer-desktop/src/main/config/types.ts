@@ -14,6 +14,8 @@ export {
   applyDocumentTheme,
   isUiThemeId,
   normalizeUiTheme,
+  DEFAULT_SOUND_VOLUME,
+  normalizeSoundVolume,
   type AppConfig,
   type AppSnapshot,
   type DisplayBounds,

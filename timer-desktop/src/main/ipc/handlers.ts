@@ -6,7 +6,7 @@ import { getAllDisplaysInfo } from "../screen/displayMapper";
 import { listBlindStructures } from "../supabase/blinds";
 import type { TimerHub } from "../timer/timerHub";
 import type { MonitorSlot, TableSlot } from "../../shared/types";
-import { normalizeUiTheme } from "../../shared/types";
+import { normalizeSoundVolume, normalizeUiTheme } from "../../shared/types";
 import type { BlindStructureOption, TimerAction } from "@mnf/timer/types";
 import type { WindowManager } from "../windows/windowManager";
 import type { RemoteServer } from "../remote/server";
@@ -48,10 +48,24 @@ function isBlindStructure(v: unknown): v is BlindStructureOption {
   return typeof o.id === "string" && typeof o.name === "string" && Array.isArray(o.levels);
 }
 
+let volumeSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function persistSoundVolume(wm: WindowManager): void {
+  const latest = wm.getConfig() ?? loadConfig();
+  if (latest) saveConfig({ ...latest, soundVolume: wm.getSoundVolume() });
+}
+
+export function flushPendingSoundVolume(wm: WindowManager): void {
+  if (!volumeSaveTimer) return;
+  clearTimeout(volumeSaveTimer);
+  volumeSaveTimer = null;
+  persistSoundVolume(wm);
+}
+
 export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: RemoteServer): void {
   // ── 디스플레이 & 설정 ──────────────────────────────────────
   ipcMain.handle("displays:get", () => getAllDisplaysInfo());
-  ipcMain.handle("config:get", () => loadConfig() ?? wm.getConfig());
+  ipcMain.handle("config:get", () => wm.getConfig() ?? loadConfig());
   ipcMain.handle("config:save", async (_e, raw: unknown) => {
     const parsed = parseConfigInput(raw);
     if ("error" in parsed) return { ok: false as const, error: parsed.error };
@@ -63,15 +77,29 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
   ipcMain.handle("theme:get", () => wm.getTheme());
   ipcMain.handle("theme:set", async (_e, raw: unknown) => {
     const theme = normalizeUiTheme(raw);
-    const current = loadConfig() ?? wm.getConfig();
+    const current = wm.getConfig() ?? loadConfig();
     if (!current) {
       return { ok: false as const, error: "설정이 없습니다. 모니터 설정을 먼저 완료하세요." };
     }
-    const next = { ...current, theme };
+    const next = { ...current, theme, soundVolume: wm.getSoundVolume() };
     const saved = saveConfig(next);
     if (!saved.ok) return saved;
     await wm.applyConfig(next);
     return { ok: true as const, theme };
+  });
+  ipcMain.handle("soundVolume:get", () => wm.getSoundVolume());
+  ipcMain.handle("soundVolume:set", (_e, raw: unknown) => {
+    const volume = normalizeSoundVolume(raw);
+    wm.setSoundVolume(volume);
+    const current = wm.getConfig() ?? loadConfig();
+    if (current) {
+      if (volumeSaveTimer) clearTimeout(volumeSaveTimer);
+      volumeSaveTimer = setTimeout(() => {
+        volumeSaveTimer = null;
+        persistSoundVolume(wm);
+      }, 400);
+    }
+    return { ok: true as const, volume };
   });
 
   ipcMain.handle("remote:info", () => remote.getInfo());
@@ -79,7 +107,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
 
   // ── 앱 제어 ───────────────────────────────────────────────
   ipcMain.handle("app:quit", () => {
-    const { app } = require("electron");
+    flushPendingSoundVolume(wm);
     app.quit();
   });
 

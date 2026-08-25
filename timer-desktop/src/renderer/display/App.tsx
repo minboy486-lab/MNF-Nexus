@@ -19,7 +19,7 @@ import {
 } from "../../shared/types";
 import logoUrl from "./mnf-logo.png";
 import { DsBlinds } from "../shared/DsBlinds";
-import { useTimerAnnounce } from "../shared/timerAnnounce";
+import { useTimerAnnounce, setTimerSoundVolume } from "../shared/timerAnnounce";
 
 export function App() {
   const [monitorSlot, setMonitorSlot] = useState(1);
@@ -34,10 +34,14 @@ export function App() {
     const unsubTheme = window.displayApi.onThemeUpdate((t) => {
       applyDocumentTheme(normalizeUiTheme(t));
     });
+    const unsubVolume = window.displayApi.onSoundVolumeUpdate((v) => {
+      setTimerSoundVolume(v);
+    });
     void window.displayApi.getTheme().then((t) => {
       applyDocumentTheme(normalizeUiTheme(t));
     });
-    return () => { unsubTimer(); unsubSession(); unsubTheme(); };
+    void window.displayApi.getSoundVolume().then(setTimerSoundVolume);
+    return () => { unsubTimer(); unsubSession(); unsubTheme(); unsubVolume(); };
   }, []);
 
   useEffect(() => {

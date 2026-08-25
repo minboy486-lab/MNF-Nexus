@@ -42,7 +42,10 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
     setBusy(false);
     setConfirmOut(false);
     if ("error" in r) alert(r.error);
-    else router.refresh();
+    else {
+      clearTimerPairing();
+      router.refresh();
+    }
   }
 
   useEffect(() => {
@@ -90,7 +93,7 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
         >
           <span className="material-symbols-outlined text-4xl text-primary">qr_code_scanner</span>
           <p className="text-xl font-bold mt-2">출근 등록</p>
-          <p className="text-sm text-on-surface-variant mt-1">매장 와이파이에서 컨트롤러 QR을 스캔하면 출근됩니다</p>
+          <p className="text-sm text-on-surface-variant mt-1">매장 와이파이에서 컨트롤러 QR을 한 번 스캔하면 출근됩니다. 퇴근 전까지 다시 찍지 않아도 됩니다.</p>
         </Link>
       ) : (
         <button

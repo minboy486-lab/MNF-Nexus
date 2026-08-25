@@ -95,9 +95,15 @@ export function consumeFailedLanNavigation(windowMs = 60_000): boolean {
   return Number.isFinite(t) && Date.now() - t < windowMs;
 }
 
-export function timerRemoteHref(pairing: StaffTimerPairing): string {
+export function timerRemoteHref(
+  pairing: StaffTimerPairing,
+  mode: "clock-in" | "resume" = "resume",
+): string {
   try {
     const u = new URL(pairing.url);
+    u.searchParams.delete("tok");
+    if (pairing.pin) u.searchParams.set("pin", pairing.pin);
+    if (mode === "clock-in" && pairing.tok) u.searchParams.set("tok", pairing.tok);
     if (pairing.loginId) u.searchParams.set("id", pairing.loginId);
     if (typeof window !== "undefined" && window.location.origin) {
       u.searchParams.set("from", window.location.origin);
@@ -105,5 +111,15 @@ export function timerRemoteHref(pairing: StaffTimerPairing): string {
     return u.toString();
   } catch {
     return pairing.url;
+  }
+}
+
+export function pairingUrlWithoutTok(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.delete("tok");
+    return u.toString();
+  } catch {
+    return url;
   }
 }

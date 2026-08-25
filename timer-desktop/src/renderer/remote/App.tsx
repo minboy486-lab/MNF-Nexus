@@ -16,6 +16,7 @@ import { copyToClipboard, formatKakaoGameStatus, shareGameStatus } from "./kakao
 const LS_LOGIN = "mnf-remote-login-id";
 const LS_SESSION = "mnf-remote-session";
 const LS_FROM = "mnf-web-origin";
+const LS_PIN = "mnf-remote-pin";
 
 const EMPTY_SNAP: AppSnapshot = {
   sessions: [],
@@ -31,6 +32,34 @@ function pairingFromSearch(search: string): { pin: string; tok: string; loginId:
     loginId: (q.get("id") ?? q.get("login") ?? "").trim().toLowerCase(),
     from: q.get("from")?.trim() ?? "",
   };
+}
+
+function stripTokFromUrl(): void {
+  const u = new URL(location.href);
+  if (!u.searchParams.has("tok")) return;
+  u.searchParams.delete("tok");
+  history.replaceState(null, "", `${u.pathname}${u.search}${u.hash}`);
+}
+
+function storedPin(): string {
+  return localStorage.getItem(LS_PIN) || "";
+}
+
+function sendStaffAuth(ws: WebSocket): void {
+  const q = pairingFromSearch(location.search);
+  const sessionToken = localStorage.getItem(LS_SESSION) || "";
+  const loginId = q.loginId || localStorage.getItem(LS_LOGIN) || "";
+  if (sessionToken) {
+    ws.send(JSON.stringify({ type: "resume", sessionToken } satisfies RemoteClientMsg));
+    return;
+  }
+  if (q.tok && loginId) {
+    ws.send(JSON.stringify({ type: "claim", token: q.tok, loginId } satisfies RemoteClientMsg));
+    return;
+  }
+  if (loginId) {
+    ws.send(JSON.stringify({ type: "rejoin", loginId } satisfies RemoteClientMsg));
+  }
 }
 
 function statusLabel(status: TableTimerState["status"] | undefined): string {
@@ -86,7 +115,7 @@ function LongPressButton({
 
 export function App() {
   const initial = pairingFromSearch(window.location.search);
-  const [pin, setPin] = useState(initial.pin);
+  const [pin, setPin] = useState(() => initial.pin || storedPin());
   const [tok, setTok] = useState(initial.tok);
   const [pinOk, setPinOk] = useState(false);
   const [loginId] = useState(
@@ -148,13 +177,8 @@ export function App() {
         setStaffAuth(msg.staffAuth);
         setError(null);
         if (typeof msg.serverNow === "number") applyServerNow(msg.serverNow);
-        const sessionToken = localStorage.getItem(LS_SESSION);
-        const claimId = initial.loginId || localStorage.getItem(LS_LOGIN) || "";
-        if (msg.staffAuth && tok && claimId) {
-          ws.send(JSON.stringify({ type: "claim", token: tok, loginId: claimId } satisfies RemoteClientMsg));
-        } else if (msg.staffAuth && sessionToken) {
-          ws.send(JSON.stringify({ type: "resume", sessionToken } satisfies RemoteClientMsg));
-        }
+        localStorage.setItem(LS_PIN, nextPin);
+        if (msg.staffAuth) sendStaffAuth(ws);
         return;
       }
       if (msg.type === "hello_fail") {
@@ -164,17 +188,14 @@ export function App() {
         return;
       }
       if (msg.type === "staff") {
-        localStorage.setItem(LS_SESSION, msg.sessionToken);
-        localStorage.setItem(LS_LOGIN, msg.staff.loginId);
-        setStaff(msg.staff);
+        if (msg.sessionToken) localStorage.setItem(LS_SESSION, msg.sessionToken);
+        else localStorage.removeItem(LS_SESSION);
+        if (msg.staff.loginId) localStorage.setItem(LS_LOGIN, msg.staff.loginId);
+        setStaff(msg.staff.loginId || msg.staff.name ? msg.staff : null);
         setError(null);
         if (msg.staff.canControl) {
           setTok("");
-          const u = new URL(location.href);
-          if (u.searchParams.has("tok")) {
-            u.searchParams.delete("tok");
-            history.replaceState(null, "", `${u.pathname}${u.search}${u.hash}`);
-          }
+          stripTokFromUrl();
         }
         return;
       }
@@ -185,7 +206,29 @@ export function App() {
         return;
       }
       if (msg.type === "error") {
-        if (msg.error.includes("세션이 만료")) localStorage.removeItem(LS_SESSION);
+        if (msg.error.includes("세션이 만료")) {
+          localStorage.removeItem(LS_SESSION);
+          const q = pairingFromSearch(location.search);
+          const loginId = q.loginId || localStorage.getItem(LS_LOGIN) || "";
+          if (q.tok && loginId) {
+            ws.send(JSON.stringify({ type: "claim", token: q.tok, loginId } satisfies RemoteClientMsg));
+            return;
+          }
+          if (loginId) {
+            ws.send(JSON.stringify({ type: "rejoin", loginId } satisfies RemoteClientMsg));
+            return;
+          }
+        }
+        if (msg.error.includes("QR이 만료")) {
+          setTok("");
+          stripTokFromUrl();
+          const loginId =
+            pairingFromSearch(location.search).loginId || localStorage.getItem(LS_LOGIN) || "";
+          if (loginId) {
+            ws.send(JSON.stringify({ type: "rejoin", loginId } satisfies RemoteClientMsg));
+            return;
+          }
+        }
         setError(msg.error);
       }
     };
@@ -213,7 +256,10 @@ export function App() {
 
   useEffect(() => {
     if (initial.from) localStorage.setItem(LS_FROM, initial.from);
-    if (initial.pin) connect(initial.pin);
+    if (initial.pin) localStorage.setItem(LS_PIN, initial.pin);
+    if (initial.loginId) localStorage.setItem(LS_LOGIN, initial.loginId);
+    const nextPin = initial.pin || storedPin();
+    if (nextPin) connect(nextPin);
     return () => {
       const ws = wsRef.current;
       wsRef.current = null;
@@ -240,6 +286,7 @@ export function App() {
       setError("PIN 4자리를 입력하세요.");
       return;
     }
+    localStorage.setItem(LS_PIN, pin);
     connect(pin);
   }
 
@@ -350,7 +397,7 @@ export function App() {
       {!pinOk && !staff && (
         <form className="card" onSubmit={handleConnect}>
           <p className="card-title">컨트롤러 연결</p>
-          <p className="muted">같은 Wi-Fi에서 컨트롤러 로고 QR을 스캔하거나 PIN을 입력하세요.</p>
+          <p className="muted">같은 Wi-Fi에서 한 번만 QR을 스캔하면, 퇴근 전까지 다시 찍지 않아도 됩니다.</p>
           <input
             inputMode="numeric"
             maxLength={4}
@@ -365,11 +412,11 @@ export function App() {
         </form>
       )}
 
-      {pinOk && staffAuth && !staff && tok && loginId && (
-        <p className="muted">출근 처리 중...</p>
+      {pinOk && staffAuth && !staff && loginId && (
+        <p className="muted">출근 연결 중...</p>
       )}
 
-      {pinOk && staffAuth && !staff && !(tok && loginId) && (
+      {pinOk && staffAuth && !staff && !loginId && (
         <div className="card">
           <p className="card-title">웹에서 출근 등록</p>
           <p className="muted">직원 웹에 로그인한 뒤 컨트롤러 QR을 스캔하면 연결됩니다.</p>

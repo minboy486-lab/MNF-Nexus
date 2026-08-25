@@ -5,6 +5,7 @@ import { useState } from "react";
 import { punchMeOut, type MyShiftRow } from "@/lib/actions/staff";
 import { StaffCheckoutConfirm } from "@/components/staff/StaffCheckoutConfirm";
 import { formatDateTimeKST, formatTimeHHmmKST } from "@/lib/utils/format";
+import { clearTimerPairing } from "@/lib/staff/timer-pairing";
 
 type Props = {
   name: string;
@@ -36,7 +37,10 @@ export function StaffAttendanceClient({
     setBusy(false);
     setConfirmOut(false);
     if ("error" in r) alert(r.error);
-    else router.refresh();
+    else {
+      clearTimerPairing();
+      router.refresh();
+    }
   }
 
   return (

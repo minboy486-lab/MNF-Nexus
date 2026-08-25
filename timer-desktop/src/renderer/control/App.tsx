@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import type { BlindStructureOption, TableTimerState } from "@mnf/timer/types";
 import type { AppConfig, AppSnapshot, DisplayInfo, GameSession, UiThemeId } from "../../shared/types";
 import type { RemotePairingInfo } from "../../shared/remote";
 import {
   applyDocumentTheme,
+  DEFAULT_SOUND_VOLUME,
   DEFAULT_UI_THEME,
+  normalizeSoundVolume,
   normalizeUiTheme,
   tableName,
   UI_THEME_OPTIONS,
@@ -18,6 +20,7 @@ import { GameControlView } from "./GameControlView";
 import { GameListView } from "./GameListView";
 import { MonitorPreviewView } from "./MonitorPreviewView";
 import { SetupScreen } from "./SetupScreen";
+import { playTimerVolumePreview, setTimerSoundVolume } from "../shared/timerAnnounce";
 
 type View =
   | { kind: "main" }
@@ -49,6 +52,7 @@ export function App() {
   const [quitConfirm, setQuitConfirm] = useState(false);
   const [updaterStatus, setUpdaterStatus] = useState<{ status: string; version?: string; percent?: number; message?: string } | null>(null);
   const [theme, setTheme] = useState<UiThemeId>(DEFAULT_UI_THEME);
+  const [soundVolume, setSoundVolume] = useState(DEFAULT_SOUND_VOLUME);
 
   const [displays, setDisplays] = useState<DisplayInfo[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -80,6 +84,9 @@ export function App() {
       const nextTheme = normalizeUiTheme(cfg?.theme);
       setTheme(nextTheme);
       applyDocumentTheme(nextTheme);
+      const nextVolume = normalizeSoundVolume(cfg?.soundVolume);
+      setSoundVolume(nextVolume);
+      setTimerSoundVolume(nextVolume);
       if (!cfg) setView({ kind: "setup" });
     } finally {
       setLoading(false);
@@ -107,6 +114,11 @@ export function App() {
       setTheme(next);
       applyDocumentTheme(next);
     });
+    const unsubVolume = window.controlApi.onSoundVolumeUpdate((v) => {
+      const next = normalizeSoundVolume(v);
+      setSoundVolume(next);
+      setTimerSoundVolume(next);
+    });
 
     return () => {
       unsubSetup();
@@ -115,6 +127,7 @@ export function App() {
       unsubTimerPatch();
       unsubUpdater();
       unsubTheme();
+      unsubVolume();
     };
   }, [refresh]);
 
@@ -183,6 +196,14 @@ export function App() {
     }
     setThemeMenuOpen(false);
     setSettingsOpen(false);
+  }, []);
+
+  const handleSoundVolume = useCallback((raw: number) => {
+    const next = normalizeSoundVolume(raw);
+    setSoundVolume(next);
+    setTimerSoundVolume(next);
+    setConfig((prev) => (prev ? { ...prev, soundVolume: next } : prev));
+    void window.controlApi.setSoundVolume(next);
   }, []);
 
   // ESC → 뒤로가기 / M → 선택된 모니터 미리보기
@@ -611,7 +632,9 @@ export function App() {
           return (
             <div
               className="settings-overlay"
-              onClick={() => setThemeMenuOpen(false)}
+              onPointerDown={(e) => {
+                if (e.target === e.currentTarget) setThemeMenuOpen(false);
+              }}
             >
               <div className="settings-popup" onClick={(e) => e.stopPropagation()}>
                 <h3 className="settings-popup__title">테마</h3>
@@ -652,10 +675,33 @@ export function App() {
         return (
           <div
             className="settings-overlay"
-            onClick={() => { setSettingsOpen(false); setThemeMenuOpen(false); }}
+            onPointerDown={(e) => {
+              if (e.target === e.currentTarget) {
+                setSettingsOpen(false);
+                setThemeMenuOpen(false);
+              }
+            }}
           >
-            <div className="settings-popup" onClick={(e) => e.stopPropagation()}>
+            <div className="settings-popup" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
               <h3 className="settings-popup__title">설정</h3>
+              <div className="settings-volume">
+                <div className="settings-volume__label">
+                  <span>타이머 소리</span>
+                  <span className="settings-volume__value">{soundVolume}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={soundVolume}
+                  className="settings-volume__slider"
+                  style={{ "--vol": `${soundVolume}%` } as CSSProperties}
+                  aria-label="타이머 소리"
+                  onChange={(e) => handleSoundVolume(Number(e.currentTarget.value))}
+                  onPointerUp={() => playTimerVolumePreview()}
+                />
+              </div>
               <button
                 type="button"
                 className="settings-popup__btn"

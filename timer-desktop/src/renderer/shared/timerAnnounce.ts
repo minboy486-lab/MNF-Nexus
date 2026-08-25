@@ -31,6 +31,24 @@ const CLIP_SRC: Record<Clip, string> = {
 let sinkId: string | undefined;
 let current: HTMLAudioElement | null = null;
 let playGen = 0;
+/** HTMLAudioElement.volume, 0–1 */
+let soundGain = 1;
+
+export function setTimerSoundVolume(percent: number): void {
+  const n = typeof percent === "number" ? percent : Number(percent);
+  const pct = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 100;
+  soundGain = pct / 100;
+  if (soundGain <= 0.001) {
+    stopCurrent();
+    return;
+  }
+  if (current) current.volume = soundGain;
+}
+
+export function playTimerVolumePreview(): void {
+  if (soundGain <= 0.001) return;
+  void playClips(["chime"], false);
+}
 
 function isBreakDef(level: Pick<BlindLevelDef, "small" | "big">): boolean {
   return level.small === 0 && level.big === 0;
@@ -106,6 +124,7 @@ function playOne(src: string, matchDisplayAudio: boolean, gen: number): Promise<
     }
     const audio = new Audio(src);
     audio.preload = "auto";
+    audio.volume = soundGain;
     current = audio;
     const finish = () => {
       audio.removeEventListener("ended", finish);
@@ -139,6 +158,7 @@ function playOne(src: string, matchDisplayAudio: boolean, gen: number): Promise<
 }
 
 async function playClips(clips: Clip[], matchDisplayAudio: boolean): Promise<void> {
+  if (soundGain <= 0.001) return;
   const gen = ++playGen;
   if (matchDisplayAudio && !sinkId) {
     await refreshSink(displayLabel());
