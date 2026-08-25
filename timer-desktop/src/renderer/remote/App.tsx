@@ -25,13 +25,14 @@ const EMPTY_SNAP: AppSnapshot = {
   tableAssignments: {},
 };
 
-function pairingFromSearch(search: string): { pin: string; tok: string; loginId: string; from: string } {
+function pairingFromSearch(search: string): { pin: string; tok: string; loginId: string; from: string; next: string } {
   const q = new URLSearchParams(search);
   return {
     pin: q.get("pin")?.trim() ?? "",
     tok: q.get("tok")?.trim() ?? "",
     loginId: (q.get("id") ?? q.get("login") ?? "").trim().toLowerCase(),
     from: q.get("from")?.trim() ?? "",
+    next: q.get("next")?.trim() ?? "",
   };
 }
 
@@ -239,6 +240,13 @@ export function App() {
         if (msg.staff.canControl) {
           setTok("");
           stripTokFromUrl();
+          if (initial.next === "staff") {
+            const home = websiteUrl("/staff");
+            if (home) {
+              window.location.replace(home);
+              return;
+            }
+          }
         }
         return;
       }
@@ -402,6 +410,7 @@ export function App() {
   const session = selected?.session ?? null;
   const timer = selected?.timer;
   const ready = pinOk && (staffAuth === false || !!staff?.canControl);
+  const goingHome = initial.next === "staff";
   const hostField = selected?.host ? { host: selected.host } : {};
 
   return (
@@ -442,7 +451,7 @@ export function App() {
             로그아웃
           </button>
         )}
-        {ready && (
+        {ready && !goingHome && (
           <button type="button" className="kakao-share-btn" onClick={() => void shareKakaoStatus()}>
             {shareFlash === "shared" ? "공유됨" : shareFlash === "copied" ? "복사됨" : "카톡 공유"}
           </button>
@@ -499,7 +508,11 @@ export function App() {
         </div>
       )}
 
-      {ready && !selected && (
+      {goingHome && pinOk && !error && (
+        <p className="muted">출근 등록 중...</p>
+      )}
+
+      {ready && !selected && !goingHome && (
         <div className="game-list">
           <p className="card-title">진행 중 게임</p>
           {games.length === 0 && <p className="muted">진행 중인 게임이 없습니다.</p>}
@@ -529,7 +542,7 @@ export function App() {
         </div>
       )}
 
-      {ready && session && selected && (
+      {ready && session && selected && !goingHome && (
         <GamePad
           session={session}
           timer={timer}

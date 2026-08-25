@@ -9,7 +9,6 @@ import {
   timerRemoteHref,
   pairingUrlWithoutTok,
   consumeFailedLanNavigation,
-  claimTimerClockIn,
   LAN_WIFI_ERROR,
 } from "@/lib/staff/timer-pairing";
 
@@ -64,27 +63,8 @@ export function StaffClockInClient({ loginId, mode = "clock-in" }: Props) {
         loginId,
       };
       saveTimerPairing(pairing);
-
-      if (pairingOnly) {
-        markLanNavigation();
-        window.location.assign(timerRemoteHref({ ...pairing, loginId }, "resume"));
-        return true;
-      }
-
-      void claimTimerClockIn({
-        url: parsed.url,
-        pin: parsed.pin,
-        tok: parsed.tok,
-        loginId,
-      }).then((result) => {
-        if ("error" in result) {
-          busyRef.current = false;
-          setBusy(false);
-          setError(result.error);
-          return;
-        }
-        window.location.assign("/staff");
-      });
+      if (pairingOnly) markLanNavigation();
+      window.location.assign(timerRemoteHref({ ...pairing, loginId }, pairingOnly ? "resume" : "clock-in"));
       return true;
     },
     [loginId, pairingOnly],
