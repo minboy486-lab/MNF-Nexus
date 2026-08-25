@@ -124,32 +124,56 @@ export function BlindSelectView({
 
       <div className="sub-panel__head">
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <h2 className="sub-panel__title">{showGames ? "진행중인 게임" : "블라인드 선택"}</h2>
+          <h2 className="sub-panel__title">
+            {showGames ? "진행중인 게임" : showLocal ? "로컬 저장 목록" : "블라인드 선택"}
+          </h2>
           <button
             type="button"
-            className={`blind-refresh-btn${loading || lanLoading ? " blind-refresh-btn--spinning" : ""}`}
-            onClick={() => (showGames ? void handleShowGames() : onRefresh())}
-            disabled={loading || lanLoading}
+            className={`blind-refresh-btn${loading || lanLoading || localLoading ? " blind-refresh-btn--spinning" : ""}`}
+            onClick={() => {
+              if (showGames) void handleShowGames();
+              else if (showLocal) void handleShowLocal();
+              else onRefresh();
+            }}
+            disabled={loading || lanLoading || localLoading}
             title="새로고침"
           >
             ↻
           </button>
         </div>
         <div className="blind-head-btns">
-          <button
-            type="button"
-            className={`blind-local-btn${showGames ? " active" : ""}`}
-            onClick={() => (showGames ? setShowGames(false) : void handleShowGames())}
-          >
-            진행중인 게임
-          </button>
-          <button
-            type="button"
-            className={`blind-local-btn${showLocal && !showGames ? " active" : ""}`}
-            onClick={() => showLocal ? setShowLocal(false) : handleShowLocal()}
-          >
-            {showLocal && !showGames ? "온라인 목록" : "로컬 저장 목록"}
-          </button>
+          <div className="blind-tabs" role="tablist" aria-label="목록 전환">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!showGames && !showLocal}
+              className={`blind-tab${!showGames && !showLocal ? " active" : ""}`}
+              onClick={() => {
+                setShowGames(false);
+                setShowLocal(false);
+              }}
+            >
+              블라인드 선택
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={showGames}
+              className={`blind-tab${showGames ? " active" : ""}`}
+              onClick={() => void handleShowGames()}
+            >
+              진행중인 게임
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={showLocal && !showGames}
+              className={`blind-tab${showLocal && !showGames ? " active" : ""}`}
+              onClick={() => void handleShowLocal()}
+            >
+              로컬 저장 목록
+            </button>
+          </div>
           <button
             type="button"
             className="blind-edit-btn"

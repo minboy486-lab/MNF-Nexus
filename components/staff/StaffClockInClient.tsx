@@ -9,17 +9,21 @@ import {
   timerRemoteHref,
   pairingUrlWithoutTok,
   consumeFailedLanNavigation,
+  claimTimerClockIn,
   LAN_WIFI_ERROR,
 } from "@/lib/staff/timer-pairing";
 
 type Props = {
   loginId: string;
+  /** clock-in: QR로 출근만 하고 홈으로. pair: 이미 출근된 폰을 컨트롤러에 연결 */
+  mode?: "clock-in" | "pair";
 };
 
-export function StaffClockInClient({ loginId }: Props) {
+export function StaffClockInClient({ loginId, mode = "clock-in" }: Props) {
   const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const pairingOnly = mode === "pair";
 
   useEffect(() => {
     if (consumeFailedLanNavigation()) {
@@ -42,33 +46,58 @@ export function StaffClockInClient({ loginId }: Props) {
     (text: string) => {
       if (busyRef.current) return true;
       const parsed = parseControllerQr(text);
-      if (!parsed?.tok || !parsed.pin) {
+      if (!parsed?.pin) {
         setError("컨트롤러 QR이 아닙니다. 매장 와이파이에서 타이머 왼쪽 위 로고 QR을 스캔해 주세요.");
+        return false;
+      }
+      if (!pairingOnly && !parsed.tok) {
+        setError("QR이 만료되었습니다. 컨트롤러 로고를 다시 눌러 주세요.");
         return false;
       }
       busyRef.current = true;
       setBusy(true);
       setError(null);
       const pairing = {
-        url: parsed.url,
+        url: pairingUrlWithoutTok(parsed.url),
         pin: parsed.pin,
         tok: parsed.tok,
         loginId,
       };
-      saveTimerPairing({ ...pairing, url: pairingUrlWithoutTok(parsed.url) });
-      markLanNavigation();
-      window.location.assign(timerRemoteHref(pairing, "clock-in"));
+      saveTimerPairing(pairing);
+
+      if (pairingOnly) {
+        markLanNavigation();
+        window.location.assign(timerRemoteHref({ ...pairing, loginId }, "resume"));
+        return true;
+      }
+
+      void claimTimerClockIn({
+        url: parsed.url,
+        pin: parsed.pin,
+        tok: parsed.tok,
+        loginId,
+      }).then((result) => {
+        if ("error" in result) {
+          busyRef.current = false;
+          setBusy(false);
+          setError(result.error);
+          return;
+        }
+        window.location.assign("/staff");
+      });
       return true;
     },
-    [loginId],
+    [loginId, pairingOnly],
   );
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4">
       <div>
-        <h1 className="text-xl font-bold">출근 등록</h1>
+        <h1 className="text-xl font-bold">{pairingOnly ? "컨트롤러 연결" : "출근 등록"}</h1>
         <p className="text-sm text-on-surface-variant mt-1">
-          매장 와이파이에서 컨트롤러 로고 QR을 한 번만 스캔하세요. 퇴근 전까지는 다시 찍지 않아도 됩니다.
+          {pairingOnly
+            ? "매장 와이파이에서 컨트롤러 로고 QR을 스캔하면 리모컨이 열립니다."
+            : "매장 와이파이에서 컨트롤러 로고 QR을 한 번 스캔하면 출근됩니다. 출근 후 홈에서 매장 컨트롤을 누르면 리모컨이 열립니다."}
         </p>
       </div>
       {error && (
@@ -76,14 +105,14 @@ export function StaffClockInClient({ loginId }: Props) {
       )}
       {busy && (
         <p className="text-sm text-primary bg-primary/12 rounded-xl px-3 py-2 font-semibold">
-          촬영됨 · 매장 컨트롤러로 연결 중입니다
+          {pairingOnly ? "촬영됨 · 매장 컨트롤러로 연결 중입니다" : "촬영됨 · 출근 등록 중입니다"}
         </p>
       )}
       <StaffQrScanner
         paused={busy}
         busy={busy}
-        busyLabel="촬영됨 · 매장 와이파이 연결 중"
-        hint="한 번 맞추면 퇴근 전까지 다시 찍지 않아도 됩니다"
+        busyLabel={pairingOnly ? "촬영됨 · 매장 와이파이 연결 중" : "촬영됨 · 출근 등록 중"}
+        hint={pairingOnly ? "이 폰을 매장 컨트롤러에 연결합니다" : "한 번 출근하면 퇴근 전까지 다시 찍지 않아도 됩니다"}
         onDetect={onDetect}
       />
     </div>

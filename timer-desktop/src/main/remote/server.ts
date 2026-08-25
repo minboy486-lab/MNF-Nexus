@@ -7,6 +7,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import {
   isRemoteCounterOp,
   isRemoteTimerAction,
+  LAN_CLAIM_PATH,
   LAN_CLUSTER_PATH,
   PUNCH_TOKEN_TTL_MS,
   REMOTE_PORT,
@@ -630,6 +631,10 @@ export class RemoteServer {
     try {
       const host = req.headers.host ?? `127.0.0.1:${this.port}`;
       const url = new URL(req.url ?? "/", `http://${host}`);
+      if (url.pathname === "/lan/claim" || url.pathname === LAN_CLAIM_PATH) {
+        await this.serveLanClaim(req, res);
+        return;
+      }
       if (url.pathname === "/lan/cluster" || url.pathname === LAN_CLUSTER_PATH) {
         this.serveLanCluster(res);
         return;
@@ -655,6 +660,64 @@ export class RemoteServer {
         res.end("error");
       }
     }
+  }
+
+  private lanCors(): Record<string, string> {
+    return {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    };
+  }
+
+  private async serveLanClaim(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const cors = this.lanCors();
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, cors);
+      res.end();
+      return;
+    }
+    if (req.method !== "POST") {
+      res.writeHead(405, { ...cors, "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: "허용되지 않은 요청입니다." }));
+      return;
+    }
+    let body: { pin?: unknown; tok?: unknown; loginId?: unknown };
+    try {
+      body = JSON.parse(await readHttpBody(req)) as { pin?: unknown; tok?: unknown; loginId?: unknown };
+    } catch {
+      res.writeHead(400, { ...cors, "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: "요청을 읽을 수 없습니다." }));
+      return;
+    }
+    const pin = typeof body.pin === "string" ? body.pin : "";
+    const tok = typeof body.tok === "string" ? body.tok : "";
+    const loginId = typeof body.loginId === "string" ? body.loginId.trim().toLowerCase() : "";
+    if (pin !== this.pin) {
+      res.writeHead(403, { ...cors, "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: "PIN이 올바르지 않습니다." }));
+      return;
+    }
+    if (!tok || tok !== this.punchToken || Date.now() > this.punchExpiresAt) {
+      res.writeHead(400, { ...cors, "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: "QR이 만료되었거나 올바르지 않습니다. 컨트롤러 로고를 다시 눌러 주세요." }));
+      return;
+    }
+    if (!loginId) {
+      res.writeHead(400, { ...cors, "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: "직원 아이디가 없습니다." }));
+      return;
+    }
+    const result = await claimStaffByLoginId(loginId);
+    if ("error" in result) {
+      res.writeHead(400, { ...cors, "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: result.error }));
+      return;
+    }
+    const session: RemoteSession = { token: newToken(24), staff: result, canControl: true };
+    this.putSession(session);
+    res.writeHead(200, { ...cors, "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ ok: true }));
   }
 
   private serveLanCluster(res: ServerResponse): void {
@@ -773,4 +836,22 @@ export class RemoteServer {
 
 function guessMime(file: string): string {
   return MIME[extname(file).toLowerCase()] ?? "application/octet-stream";
+}
+
+function readHttpBody(req: IncomingMessage, limit = 4096): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let n = 0;
+    req.on("data", (c: Buffer) => {
+      n += c.length;
+      if (n > limit) {
+        reject(new Error("too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
 }

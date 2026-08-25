@@ -3,6 +3,7 @@ import type { TableTimerState } from "@mnf/timer/types";
 
 export const REMOTE_PORT = 17890;
 export const LAN_CLUSTER_PATH = "/lan/cluster";
+export const LAN_CLAIM_PATH = "/lan/claim";
 export const PUNCH_TOKEN_TTL_MS = 3 * 60 * 1000;
 
 export const REMOTE_TIMER_ACTIONS = [

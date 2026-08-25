@@ -1,5 +1,6 @@
 export const STAFF_TIMER_PAIRING_KEY = "mnf-staff-timer-pairing";
 export const CONTROLLER_REMOTE_PORT = 17890;
+export const LAN_CLAIM_PATH = "/lan/claim";
 export const LAN_WIFI_ERROR = "매장 와이파이에 연결한 뒤 다시 스캔해 주세요";
 
 export type StaffTimerPairing = {
@@ -121,5 +122,38 @@ export function pairingUrlWithoutTok(url: string): string {
     return u.toString();
   } catch {
     return url;
+  }
+}
+
+export async function claimTimerClockIn(opts: {
+  url: string;
+  pin: string;
+  tok: string;
+  loginId: string;
+}): Promise<{ ok: true } | { error: string }> {
+  let origin: string;
+  try {
+    origin = new URL(opts.url).origin;
+  } catch {
+    return { error: LAN_WIFI_ERROR };
+  }
+  const ctrl = new AbortController();
+  const timer = window.setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const r = await fetch(`${origin}${LAN_CLAIM_PATH}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin: opts.pin, tok: opts.tok, loginId: opts.loginId }),
+      signal: ctrl.signal,
+    });
+    const data = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+    if (!r.ok || !data?.ok) {
+      return { error: typeof data?.error === "string" && data.error ? data.error : LAN_WIFI_ERROR };
+    }
+    return { ok: true };
+  } catch {
+    return { error: LAN_WIFI_ERROR };
+  } finally {
+    window.clearTimeout(timer);
   }
 }

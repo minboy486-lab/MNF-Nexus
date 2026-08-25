@@ -60,7 +60,7 @@ export function StaffTimerGate({ loginId }: Props) {
   }
 
   if (!pairing) {
-    return <StaffClockInClient loginId={loginId} />;
+    return <StaffClockInClient loginId={loginId} mode="pair" />;
   }
 
   return (

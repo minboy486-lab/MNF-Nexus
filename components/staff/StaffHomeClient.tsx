@@ -93,7 +93,7 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
         >
           <span className="material-symbols-outlined text-4xl text-primary">qr_code_scanner</span>
           <p className="text-xl font-bold mt-2">출근 등록</p>
-          <p className="text-sm text-on-surface-variant mt-1">매장 와이파이에서 컨트롤러 QR을 한 번 스캔하면 출근됩니다. 퇴근 전까지 다시 찍지 않아도 됩니다.</p>
+          <p className="text-sm text-on-surface-variant mt-1">매장 와이파이에서 컨트롤러 QR을 한 번 스캔하면 출근됩니다. 그다음 홈에서 매장 컨트롤을 누르세요.</p>
         </Link>
       ) : (
         <button
@@ -102,9 +102,9 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
           className="block w-full text-left rounded-2xl p-5 border border-primary/35 bg-primary/12"
         >
           <span className="material-symbols-outlined text-4xl text-primary">timer</span>
-          <p className="text-xl font-bold mt-2">타이머 관리</p>
+          <p className="text-xl font-bold mt-2">매장 컨트롤</p>
           <p className="text-sm text-on-surface-variant mt-1">
-            {hasPairing ? "진행 중 게임을 조작합니다" : "컨트롤러 QR을 한 번 더 스캔해 연결합니다"}
+            {hasPairing ? "진행 중 게임을 리모컨으로 조작합니다" : "컨트롤러 QR을 한 번 스캔해 이 폰을 연결합니다"}
           </p>
         </button>
       )}
