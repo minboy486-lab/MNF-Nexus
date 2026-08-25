@@ -1,10 +1,12 @@
 import { BrowserWindow, screen } from "electron";
-import type { AppConfig, MonitorSlot, UiThemeId } from "../../shared/types";
+import type { AppConfig, GameSession, MonitorSlot, UiThemeId } from "../../shared/types";
 import { DEFAULT_SOUND_VOLUME, normalizeSoundVolume, normalizeUiTheme } from "../../shared/types";
+import type { TableTimerState } from "@mnf/timer/types";
 import { configNeedsSetup, getDisplayMappings } from "../config/configStore";
 import {
   enrichMappingsWithCurrentDisplays,
   findDisplayById,
+  getAllDisplaysInfo,
   resolveDisplayForMapping,
 } from "../screen/displayMapper";
 import { createControlWindow, createDisplayWindow } from "./controlWindow";
@@ -51,6 +53,58 @@ export class WindowManager {
       }
     }
     return result;
+  }
+
+  getAllDisplayWindows(): BrowserWindow[] {
+    const result: BrowserWindow[] = [];
+    for (const entry of this.displayWindows.values()) {
+      if (!entry.win.isDestroyed()) result.push(entry.win);
+    }
+    return result;
+  }
+
+  ensureLanDisplays(): void {
+    const controlId = this.config?.controlDisplayId;
+    const extras = getAllDisplaysInfo().filter((d) => d.id !== controlId);
+    for (const d of extras) {
+      const existing = this.displayWindows.get(d.id);
+      if (existing && !existing.win.isDestroyed()) continue;
+      this.openDisplayWindow(d.id, 1, d);
+    }
+  }
+
+  broadcastToAllDisplays(state: TableTimerState, session: GameSession | null): void {
+    for (const win of this.getAllDisplayWindows()) {
+      win.webContents.send("timer:update", state);
+      win.webContents.send("session:update", session);
+    }
+  }
+
+  broadcastThemeToDisplays(theme: string): void {
+    const next = normalizeUiTheme(theme);
+    for (const win of this.getAllDisplayWindows()) {
+      win.webContents.send("theme:update", next);
+    }
+  }
+
+  broadcastVolumeToDisplays(volume: number): void {
+    const next = normalizeSoundVolume(volume);
+    for (const win of this.getAllDisplayWindows()) {
+      win.webContents.send("soundVolume:update", next);
+    }
+  }
+
+  restoreLocalDisplays(): void {
+    const desired = this.config ? getDisplayMappings(this.config) : [];
+    const desiredIds = new Set(desired.map((d) => d.displayId));
+    for (const [id, entry] of this.displayWindows.entries()) {
+      if (desiredIds.has(id)) continue;
+      if (!entry.win.isDestroyed()) entry.win.destroy();
+      this.displayWindows.delete(id);
+    }
+    this.broadcastTheme();
+    this.broadcastSoundVolume();
+    this.timerHub?.pushAllMonitors();
   }
 
   setQuitting(value: boolean): void {

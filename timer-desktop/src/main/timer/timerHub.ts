@@ -267,6 +267,10 @@ export class TimerHub {
     this.pushSnapshotToControl();
   }
 
+  assignAllMonitors(gameId: number): void {
+    for (const slot of MONITOR_SLOTS) this.assignMonitor(slot, gameId);
+  }
+
   // ── 타이머 조작 ────────────────────────────────────────────
 
   dispatch(gameId: number, action: TimerAction, options?: { minutes?: number; ms?: number; sec?: number }): TableTimerState | null {

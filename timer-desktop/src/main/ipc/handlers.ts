@@ -10,6 +10,8 @@ import { normalizeSoundVolume, normalizeUiTheme } from "../../shared/types";
 import type { BlindStructureOption, TimerAction } from "@mnf/timer/types";
 import type { WindowManager } from "../windows/windowManager";
 import type { RemoteServer } from "../remote/server";
+import { discoverLanGames } from "../remote/lanDiscover";
+import { LanViewClient } from "../remote/lanViewClient";
 
 function localBlindsPath() {
   const dir = app.getPath("userData");
@@ -62,7 +64,18 @@ export function flushPendingSoundVolume(wm: WindowManager): void {
   persistSoundVolume(wm);
 }
 
+let lanView: LanViewClient | null = null;
+
+export function stopLanView(): void {
+  lanView?.stop();
+}
+
 export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: RemoteServer): void {
+  lanView = new LanViewClient(wm);
+  lanView.onState((state) => {
+    const win = wm.getControlWindow();
+    if (win && !win.isDestroyed()) win.webContents.send("lan:view-state", state);
+  });
   // ── 디스플레이 & 설정 ──────────────────────────────────────
   ipcMain.handle("displays:get", () => getAllDisplaysInfo());
   ipcMain.handle("config:get", () => wm.getConfig() ?? loadConfig());
@@ -108,6 +121,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
   // ── 앱 제어 ───────────────────────────────────────────────
   ipcMain.handle("app:quit", () => {
     flushPendingSoundVolume(wm);
+    stopLanView();
     app.quit();
   });
 
@@ -173,6 +187,32 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const gameId = p.gameId === null ? null : p.gameId;
     if (gameId !== null && !isGameId(gameId)) return { ok: false as const, error: "유효하지 않은 게임 ID입니다." };
     hub.assignMonitor(p.monitorSlot, gameId as number | null);
+    return { ok: true as const };
+  });
+  ipcMain.handle("monitor:assign-all", (_e, gameId: unknown) => {
+    if (!isGameId(gameId)) return { ok: false as const, error: "유효하지 않은 게임 ID입니다." };
+    hub.assignAllMonitors(gameId);
+    return { ok: true as const };
+  });
+  ipcMain.handle("lan:discover", () => discoverLanGames());
+  ipcMain.handle("lan:view-start", async (_e, raw: unknown) => {
+    const p = raw as Record<string, unknown>;
+    const host = typeof p?.host === "string" ? p.host.trim() : "";
+    const gameId = p?.gameId;
+    const structureName = typeof p?.structureName === "string" ? p.structureName : "";
+    if (!host || !isGameId(gameId)) return { ok: false as const, error: "연결 정보가 올바르지 않습니다." };
+    wm.ensureLanDisplays();
+    return lanView!.start({
+      host,
+      hostname: typeof p?.hostname === "string" ? p.hostname : host,
+      gameId,
+      structureName,
+      theme: typeof p?.theme === "string" ? p.theme : undefined,
+      soundVolume: typeof p?.soundVolume === "number" ? p.soundVolume : undefined,
+    });
+  });
+  ipcMain.handle("lan:view-stop", () => {
+    lanView?.stop();
     return { ok: true as const };
   });
 

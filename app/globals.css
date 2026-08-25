@@ -2848,6 +2848,9 @@ body {
   backdrop-filter: blur(8px);
   white-space: nowrap;
 }
+.staff-qr__badge--action {
+  cursor: pointer;
+}
 .staff-qr__badge--ok {
   color: #052e1c;
   background: #6ee7b7;

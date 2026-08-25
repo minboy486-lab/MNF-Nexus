@@ -93,6 +93,8 @@ export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · �
   const shutterTimer = useRef<number | null>(null);
   const resumeTimer = useRef<number | null>(null);
   const [camError, setCamError] = useState<string | null>(null);
+  const [camDenied, setCamDenied] = useState(false);
+  const [retry, setRetry] = useState(0);
   const [phase, setPhase] = useState<Phase>("scanning");
   const [flash, setFlash] = useState(false);
 
@@ -216,8 +218,18 @@ export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · �
         video.setAttribute("playsinline", "true");
         video.muted = true;
         await video.play();
-      } catch {
-        setCamError("카메라를 열 수 없습니다. 카메라 권한을 허용해 주세요.");
+        setCamError(null);
+        setCamDenied(false);
+      } catch (err) {
+        const denied =
+          err instanceof DOMException &&
+          (err.name === "NotAllowedError" || err.name === "PermissionDeniedError");
+        setCamDenied(denied);
+        setCamError(
+          denied
+            ? "카메라 권한을 허용해 주세요. 여기를 누르면 다시 요청합니다."
+            : "카메라를 열 수 없습니다. 여기를 눌러 다시 시도해 주세요.",
+        );
         return;
       }
       const Detector = getDetector();
@@ -233,7 +245,7 @@ export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · �
       if (resumeTimer.current) window.clearTimeout(resumeTimer.current);
       stream?.getTracks().forEach((t) => t.stop());
     };
-  }, []);
+  }, [retry]);
 
   const frozen = phase !== "scanning";
   const badge =
@@ -243,6 +255,15 @@ export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · �
       : phase === "captured"
         ? "촬영됨 · QR 인식"
         : "스캔 중 · QR을 네모 안에");
+
+  function retryCamera() {
+    if (camDenied && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      window.location.href = "app-settings:";
+    }
+    setCamError(null);
+    setCamDenied(false);
+    setRetry((n) => n + 1);
+  }
 
   return (
     <div className="space-y-3">
@@ -269,7 +290,22 @@ export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · �
           <span className="staff-qr__corner staff-qr__corner--br" />
           {!frozen && <span className="staff-qr__scanline" />}
         </div>
-        <div className={`staff-qr__badge${frozen ? " staff-qr__badge--ok" : ""}`}>
+        <div
+          className={`staff-qr__badge${frozen ? " staff-qr__badge--ok" : ""}${camError ? " staff-qr__badge--action" : ""}`}
+          role={camError ? "button" : undefined}
+          tabIndex={camError ? 0 : undefined}
+          onClick={camError ? retryCamera : undefined}
+          onKeyDown={
+            camError
+              ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    retryCamera();
+                  }
+                }
+              : undefined
+          }
+        >
           {phase === "busy" ? (
             <svg className="staff-qr__badge-icon staff-qr__badge-icon--spin" viewBox="0 0 24 24" aria-hidden>
               <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="2.4" strokeDasharray="36 14" />
@@ -290,9 +326,21 @@ export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · �
           {badge}
         </div>
       </div>
-      <p className="text-sm text-on-surface-variant text-center">
-        {camError ?? (frozen ? "촬영된 화면입니다. 잠시만 기다려 주세요." : hint)}
-      </p>
+      {camError ? (
+        <button
+          type="button"
+          className="w-full text-sm text-error text-center underline underline-offset-2"
+          onClick={retryCamera}
+        >
+          {camDenied
+            ? "권한을 허용해 주세요. 눌러서 다시 요청하거나, 아이폰은 설정 앱으로 이동합니다."
+            : camError}
+        </button>
+      ) : (
+        <p className="text-sm text-on-surface-variant text-center">
+          {frozen ? "촬영된 화면입니다. 잠시만 기다려 주세요." : hint}
+        </p>
+      )}
     </div>
   );
 }

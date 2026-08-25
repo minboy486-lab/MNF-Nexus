@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, shell } from "electron";
 import type { BlindStructureOption, TableTimerState, TimerAction } from "@mnf/timer/types";
 import type { AppConfig, AppSnapshot, DisplayInfo, GameSession, UiThemeId } from "../shared/types";
+import type { LanDiscoveredGame, LanViewState } from "../shared/lanView";
 
 export type ControlApi = {
   // 디스플레이/설정
@@ -31,6 +32,18 @@ export type ControlApi = {
   // 테이블/모니터 연결
   assignTable: (tableSlot: number, gameId: number | null) => Promise<{ ok: true } | { ok: false; error: string }>;
   assignMonitor: (monitorSlot: number, gameId: number | null) => Promise<{ ok: true } | { ok: false; error: string }>;
+  assignAllMonitors: (gameId: number) => Promise<{ ok: true } | { ok: false; error: string }>;
+  discoverLanGames: () => Promise<LanDiscoveredGame[]>;
+  startLanView: (opts: {
+    host: string;
+    hostname?: string;
+    gameId: number;
+    structureName: string;
+    theme?: string;
+    soundVolume?: number;
+  }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  stopLanView: () => Promise<{ ok: true }>;
+  onLanViewState: (cb: (state: LanViewState | null) => void) => () => void;
   // 타이머
   timerCommand: (gameId: number, action: TimerAction, options?: { minutes?: number; ms?: number; sec?: number }) => Promise<{ ok: true; state: TableTimerState } | { ok: false; error: string }>;
   // 세션 카운터
@@ -92,6 +105,15 @@ const api: ControlApi = {
   deleteGame: (gameId) => ipcRenderer.invoke("game:delete", gameId),
   assignTable: (tableSlot, gameId) => ipcRenderer.invoke("table:assign", { tableSlot, gameId }),
   assignMonitor: (monitorSlot, gameId) => ipcRenderer.invoke("monitor:assign", { monitorSlot, gameId }),
+  assignAllMonitors: (gameId) => ipcRenderer.invoke("monitor:assign-all", gameId),
+  discoverLanGames: () => ipcRenderer.invoke("lan:discover"),
+  startLanView: (opts) => ipcRenderer.invoke("lan:view-start", opts),
+  stopLanView: () => ipcRenderer.invoke("lan:view-stop"),
+  onLanViewState: (cb) => {
+    const h = (_e: Electron.IpcRendererEvent, state: LanViewState | null) => cb(state);
+    ipcRenderer.on("lan:view-state", h);
+    return () => ipcRenderer.removeListener("lan:view-state", h);
+  },
   timerCommand: (gameId, action, options) =>
     ipcRenderer.invoke("timer:command", { gameId, action, ...options }),
   updateCounters: (gameId, patch) => {

@@ -7,18 +7,26 @@ import { WebSocketServer, type WebSocket } from "ws";
 import {
   isRemoteCounterOp,
   isRemoteTimerAction,
+  LAN_CLUSTER_PATH,
   PUNCH_TOKEN_TTL_MS,
   REMOTE_PORT,
   type RemoteClientMsg,
   type RemotePairingInfo,
+  type RemotePeerSnapshot,
   type RemoteServerMsg,
   type RemoteStaffState,
 } from "../../shared/remote";
 import type { TimerHub } from "../timer/timerHub";
 import { clockInStaff, clockOutStaff, claimStaffByLoginId, loginStaff, rejoinStaffByLoginId, refreshStaffClock, type StaffAuthOk } from "../supabase/staffAuth";
 import { getSupabase } from "../supabase/client";
+import { hostname } from "node:os";
+import { getDisplayRemainingMs } from "@mnf/timer/engine";
 import { listLanIPv4 } from "./lan";
 import { loadRemoteAuth, saveRemoteAuth } from "./authStore";
+import type { LanHostGames } from "../../shared/lanView";
+import { LanCluster, normalizeRemoteIp } from "./lanCluster";
+import type { AppSnapshot } from "../../shared/types";
+import type { TableTimerState } from "@mnf/timer/types";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -46,6 +54,10 @@ type RemoteSession = {
 type SockState = {
   pinOk: boolean;
   session: RemoteSession | null;
+  viewOnly: boolean;
+  viewGameId: number | null;
+  peer: boolean;
+  remoteHost: string;
 };
 
 function newToken(bytes = 12): string {
@@ -89,6 +101,14 @@ export class RemoteServer {
   private punchToken = newToken();
   private punchExpiresAt = 0;
   private staffAuthEnabled = false;
+  private getThemeId: () => string = () => "black-pink";
+  private getVolume: () => number = () => 100;
+  private cluster: LanCluster | null = null;
+
+  setAppearance(getTheme: () => string, getVolume: () => number): void {
+    this.getThemeId = getTheme;
+    this.getVolume = getVolume;
+  }
 
   async start(hub: TimerHub): Promise<void> {
     this.hub = hub;
@@ -98,7 +118,14 @@ export class RemoteServer {
     this.sessions.clear();
     for (const s of auth.sessions) this.sessions.set(s.token, s);
     this.persistAuth();
-    this.unsubHub = hub.onRemotePush(() => this.broadcastSnapshot());
+    this.unsubHub = hub.onRemotePush(() => this.onLocalHubChange());
+    this.cluster = new LanCluster({
+      getPin: () => this.pin,
+      adoptPin: (pin) => this.adoptPin(pin),
+      hostname: () => hostname() || "pc",
+      getLocalSnapshot: () => this.localSnapshotPayload(),
+      onPeersChange: () => this.broadcastToOperators(),
+    });
     this.rotatePunchToken();
 
     const wss = new WebSocketServer({ noServer: true });
@@ -125,10 +152,13 @@ export class RemoteServer {
       http.listen(this.port, "0.0.0.0", () => resolve());
     });
     this.infoCache = await this.buildInfo();
+    this.cluster.start();
     console.log(`[remote] LAN http://0.0.0.0:${this.port} PIN ${this.pin}`);
   }
 
   stop(): void {
+    this.cluster?.stop();
+    this.cluster = null;
     this.unsubHub?.();
     this.unsubHub = null;
     for (const ws of this.clients.keys()) {
@@ -186,10 +216,67 @@ export class RemoteServer {
     };
   }
 
-  private snapshotMsg(): RemoteServerMsg {
+  private adoptPin(pin: string): void {
+    if (!/^\d{4}$/.test(pin) || pin === this.pin) return;
+    this.pin = pin;
+    this.persistAuth();
+    void this.buildInfo().then((info) => {
+      this.infoCache = info;
+    });
+    console.log(`[remote] 매장 PIN 맞춤 ${this.pin}`);
+  }
+
+  private localSnapshotPayload(): {
+    snapshot: AppSnapshot;
+    timers: TableTimerState[];
+    serverNow: number;
+    hostname: string;
+  } {
     const hub = this.hub;
-    if (!hub) return { type: "error", error: "서버 준비 전입니다." };
-    return { type: "snapshot", snapshot: hub.getSnapshot(), timers: hub.getAllTimers(), serverNow: Date.now() };
+    return {
+      snapshot: hub?.getSnapshot() ?? { sessions: [], monitorAssignments: {}, tableAssignments: {} },
+      timers: hub?.getAllTimers() ?? [],
+      serverNow: Date.now(),
+      hostname: hostname() || "pc",
+    };
+  }
+
+  private localSnapshotMsg(): RemoteServerMsg {
+    const local = this.localSnapshotPayload();
+    return {
+      type: "snapshot",
+      snapshot: local.snapshot,
+      timers: local.timers,
+      serverNow: local.serverNow,
+      hostname: local.hostname,
+    };
+  }
+
+  private federatedSnapshotMsg(): RemoteServerMsg {
+    const local = this.localSnapshotMsg();
+    if (local.type !== "snapshot") return local;
+    const peers: RemotePeerSnapshot[] = this.cluster?.peers() ?? [];
+    return { ...local, peers };
+  }
+
+  private onLocalHubChange(): void {
+    this.broadcastLocalToPeersAndViews();
+    this.broadcastToOperators();
+    this.cluster?.pushLocalSnapshot();
+  }
+
+  private broadcastLocalToPeersAndViews(): void {
+    const msg = JSON.stringify(this.localSnapshotMsg());
+    for (const [ws, st] of this.clients) {
+      if (ws.readyState === ws.OPEN && (st.peer || st.viewOnly)) ws.send(msg);
+    }
+  }
+
+  private broadcastToOperators(): void {
+    const msg = JSON.stringify(this.federatedSnapshotMsg());
+    for (const [ws, st] of this.clients) {
+      if (ws.readyState === ws.OPEN && this.canOperate(st) && !st.peer && !st.viewOnly) ws.send(msg);
+    }
   }
 
   private canOperate(state: SockState): boolean {
@@ -204,14 +291,7 @@ export class RemoteServer {
 
   private afterPin(ws: WebSocket, state: SockState): void {
     sendJson(ws, this.helloOk());
-    if (this.canOperate(state)) sendJson(ws, this.snapshotMsg());
-  }
-
-  private broadcastSnapshot(): void {
-    const msg = JSON.stringify(this.snapshotMsg());
-    for (const [ws, st] of this.clients) {
-      if (ws.readyState === ws.OPEN && this.canOperate(st)) ws.send(msg);
-    }
+    if (this.canOperate(state)) sendJson(ws, this.federatedSnapshotMsg());
   }
 
   private persistAuth(): void {
@@ -240,7 +320,7 @@ export class RemoteServer {
   private bindSession(ws: WebSocket, state: SockState, session: RemoteSession): void {
     state.session = session;
     this.sendStaff(ws, session);
-    if (session.canControl) sendJson(ws, this.snapshotMsg());
+    if (session.canControl) sendJson(ws, this.federatedSnapshotMsg());
   }
 
   private sendStaff(ws: WebSocket, session: RemoteSession): void {
@@ -248,7 +328,14 @@ export class RemoteServer {
   }
 
   private onSocket(ws: WebSocket, req: IncomingMessage): void {
-    const state: SockState = { pinOk: false, session: null };
+    const state: SockState = {
+      pinOk: false,
+      session: null,
+      viewOnly: false,
+      viewGameId: null,
+      peer: false,
+      remoteHost: normalizeRemoteIp(req.socket.remoteAddress),
+    };
     const q = new URL(req.url ?? "/", "http://localhost").searchParams.get("pin");
     if (q && q === this.pin) state.pinOk = true;
 
@@ -262,11 +349,46 @@ export class RemoteServer {
     });
 
     ws.on("close", () => {
+      this.cluster?.dropSocket(ws);
       this.clients.delete(ws);
     });
   }
 
   private async handleMessage(ws: WebSocket, state: SockState, msg: RemoteClientMsg): Promise<void> {
+    if (msg.type === "view") {
+      const hub = this.hub;
+      if (!hub || !Number.isInteger(msg.gameId) || msg.gameId < 1) {
+        sendJson(ws, { type: "error", error: "유효하지 않은 게임입니다." });
+        return;
+      }
+      if (!hub.getTimer(msg.gameId)) {
+        sendJson(ws, { type: "error", error: "진행 중인 게임이 아닙니다." });
+        return;
+      }
+      state.viewOnly = true;
+      state.viewGameId = msg.gameId;
+      sendJson(ws, {
+        type: "view_ok",
+        gameId: msg.gameId,
+        theme: this.getThemeId(),
+        soundVolume: this.getVolume(),
+        serverNow: Date.now(),
+      });
+      sendJson(ws, this.localSnapshotMsg());
+      return;
+    }
+    if (msg.type === "peer_hello") {
+      if (msg.pin !== this.pin) {
+        sendJson(ws, { type: "hello_fail", error: "PIN이 올바르지 않습니다." });
+        ws.close();
+        return;
+      }
+      state.pinOk = true;
+      state.peer = true;
+      this.cluster?.noteInbound(state.remoteHost, ws);
+      sendJson(ws, this.localSnapshotMsg());
+      return;
+    }
     if (msg.type === "hello") {
       if (msg.pin !== this.pin) {
         sendJson(ws, { type: "hello_fail", error: "PIN이 올바르지 않습니다." });
@@ -383,7 +505,58 @@ export class RemoteServer {
       return;
     }
 
+    if (state.peer) {
+      this.handlePeerMessage(ws, state, msg);
+      return;
+    }
+
     this.handleCommand(ws, state, msg);
+  }
+
+  private handlePeerMessage(ws: WebSocket, state: SockState, msg: RemoteClientMsg): void {
+    const hub = this.hub;
+    if (!hub) return;
+
+    if (msg.type === "peer_snapshot") {
+      this.cluster?.rememberPeer(state.remoteHost, {
+        host: state.remoteHost,
+        hostname: msg.hostname || state.remoteHost,
+        snapshot: msg.snapshot,
+        timers: msg.timers,
+        serverNow: typeof msg.serverNow === "number" ? msg.serverNow : Date.now(),
+      });
+      return;
+    }
+
+    if (msg.type === "peer_command") {
+      if (!Number.isInteger(msg.gameId) || msg.gameId < 1 || !isRemoteTimerAction(msg.action)) {
+        sendJson(ws, { type: "error", error: "허용되지 않은 명령입니다." });
+        return;
+      }
+      const result = hub.dispatch(msg.gameId, msg.action, {
+        sec: typeof msg.sec === "number" ? msg.sec : undefined,
+      });
+      if (!result) sendJson(ws, { type: "error", error: "게임을 찾을 수 없습니다." });
+      return;
+    }
+
+    if (msg.type === "peer_counters") {
+      if (!Number.isInteger(msg.gameId) || msg.gameId < 1 || !isRemoteCounterOp(msg.op)) {
+        sendJson(ws, { type: "error", error: "잘못된 카운터 명령입니다." });
+        return;
+      }
+      const ok = hub.applyRemoteCounter(msg.gameId, msg.op, msg.rebuyIndex);
+      if (!ok) sendJson(ws, { type: "error", error: "카운터를 바꿀 수 없습니다." });
+      return;
+    }
+
+    if (msg.type === "peer_deleteGame") {
+      if (!Number.isInteger(msg.gameId) || msg.gameId < 1) {
+        sendJson(ws, { type: "error", error: "유효하지 않은 게임입니다." });
+        return;
+      }
+      hub.deleteGame(msg.gameId);
+    }
   }
 
   private handleCommand(ws: WebSocket, state: SockState, msg: RemoteClientMsg): void {
@@ -392,6 +565,30 @@ export class RemoteServer {
     if (!this.canOperate(state)) {
       sendJson(ws, { type: "error", error: this.staffAuthEnabled ? "출근 연결이 필요합니다." : "PIN이 필요합니다." });
       return;
+    }
+
+    if (msg.type === "command" || msg.type === "counters" || msg.type === "deleteGame") {
+      const target = typeof msg.host === "string" ? msg.host : "";
+      if (target && this.cluster && !this.cluster.isOwnHost(target)) {
+        const forwarded =
+          msg.type === "command"
+            ? this.cluster.forward(target, {
+                type: "peer_command",
+                gameId: msg.gameId,
+                action: msg.action,
+                sec: msg.sec,
+              })
+            : msg.type === "counters"
+              ? this.cluster.forward(target, {
+                  type: "peer_counters",
+                  gameId: msg.gameId,
+                  op: msg.op,
+                  rebuyIndex: msg.rebuyIndex,
+                })
+              : this.cluster.forward(target, { type: "peer_deleteGame", gameId: msg.gameId });
+        if (!forwarded) sendJson(ws, { type: "error", error: "다른 컴퓨터의 게임에 연결할 수 없습니다." });
+        return;
+      }
     }
 
     if (msg.type === "command") {
@@ -433,6 +630,14 @@ export class RemoteServer {
     try {
       const host = req.headers.host ?? `127.0.0.1:${this.port}`;
       const url = new URL(req.url ?? "/", `http://${host}`);
+      if (url.pathname === "/lan/cluster" || url.pathname === LAN_CLUSTER_PATH) {
+        this.serveLanCluster(res);
+        return;
+      }
+      if (url.pathname === "/lan/games") {
+        this.serveLanGames(res);
+        return;
+      }
       if (url.pathname === "/manifest.webmanifest") {
         this.serveManifest(res);
         return;
@@ -450,6 +655,50 @@ export class RemoteServer {
         res.end("error");
       }
     }
+  }
+
+  private serveLanCluster(res: ServerResponse): void {
+    const body = {
+      ok: true,
+      hostname: hostname() || "pc",
+      pin: this.pin,
+    };
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+    });
+    res.end(JSON.stringify(body));
+  }
+
+  private serveLanGames(res: ServerResponse): void {
+    const hub = this.hub;
+    const snap = hub?.getSnapshot();
+    const timers = hub?.getAllTimers() ?? [];
+    const games = (snap?.sessions ?? []).map((session) => {
+      const timer = timers.find((t) => t.tableId === session.gameId);
+      return {
+        gameId: session.gameId,
+        structureName: session.structureName,
+        status: timer?.status ?? "stopped",
+        blindLevel: timer?.blindLevel ?? 1,
+        smallBlind: timer?.smallBlind ?? 0,
+        bigBlind: timer?.bigBlind ?? 0,
+        remainingMs: timer ? getDisplayRemainingMs(timer) : 0,
+      };
+    });
+    const body: LanHostGames = {
+      ok: true,
+      host: "",
+      hostname: hostname(),
+      theme: this.getThemeId(),
+      soundVolume: this.getVolume(),
+      games,
+    };
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+    });
+    res.end(JSON.stringify(body));
   }
 
   private serveManifest(res: ServerResponse): void {

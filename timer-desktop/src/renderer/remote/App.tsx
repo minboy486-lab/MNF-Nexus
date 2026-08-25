@@ -6,12 +6,13 @@ import type { AppSnapshot, GameSession } from "../../shared/types";
 import type {
   RemoteClientMsg,
   RemoteCounterOp,
+  RemotePeerSnapshot,
   RemoteServerMsg,
   RemoteStaffState,
   RemoteTimerAction,
 } from "../../shared/remote";
 import logoUrl from "./mnf-logo.png";
-import { copyToClipboard, formatKakaoGameStatus, shareGameStatus } from "./kakaoStatus";
+import { copyToClipboard, formatKakaoGameStatusFromOrigins, shareGameStatus } from "./kakaoStatus";
 
 const LS_LOGIN = "mnf-remote-login-id";
 const LS_SESSION = "mnf-remote-session";
@@ -66,6 +67,45 @@ function statusLabel(status: TableTimerState["status"] | undefined): string {
   if (!status || status === "stopped") return "정지";
   if (status === "running") return "진행";
   return "일시정지";
+}
+
+type GameSel = { host: string; gameId: number };
+
+type ListedGame = {
+  host: string;
+  hostname: string;
+  session: GameSession;
+  timer: TableTimerState | undefined;
+};
+
+function listedGames(
+  snapshot: AppSnapshot,
+  timers: TableTimerState[],
+  hostname: string,
+  peers: RemotePeerSnapshot[],
+): ListedGame[] {
+  const rows: ListedGame[] = snapshot.sessions.map((session) => ({
+    host: "",
+    hostname: hostname || "이 컴퓨터",
+    session,
+    timer: timers.find((t) => t.tableId === session.gameId),
+  }));
+  for (const peer of peers) {
+    for (const session of peer.snapshot.sessions) {
+      rows.push({
+        host: peer.host,
+        hostname: peer.hostname || peer.host,
+        session,
+        timer: peer.timers.find((t) => t.tableId === session.gameId),
+      });
+    }
+  }
+  rows.sort((a, b) => {
+    const h = a.hostname.localeCompare(b.hostname, undefined, { sensitivity: "base" });
+    if (h !== 0) return h;
+    return a.session.gameId - b.session.gameId;
+  });
+  return rows;
 }
 
 function LongPressButton({
@@ -125,7 +165,9 @@ export function App() {
   const [staffAuth, setStaffAuth] = useState<boolean | null>(null);
   const [snapshot, setSnapshot] = useState<AppSnapshot>(EMPTY_SNAP);
   const [timers, setTimers] = useState<TableTimerState[]>([]);
-  const [gameId, setGameId] = useState<number | null>(null);
+  const [hostname, setHostname] = useState("");
+  const [peers, setPeers] = useState<RemotePeerSnapshot[]>([]);
+  const [sel, setSel] = useState<GameSel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [shareFlash, setShareFlash] = useState<"shared" | "copied" | null>(null);
@@ -134,14 +176,15 @@ export function App() {
   const wsRef = useRef<WebSocket | null>(null);
   const pinOkRef = useRef(false);
   const clockOffsetRef = useRef(0);
+  const offsetsRef = useRef<Record<string, number>>({ "": 0 });
 
   function applyServerNow(serverNow: number) {
     clockOffsetRef.current = serverNow - Date.now();
   }
 
-  function remainingOf(timer: TableTimerState | undefined): number {
+  function remainingOf(timer: TableTimerState | undefined, host = ""): number {
     if (!timer) return 0;
-    return getDisplayRemainingMs(timer, Date.now() + clockOffsetRef.current);
+    return getDisplayRemainingMs(timer, Date.now() + (offsetsRef.current[host] ?? clockOffsetRef.current));
   }
 
   const send = useCallback((msg: RemoteClientMsg) => {
@@ -201,8 +244,15 @@ export function App() {
       }
       if (msg.type === "snapshot") {
         if (typeof msg.serverNow === "number") applyServerNow(msg.serverNow);
+        const nextOffsets: Record<string, number> = { "": clockOffsetRef.current };
+        for (const peer of msg.peers ?? []) {
+          nextOffsets[peer.host] = (typeof peer.serverNow === "number" ? peer.serverNow : Date.now()) - Date.now();
+        }
+        offsetsRef.current = nextOffsets;
         setSnapshot(msg.snapshot);
         setTimers(msg.timers);
+        setHostname(msg.hostname ?? "");
+        setPeers(msg.peers ?? []);
         return;
       }
       if (msg.type === "error") {
@@ -275,10 +325,12 @@ export function App() {
   }, [pinOk, staff, tok, send]);
 
   useEffect(() => {
-    if (gameId != null && !snapshot.sessions.some((s) => s.gameId === gameId)) {
-      setGameId(null);
-    }
-  }, [gameId, snapshot.sessions]);
+    if (!sel) return;
+    const stillThere = listedGames(snapshot, timers, hostname, peers).some(
+      (g) => g.host === sel.host && g.session.gameId === sel.gameId,
+    );
+    if (!stillThere) setSel(null);
+  }, [sel, snapshot, timers, hostname, peers]);
 
   function handleConnect(e: React.FormEvent) {
     e.preventDefault();
@@ -296,7 +348,10 @@ export function App() {
   }
 
   async function shareKakaoStatus() {
-    const text = formatKakaoGameStatus(snapshot, timers);
+    const text = formatKakaoGameStatusFromOrigins([
+      { snapshot, timers },
+      ...peers.map((p) => ({ snapshot: p.snapshot, timers: p.timers })),
+    ]);
     const result = await shareGameStatus(text);
     if (result === "cancelled") return;
     if (result === "sheet") {
@@ -337,23 +392,27 @@ export function App() {
       return;
     }
     setStaff(null);
-    setGameId(null);
+    setSel(null);
     setTok("");
   }
 
-  const session = snapshot.sessions.find((s) => s.gameId === gameId) ?? null;
-  const timer = timers.find((t) => t.tableId === gameId);
+  const games = listedGames(snapshot, timers, hostname, peers);
+  const showHosts = peers.length > 0;
+  const selected = sel ? games.find((g) => g.host === sel.host && g.session.gameId === sel.gameId) ?? null : null;
+  const session = selected?.session ?? null;
+  const timer = selected?.timer;
   const ready = pinOk && (staffAuth === false || !!staff?.canControl);
+  const hostField = selected?.host ? { host: selected.host } : {};
 
   return (
     <div className="remote">
       <header className="remote-header">
-        {ready && gameId != null ? (
+        {ready && selected ? (
           <button
             type="button"
             className="games-list-btn"
             onClick={() => {
-              setGameId(null);
+              setSel(null);
               setMoreOpen(false);
             }}
           >
@@ -440,21 +499,27 @@ export function App() {
         </div>
       )}
 
-      {ready && gameId === null && (
+      {ready && !selected && (
         <div className="game-list">
           <p className="card-title">진행 중 게임</p>
-          {snapshot.sessions.length === 0 && <p className="muted">진행 중인 게임이 없습니다.</p>}
-          {snapshot.sessions.map((s) => {
-            const t = timers.find((x) => x.tableId === s.gameId);
+          {games.length === 0 && <p className="muted">진행 중인 게임이 없습니다.</p>}
+          {games.map((g) => {
+            const t = g.timer;
             return (
-              <button key={s.gameId} type="button" className="game-row" onClick={() => setGameId(s.gameId)}>
-                <span className="gid">G{s.gameId}</span>
+              <button
+                key={`${g.host}:${g.session.gameId}`}
+                type="button"
+                className="game-row"
+                onClick={() => setSel({ host: g.host, gameId: g.session.gameId })}
+              >
+                <span className="gid">G{g.session.gameId}</span>
                 <span className="ginfo">
-                  <strong>{s.structureName}</strong>
+                  <strong>{g.session.structureName}</strong>
+                  {showHosts && g.hostname ? <span className="ghost">{g.hostname}</span> : null}
                   <small>
                     {statusLabel(t?.status)} · {formatTimerLevelShort(t)} ·{" "}
                     {t && (t.status === "running" || t.status === "paused")
-                      ? formatRemainingMs(remainingOf(t))
+                      ? formatRemainingMs(remainingOf(t, g.host))
                       : "—"}
                   </small>
                 </span>
@@ -464,19 +529,24 @@ export function App() {
         </div>
       )}
 
-      {ready && session && (
+      {ready && session && selected && (
         <GamePad
           session={session}
           timer={timer}
-          remainingMs={remainingOf(timer)}
+          remainingMs={remainingOf(timer, selected.host)}
+          originLabel={showHosts ? selected.hostname : ""}
           moreOpen={moreOpen}
           onMore={() => setMoreOpen((v) => !v)}
-          onCommand={(action, sec) => send({ type: "command", gameId: session.gameId, action, sec })}
-          onCounter={(op, rebuyIndex) => send({ type: "counters", gameId: session.gameId, op, rebuyIndex })}
-          onReset={() => send({ type: "command", gameId: session.gameId, action: "reset" })}
+          onCommand={(action, sec) =>
+            send({ type: "command", gameId: session.gameId, action, sec, ...hostField })
+          }
+          onCounter={(op, rebuyIndex) =>
+            send({ type: "counters", gameId: session.gameId, op, rebuyIndex, ...hostField })
+          }
+          onReset={() => send({ type: "command", gameId: session.gameId, action: "reset", ...hostField })}
           onDelete={() => {
-            send({ type: "deleteGame", gameId: session.gameId });
-            setGameId(null);
+            send({ type: "deleteGame", gameId: session.gameId, ...hostField });
+            setSel(null);
             setMoreOpen(false);
           }}
         />
@@ -519,6 +589,7 @@ function GamePad({
   session,
   timer,
   remainingMs,
+  originLabel,
   moreOpen,
   onMore,
   onCommand,
@@ -529,6 +600,7 @@ function GamePad({
   session: GameSession;
   timer: TableTimerState | undefined;
   remainingMs: number;
+  originLabel?: string;
   moreOpen: boolean;
   onMore: () => void;
   onCommand: (action: RemoteTimerAction, sec?: number) => void;
@@ -547,6 +619,7 @@ function GamePad({
         <p className="status-name">
           G{session.gameId} {session.structureName}
         </p>
+        {originLabel ? <p className="muted">{originLabel}</p> : null}
         <div className="status-time-row">
           <p className="status-time">{formatRemainingMs(remaining)}</p>
           <div className="status-side">

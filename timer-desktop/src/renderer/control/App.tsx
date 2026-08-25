@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import type { BlindStructureOption, TableTimerState } from "@mnf/timer/types";
 import type { AppConfig, AppSnapshot, DisplayInfo, GameSession, UiThemeId } from "../../shared/types";
 import type { RemotePairingInfo } from "../../shared/remote";
+import type { LanDiscoveredGame, LanViewState } from "../../shared/lanView";
 import {
   applyDocumentTheme,
   DEFAULT_SOUND_VOLUME,
@@ -27,7 +28,8 @@ type View =
   | { kind: "blind-select" }
   | { kind: "game-control"; session: GameSession }
   | { kind: "monitor-preview"; slot: number }
-  | { kind: "setup" };
+  | { kind: "setup" }
+  | { kind: "lan-view"; title: string };
 
 type Popup =
   | { kind: "table"; slot: number; pos: { x: number; y: number } }
@@ -50,6 +52,8 @@ export function App() {
   const [qrSrc, setQrSrc] = useState<string | null>(null);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [quitConfirm, setQuitConfirm] = useState(false);
+  const [lanLeaveConfirm, setLanLeaveConfirm] = useState(false);
+  const [lanViewState, setLanViewState] = useState<LanViewState | null>(null);
   const [updaterStatus, setUpdaterStatus] = useState<{ status: string; version?: string; percent?: number; message?: string } | null>(null);
   const [theme, setTheme] = useState<UiThemeId>(DEFAULT_UI_THEME);
   const [soundVolume, setSoundVolume] = useState(DEFAULT_SOUND_VOLUME);
@@ -119,6 +123,7 @@ export function App() {
       setSoundVolume(next);
       setTimerSoundVolume(next);
     });
+    const unsubLan = window.controlApi.onLanViewState(setLanViewState);
 
     return () => {
       unsubSetup();
@@ -128,6 +133,7 @@ export function App() {
       unsubUpdater();
       unsubTheme();
       unsubVolume();
+      unsubLan();
     };
   }, [refresh]);
 
@@ -223,14 +229,24 @@ export function App() {
         return;
       }
 
+      if (lanLeaveConfirm) {
+        if (e.key === "Escape" || e.key === "2" || e.key === "n" || e.key === "N") { setLanLeaveConfirm(false); return; }
+        if (e.key === "1" || e.key === "y" || e.key === "Y") {
+          setLanLeaveConfirm(false);
+          void leaveLanView();
+        }
+        return;
+      }
+
       if (e.key === "Escape") {
         if (qrOpen) { setQrOpen(false); return; }
         if (themeMenuOpen) { setThemeMenuOpen(false); return; }
         if (settingsOpen) { setSettingsOpen(false); return; }
         if (popup) { setPopup(null); return; }
-        if (typing) return; // 문구 편집 중 ESC는 GameControlView에서 처리
+        if (view.kind === "blind-select") return;
+        if (view.kind === "lan-view") { setLanLeaveConfirm(true); return; }
+        if (typing) return;
         if (view.kind !== "main") { setView({ kind: "main" }); return; }
-        // main 화면에서 ESC → 설정 메뉴
         setSettingsOpen(true);
         return;
       }
@@ -292,7 +308,7 @@ export function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [view, popup, settingsOpen, themeMenuOpen, quitConfirm, qrOpen, handleSetTheme]);
+  }, [view, popup, settingsOpen, themeMenuOpen, quitConfirm, lanLeaveConfirm, qrOpen, handleSetTheme]);
 
   // ── 플로어 단축키 (main 뷰 + 팝업 없을 때) ───────────────────
   useEffect(() => {
@@ -327,7 +343,7 @@ export function App() {
         !!t?.closest?.('[contenteditable="true"]')
       ) return;
       if (view.kind !== "main") return;
-      if (popup || settingsOpen || quitConfirm || qrOpen) return;
+      if (popup || settingsOpen || quitConfirm || lanLeaveConfirm || qrOpen) return;
 
       // 한글이면 영문으로 변환
       const raw = e.key.length === 1 ? e.key.toLowerCase() : e.key;
@@ -369,7 +385,7 @@ export function App() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [view, popup, settingsOpen, quitConfirm, qrOpen, snapshot]);
+  }, [view, popup, settingsOpen, quitConfirm, lanLeaveConfirm, qrOpen, snapshot]);
 
   // ── 게임 생성 ───────────────────────────────────────────────
 
@@ -410,6 +426,38 @@ export function App() {
     setPending(false);
     if (!result.ok) { setError(result.error); return; }
     setView({ kind: "game-control", session: result.session });
+  }
+
+  async function handlePickLocalGame(gameId: number): Promise<void> {
+    setPending(true);
+    setError(null);
+    const result = await window.controlApi.assignAllMonitors(gameId);
+    setPending(false);
+    if (!result.ok) { setError(result.error); return; }
+    setView({ kind: "main" });
+  }
+
+  async function handlePickLanGame(game: LanDiscoveredGame): Promise<void> {
+    setPending(true);
+    setError(null);
+    const result = await window.controlApi.startLanView({
+      host: game.host,
+      hostname: game.hostname,
+      gameId: game.gameId,
+      structureName: game.structureName,
+      theme: game.theme,
+      soundVolume: game.soundVolume,
+    });
+    setPending(false);
+    if (!result.ok) { setError(result.error); return; }
+    setView({ kind: "lan-view", title: `${game.hostname} · G${game.gameId} ${game.structureName}` });
+  }
+
+  async function leaveLanView(): Promise<void> {
+    await window.controlApi.stopLanView();
+    setLanViewState(null);
+    setLanLeaveConfirm(false);
+    setView({ kind: "main" });
   }
 
   // ── 게임 삭제 ───────────────────────────────────────────────
@@ -465,7 +513,7 @@ export function App() {
 
   return (
     <div className="shell compact">
-      {view.kind !== "monitor-preview" && (
+      {view.kind !== "monitor-preview" && view.kind !== "lan-view" && (
         <header className="shell-header compact-header">
           <div className="header-brand">
             <button
@@ -525,10 +573,13 @@ export function App() {
           options={blinds}
           loading={blindsLoading}
           pending={pending}
+          localSessions={snapshot.sessions}
+          timers={timers}
           onBack={() => setView({ kind: "main" })}
           onSelect={(s) => void handleCreateGame(s)}
-          onOpenSettings={() => setSettingsOpen(true)}
           onRefresh={() => void openBlindSelect()}
+          onPickLocalGame={(id) => void handlePickLocalGame(id)}
+          onPickLanGame={(g) => void handlePickLanGame(g)}
         />
       )}
 
@@ -542,6 +593,21 @@ export function App() {
           onCommand={(action, options) => void handleCommand(currentSession.gameId, action, options)}
           onDeleteGame={() => void handleDeleteGame(currentSession.gameId)}
         />
+      )}
+
+      {!loading && view.kind === "lan-view" && (
+        <section className="lan-view-page">
+          <button type="button" className="back-btn" onClick={() => setLanLeaveConfirm(true)}>
+            ← 뒤로
+          </button>
+          <p className="lan-view-page__title">{view.title}</p>
+          {error && <p className="error">{error}</p>}
+          <MonitorPreviewView
+            slot={1}
+            session={lanViewState?.session ?? null}
+            timerState={lanViewState?.timer ?? null}
+          />
+        </section>
       )}
 
       {!loading && view.kind === "monitor-preview" && (
@@ -767,6 +833,32 @@ export function App() {
                 onClick={() => setQrOpen(false)}
               >
                 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {lanLeaveConfirm && (
+        <div className="settings-overlay">
+          <div className="settings-popup">
+            <h3 className="settings-popup__title">뒤로 돌아가시겠습니까?</h3>
+            <div className="settings-popup__row">
+              <button
+                type="button"
+                className="confirm-btn confirm-btn--yes"
+                onClick={() => void leaveLanView()}
+              >
+                <span className="confirm-btn__key">1</span>
+                YES
+              </button>
+              <button
+                type="button"
+                className="confirm-btn confirm-btn--no"
+                onClick={() => setLanLeaveConfirm(false)}
+              >
+                <span className="confirm-btn__key">2</span>
+                NO
               </button>
             </div>
           </div>

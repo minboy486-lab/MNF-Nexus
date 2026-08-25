@@ -56,19 +56,31 @@ function gameBlock(session: GameSession, snapshot: AppSnapshot, timers: TableTim
   return `${title}\n${indent}${levelLine}`;
 }
 
-export function formatKakaoGameStatus(snapshot: AppSnapshot, timers: TableTimerState[]): string {
-  const games = [...snapshot.sessions].sort((a, b) => {
-    const ta = tablesForGame(snapshot, a)[0] ?? 99;
-    const tb = tablesForGame(snapshot, b)[0] ?? 99;
-    return ta - tb || a.gameId - b.gameId;
+export type KakaoOrigin = {
+  snapshot: AppSnapshot;
+  timers: TableTimerState[];
+};
+
+export function formatKakaoGameStatusFromOrigins(origins: KakaoOrigin[]): string {
+  const games = origins.flatMap((o) =>
+    [...o.snapshot.sessions].map((session) => ({ session, origin: o })),
+  );
+  games.sort((a, b) => {
+    const ta = tablesForGame(a.origin.snapshot, a.session)[0] ?? 99;
+    const tb = tablesForGame(b.origin.snapshot, b.session)[0] ?? 99;
+    return ta - tb || a.session.gameId - b.session.gameId;
   });
-  const blocks = games.map((s) => gameBlock(s, snapshot, timers)).join("\n\n");
+  const blocks = games.map((g) => gameBlock(g.session, g.origin.snapshot, g.origin.timers)).join("\n\n");
   const body = blocks ? `${blocks}\n\n` : "";
   return `☪️ MNF HOLDEM ☪️
 
  ✨ MNF HOLDEM 진행현황 ✨
 
 ${body}${SHARE_FOOTER}`;
+}
+
+export function formatKakaoGameStatus(snapshot: AppSnapshot, timers: TableTimerState[]): string {
+  return formatKakaoGameStatusFromOrigins([{ snapshot, timers }]);
 }
 
 export type ShareStatusResult = "shared" | "cancelled" | "sheet";

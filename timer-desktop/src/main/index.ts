@@ -23,7 +23,7 @@ import { join, resolve } from "node:path";
 import { app, BrowserWindow, screen } from "electron";
 import { loadConfig } from "./config/configStore";
 import { enrichMappingsWithCurrentDisplays } from "./screen/displayMapper";
-import { flushPendingSoundVolume, registerIpcHandlers } from "./ipc/handlers";
+import { flushPendingSoundVolume, registerIpcHandlers, stopLanView } from "./ipc/handlers";
 import { TimerHub } from "./timer/timerHub";
 import { WindowManager } from "./windows/windowManager";
 import { setupAutoUpdater } from "./updater";
@@ -55,6 +55,10 @@ function registerScreenEvents(): void {
 }
 
 app.whenReady().then(async () => {
+  remoteServer.setAppearance(
+    () => windowManager.getTheme(),
+    () => windowManager.getSoundVolume(),
+  );
   registerIpcHandlers(windowManager, timerHub, remoteServer);
   setupAutoUpdater();
   registerScreenEvents();
@@ -80,6 +84,7 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   flushPendingSoundVolume(windowManager);
+  stopLanView();
   windowManager.setQuitting(true);
   remoteServer.stop();
 });

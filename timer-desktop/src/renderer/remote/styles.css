@@ -196,6 +196,7 @@ body {
 .gid { font-weight: 800; color: #ffb6c9; width: 42px; }
 .ginfo { display: flex; flex-direction: column; gap: 4px; }
 .ginfo small { color: #9b9298; }
+.ghost { display: block; font-size: 12px; font-weight: 600; color: #c4b8be; }
 
 .status { text-align: center; padding: 8px 0 4px; }
 .status-name { font-weight: 700; }

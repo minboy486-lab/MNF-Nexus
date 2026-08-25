@@ -2,6 +2,7 @@ import type { AppSnapshot } from "./types";
 import type { TableTimerState } from "@mnf/timer/types";
 
 export const REMOTE_PORT = 17890;
+export const LAN_CLUSTER_PATH = "/lan/cluster";
 export const PUNCH_TOKEN_TTL_MS = 3 * 60 * 1000;
 
 export const REMOTE_TIMER_ACTIONS = [
@@ -36,9 +37,21 @@ export type RemoteClientMsg =
   | { type: "punch"; token: string }
   | { type: "checkout" }
   | { type: "logout" }
-  | { type: "command"; gameId: number; action: RemoteTimerAction; sec?: number }
-  | { type: "counters"; gameId: number; op: RemoteCounterOp; rebuyIndex?: number }
-  | { type: "deleteGame"; gameId: number };
+  | { type: "command"; gameId: number; action: RemoteTimerAction; sec?: number; host?: string }
+  | { type: "counters"; gameId: number; op: RemoteCounterOp; rebuyIndex?: number; host?: string }
+  | { type: "deleteGame"; gameId: number; host?: string }
+  | { type: "view"; gameId: number }
+  | { type: "peer_hello"; pin: string }
+  | { type: "peer_command"; gameId: number; action: RemoteTimerAction; sec?: number }
+  | { type: "peer_counters"; gameId: number; op: RemoteCounterOp; rebuyIndex?: number }
+  | { type: "peer_deleteGame"; gameId: number }
+  | {
+      type: "peer_snapshot";
+      hostname: string;
+      snapshot: AppSnapshot;
+      timers: TableTimerState[];
+      serverNow: number;
+    };
 
 export type RemoteStaffState = {
   name: string;
@@ -48,11 +61,27 @@ export type RemoteStaffState = {
   checkedInAt: string | null;
 };
 
+export type RemotePeerSnapshot = {
+  host: string;
+  hostname: string;
+  snapshot: AppSnapshot;
+  timers: TableTimerState[];
+  serverNow: number;
+};
+
 export type RemoteServerMsg =
   | { type: "hello_ok"; staffAuth: boolean; serverNow: number }
   | { type: "hello_fail"; error: string }
   | { type: "staff"; staff: RemoteStaffState; sessionToken: string }
-  | { type: "snapshot"; snapshot: AppSnapshot; timers: TableTimerState[]; serverNow: number }
+  | {
+      type: "snapshot";
+      snapshot: AppSnapshot;
+      timers: TableTimerState[];
+      serverNow: number;
+      hostname?: string;
+      peers?: RemotePeerSnapshot[];
+    }
+  | { type: "view_ok"; gameId: number; theme: string; soundVolume: number; serverNow: number }
   | { type: "error"; error: string };
 
 export type RemotePairingInfo = {
