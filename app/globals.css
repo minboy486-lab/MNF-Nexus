@@ -46,6 +46,10 @@
   --font-sans: var(--font-hanken);
 }
 
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 html {
   color-scheme: dark;
 }
@@ -2763,7 +2767,7 @@ body {
   border-radius: 1.15rem;
   background: #05070c;
   aspect-ratio: 3 / 4;
-  max-height: 70dvh;
+  max-height: min(70dvh, calc(100dvh - 16rem));
   isolation: isolate;
 }
 .staff-qr__video,

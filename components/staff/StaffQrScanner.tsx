@@ -1,7 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
+import {
+  isCameraDeniedError,
+  openAppSettings,
+  openStaffCamera,
+  queryCameraPermission,
+} from "@/lib/staff/staff-camera";
 
 type Props = {
   hint: string;
@@ -22,22 +28,6 @@ function getDetector(): DetectorCtor | null {
   return (
     (window as unknown as { BarcodeDetector?: DetectorCtor }).BarcodeDetector ?? null
   );
-}
-
-async function openCamera(): Promise<MediaStream> {
-  try {
-    return await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        facingMode: { ideal: "environment" },
-        width: { ideal: 1280, max: 1920 },
-        height: { ideal: 720, max: 1080 },
-        frameRate: { ideal: 30, max: 30 },
-      },
-    });
-  } catch {
-    return navigator.mediaDevices.getUserMedia({ audio: false, video: true });
-  }
 }
 
 async function preferContinuousFocus(stream: MediaStream): Promise<void> {
@@ -92,9 +82,11 @@ export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · �
   const lockedRef = useRef(false);
   const shutterTimer = useRef<number | null>(null);
   const resumeTimer = useRef<number | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const cancelLoopRef = useRef<(() => void) | null>(null);
+  const stoppedRef = useRef(false);
   const [camError, setCamError] = useState<string | null>(null);
   const [camDenied, setCamDenied] = useState(false);
-  const [retry, setRetry] = useState(0);
   const [phase, setPhase] = useState<Phase>("scanning");
   const [flash, setFlash] = useState(false);
 
@@ -119,11 +111,8 @@ export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · �
     void videoRef.current?.play().catch(() => undefined);
   }, [paused, busy]);
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    let stream: MediaStream | null = null;
-    let stopped = false;
+  const beginScanLoop = useCallback((video: HTMLVideoElement) => {
+    cancelLoopRef.current?.();
     let inFlight = false;
     let raf = 0;
     let vfc = 0;
@@ -141,9 +130,10 @@ export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · �
       }
       vfc = 0;
     };
+    cancelLoopRef.current = cancelLoop;
 
     const schedule = (fn: () => void) => {
-      if (stopped) return;
+      if (stoppedRef.current) return;
       if (videoWithVfc.requestVideoFrameCallback) {
         vfc = videoWithVfc.requestVideoFrameCallback(() => fn());
       } else {
@@ -152,7 +142,7 @@ export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · �
     };
 
     const capture = (raw: string) => {
-      if (lockedRef.current || stopped) return;
+      if (lockedRef.current || stoppedRef.current) return;
       lockedRef.current = true;
       const freeze = freezeCanvasRef.current;
       if (freeze) drawFreezeFrame(video, freeze);
@@ -174,7 +164,7 @@ export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · �
       if (!keepFrozen) {
         if (resumeTimer.current) window.clearTimeout(resumeTimer.current);
         resumeTimer.current = window.setTimeout(() => {
-          if (stopped || pausedRef.current) return;
+          if (stoppedRef.current || pausedRef.current) return;
           lockedRef.current = false;
           setPhase("scanning");
           void video.play().catch(() => undefined);
@@ -183,7 +173,7 @@ export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · �
     };
 
     const tick = async () => {
-      if (stopped) return;
+      if (stoppedRef.current) return;
       if (!inFlight && !pausedRef.current && !lockedRef.current && video.readyState >= 2) {
         inFlight = true;
         try {
@@ -202,50 +192,76 @@ export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · �
           inFlight = false;
         }
       }
-      if (!stopped) schedule(() => void tick());
+      if (!stoppedRef.current) schedule(() => void tick());
     };
 
-    async function start() {
-      if (!video) return;
-      try {
-        stream = await openCamera();
-        if (stopped) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        await preferContinuousFocus(stream);
-        video.srcObject = stream;
-        video.setAttribute("playsinline", "true");
-        video.muted = true;
-        await video.play();
-        setCamError(null);
-        setCamDenied(false);
-      } catch (err) {
-        const denied =
-          err instanceof DOMException &&
-          (err.name === "NotAllowedError" || err.name === "PermissionDeniedError");
-        setCamDenied(denied);
-        setCamError(
-          denied
-            ? "카메라 권한을 허용해 주세요. 여기를 누르면 다시 요청합니다."
-            : "카메라를 열 수 없습니다. 여기를 눌러 다시 시도해 주세요.",
-        );
+    const Detector = getDetector();
+    detector = Detector ? new Detector({ formats: ["qr_code"] }) : null;
+    schedule(() => void tick());
+  }, []);
+
+  const attachStream = useCallback(
+    async (stream: MediaStream) => {
+      const video = videoRef.current;
+      if (!video || stoppedRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
         return;
       }
-      const Detector = getDetector();
-      detector = Detector ? new Detector({ formats: ["qr_code"] }) : null;
-      schedule(() => void tick());
-    }
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = stream;
+      await preferContinuousFocus(stream);
+      video.srcObject = stream;
+      video.setAttribute("playsinline", "true");
+      video.muted = true;
+      await video.play();
+      setCamError(null);
+      setCamDenied(false);
+      lockedRef.current = !!pausedRef.current;
+      setPhase(pausedRef.current ? "busy" : "scanning");
+      beginScanLoop(video);
+    },
+    [beginScanLoop],
+  );
 
-    void start();
+  const startCamera = useCallback(
+    async (stream?: MediaStream) => {
+      try {
+        const next = stream ?? (await openStaffCamera());
+        if (stoppedRef.current) {
+          next.getTracks().forEach((t) => t.stop());
+          return false;
+        }
+        await attachStream(next);
+        return true;
+      } catch (err) {
+        const denied = isCameraDeniedError(err);
+        setCamDenied(denied);
+        setCamError(denied ? "카메라 권한" : "카메라 오류");
+        return false;
+      }
+    },
+    [attachStream],
+  );
+
+  useEffect(() => {
+    stoppedRef.current = false;
+    void startCamera();
+    function onVisible() {
+      if (document.visibilityState !== "visible") return;
+      if (streamRef.current?.getVideoTracks().some((t) => t.readyState === "live")) return;
+      void startCamera();
+    }
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
-      stopped = true;
-      cancelLoop();
+      stoppedRef.current = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      cancelLoopRef.current?.();
       if (shutterTimer.current) window.clearTimeout(shutterTimer.current);
       if (resumeTimer.current) window.clearTimeout(resumeTimer.current);
-      stream?.getTracks().forEach((t) => t.stop());
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
     };
-  }, [retry]);
+  }, [startCamera]);
 
   const frozen = phase !== "scanning";
   const badge =
@@ -254,19 +270,27 @@ export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · �
       ? busyLabel
       : phase === "captured"
         ? "촬영됨 · QR 인식"
-        : "스캔 중 · QR을 네모 안에");
+        : "스캔 중");
 
-  function retryCamera() {
-    if (camDenied && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
-      window.location.href = "app-settings:";
+  async function allowCamera() {
+    const state = await queryCameraPermission();
+    if (state === "denied") {
+      openAppSettings();
+      return;
     }
-    setCamError(null);
-    setCamDenied(false);
-    setRetry((n) => n + 1);
+    try {
+      const stream = await openStaffCamera();
+      await startCamera(stream);
+    } catch (err) {
+      const denied = isCameraDeniedError(err);
+      setCamDenied(denied);
+      setCamError(denied ? "카메라 권한" : "카메라 오류");
+      if (denied && state === "unknown") openAppSettings();
+    }
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
       <div className={`staff-qr ${frozen ? "staff-qr--frozen" : ""}`} data-phase={phase}>
         <video
           ref={videoRef}
@@ -288,57 +312,42 @@ export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · �
           <span className="staff-qr__corner staff-qr__corner--tr" />
           <span className="staff-qr__corner staff-qr__corner--bl" />
           <span className="staff-qr__corner staff-qr__corner--br" />
-          {!frozen && <span className="staff-qr__scanline" />}
+          {!frozen && !camError && <span className="staff-qr__scanline" />}
         </div>
-        <div
-          className={`staff-qr__badge${frozen ? " staff-qr__badge--ok" : ""}${camError ? " staff-qr__badge--action" : ""}`}
-          role={camError ? "button" : undefined}
-          tabIndex={camError ? 0 : undefined}
-          onClick={camError ? retryCamera : undefined}
-          onKeyDown={
-            camError
-              ? (e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    retryCamera();
-                  }
-                }
-              : undefined
-          }
-        >
-          {phase === "busy" ? (
-            <svg className="staff-qr__badge-icon staff-qr__badge-icon--spin" viewBox="0 0 24 24" aria-hidden>
-              <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="2.4" strokeDasharray="36 14" />
-            </svg>
-          ) : frozen ? (
-            <svg className="staff-qr__badge-icon" viewBox="0 0 24 24" aria-hidden>
-              <circle cx="12" cy="12" r="9" fill="currentColor" opacity="0.18" />
-              <path d="M7.5 12.4 10.4 15.2 16.5 8.8" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          ) : (
-            <svg className="staff-qr__badge-icon" viewBox="0 0 24 24" aria-hidden>
-              <rect x="4" y="4" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.8" />
-              <rect x="14" y="4" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.8" />
-              <rect x="4" y="14" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.8" />
-              <path d="M14 14h3v3h-3zM19 14h1v1M14 19h1M18 18h2v2" fill="currentColor" />
-            </svg>
-          )}
-          {badge}
-        </div>
+        {!camError && (
+          <div className={`staff-qr__badge${frozen ? " staff-qr__badge--ok" : ""}`}>
+            {phase === "busy" ? (
+              <svg className="staff-qr__badge-icon staff-qr__badge-icon--spin" viewBox="0 0 24 24" aria-hidden>
+                <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="2.4" strokeDasharray="36 14" />
+              </svg>
+            ) : frozen ? (
+              <svg className="staff-qr__badge-icon" viewBox="0 0 24 24" aria-hidden>
+                <circle cx="12" cy="12" r="9" fill="currentColor" opacity="0.18" />
+                <path d="M7.5 12.4 10.4 15.2 16.5 8.8" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : (
+              <svg className="staff-qr__badge-icon" viewBox="0 0 24 24" aria-hidden>
+                <rect x="4" y="4" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.8" />
+                <rect x="14" y="4" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.8" />
+                <rect x="4" y="14" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M14 14h3v3h-3zM19 14h1v1M14 19h1M18 18h2v2" fill="currentColor" />
+              </svg>
+            )}
+            {badge}
+          </div>
+        )}
       </div>
       {camError ? (
         <button
           type="button"
-          className="w-full text-sm text-error text-center underline underline-offset-2"
-          onClick={retryCamera}
+          className="w-full min-h-12 rounded-xl bg-primary text-on-primary text-sm font-bold active:scale-[0.97] transition-transform"
+          onClick={() => void allowCamera()}
         >
-          {camDenied
-            ? "권한을 허용해 주세요. 눌러서 다시 요청하거나, 아이폰은 설정 앱으로 이동합니다."
-            : camError}
+          {camDenied ? "권한 허용" : "다시 시도"}
         </button>
       ) : (
         <p className="text-sm text-on-surface-variant text-center">
-          {frozen ? "촬영된 화면입니다. 잠시만 기다려 주세요." : hint}
+          {frozen ? "잠시만 기다려 주세요" : hint}
         </p>
       )}
     </div>

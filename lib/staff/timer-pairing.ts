@@ -1,6 +1,5 @@
 export const STAFF_TIMER_PAIRING_KEY = "mnf-staff-timer-pairing";
 export const CONTROLLER_REMOTE_PORT = 17890;
-export const LAN_WIFI_ERROR = "매장 와이파이에 연결한 뒤 다시 스캔해 주세요";
 
 export type StaffTimerPairing = {
   url: string;
@@ -80,12 +79,10 @@ export function subscribeTimerPairing(onChange: () => void): () => void {
   return () => window.removeEventListener("storage", onChange);
 }
 
-export const STAFF_LAN_NAV_KEY = "mnf-staff-lan-nav";
 export const CLOCK_IN_HOME_KEY = "mnf-clock-in-go-home";
 
 export function markClockInGoHome(): void {
   sessionStorage.setItem(CLOCK_IN_HOME_KEY, "1");
-  sessionStorage.removeItem(STAFF_LAN_NAV_KEY);
 }
 
 export function consumeClockInGoHome(): boolean {
@@ -96,19 +93,6 @@ export function consumeClockInGoHome(): boolean {
 
 export function hasClockInGoHome(): boolean {
   return sessionStorage.getItem(CLOCK_IN_HOME_KEY) === "1";
-}
-
-export function markLanNavigation(): void {
-  sessionStorage.setItem(STAFF_LAN_NAV_KEY, String(Date.now()));
-}
-
-/** 컨트롤러 연결에 실패하고 바로 돌아온 경우 */
-export function consumeFailedLanNavigation(windowMs = 60_000): boolean {
-  const raw = sessionStorage.getItem(STAFF_LAN_NAV_KEY);
-  if (!raw) return false;
-  const t = Number(raw);
-  sessionStorage.removeItem(STAFF_LAN_NAV_KEY);
-  return Number.isFinite(t) && Date.now() - t < windowMs;
 }
 
 export function timerRemoteHref(

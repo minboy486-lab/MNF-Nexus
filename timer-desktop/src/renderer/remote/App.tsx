@@ -428,9 +428,16 @@ export function App() {
             ← 게임 목록
           </button>
         ) : websiteUrl("/staff") ? (
-          <a className="games-list-btn" href={websiteUrl("/staff") ?? "/staff"}>
+          <button
+            type="button"
+            className="games-list-btn"
+            onClick={() => {
+              const url = websiteUrl("/staff");
+              if (url) window.location.replace(url);
+            }}
+          >
             ← 뒤로
-          </a>
+          </button>
         ) : (
           <>
             <img src={logoUrl} alt="MNF" className="remote-logo" />
@@ -465,7 +472,7 @@ export function App() {
       {!pinOk && !staff && (
         <form className="card" onSubmit={handleConnect}>
           <p className="card-title">컨트롤러 연결</p>
-          <p className="muted">같은 Wi-Fi에서 한 번만 QR을 스캔하면, 퇴근 전까지 다시 찍지 않아도 됩니다.</p>
+          <p className="muted">같은 와이파이에서 PIN 4자리를 입력하세요.</p>
           <input
             inputMode="numeric"
             maxLength={4}

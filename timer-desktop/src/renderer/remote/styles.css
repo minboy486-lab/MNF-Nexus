@@ -39,6 +39,7 @@ body {
   border: 1px solid rgba(255, 182, 201, 0.5);
   background: rgba(255, 182, 201, 0.18);
   color: #ffb6c9;
+  font-family: inherit;
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;

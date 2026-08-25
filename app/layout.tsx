@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
@@ -13,6 +13,13 @@ const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   weight: ["400", "600", "700"],
 });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0d0b12",
+};
 
 export const metadata: Metadata = {
   title: "MNF HOLDEM | Nexus",
