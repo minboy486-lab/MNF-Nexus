@@ -1,6 +1,6 @@
 {
   "name": "mnf-timer-desktop",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "private": true,
   "main": "./out/main/index.js",
   "scripts": {
@@ -50,7 +50,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "MNF Timer"
+      "shortcutName": "MNF Timer",
+      "artifactName": "MNF-Timer-Setup-${version}.${ext}"
     },
     "mac": {
       "target": "dmg",

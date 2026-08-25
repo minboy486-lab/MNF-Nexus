@@ -89,6 +89,33 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run dist:win -- --publish never
 
+      # GitHub Release rewrites spaces in asset names to dots, but leaves
+      # latest.yml contents unchanged — electron-updater then 404s. Fail
+      # before upload if the installer name in latest.yml has spaces or
+      # does not match the built exe.
+      - name: Verify installer name matches latest.yml
+        shell: bash
+        run: |
+          set -euo pipefail
+          YML=dist/latest.yml
+          PATH_NAME=$(sed -n 's/^path:[[:space:]]*//p' "$YML" | head -n1 | tr -d '\r')
+          if [ -z "$PATH_NAME" ]; then
+            echo "latest.yml has no path field"
+            cat "$YML"
+            exit 1
+          fi
+          if [[ "$PATH_NAME" == *" "* ]]; then
+            echo "latest.yml path has spaces: $PATH_NAME"
+            echo "GitHub Release would rewrite spaces to dots and break in-app updates."
+            exit 1
+          fi
+          if [ ! -f "dist/$PATH_NAME" ]; then
+            echo "Installer missing: dist/$PATH_NAME"
+            ls -la dist/
+            exit 1
+          fi
+          echo "Installer name OK: $PATH_NAME"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

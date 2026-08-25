@@ -13,6 +13,10 @@ function send(event: string, data?: unknown) {
 }
 
 export function setupAutoUpdater(): void {
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.disableDifferentialDownload = true;
+
   autoUpdater.on("checking-for-update", () => {
     send("updater:status", { status: "checking" });
   });
