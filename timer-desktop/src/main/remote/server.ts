@@ -187,7 +187,7 @@ export class RemoteServer {
   private snapshotMsg(): RemoteServerMsg {
     const hub = this.hub;
     if (!hub) return { type: "error", error: "서버 준비 전입니다." };
-    return { type: "snapshot", snapshot: hub.getSnapshot(), timers: hub.getAllTimers() };
+    return { type: "snapshot", snapshot: hub.getSnapshot(), timers: hub.getAllTimers(), serverNow: Date.now() };
   }
 
   private canOperate(state: SockState): boolean {
@@ -197,7 +197,7 @@ export class RemoteServer {
   }
 
   private helloOk(): RemoteServerMsg {
-    return { type: "hello_ok", staffAuth: this.staffAuthEnabled };
+    return { type: "hello_ok", staffAuth: this.staffAuthEnabled, serverNow: Date.now() };
   }
 
   private afterPin(ws: WebSocket, state: SockState): void {

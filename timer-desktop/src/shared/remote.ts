@@ -48,10 +48,10 @@ export type RemoteStaffState = {
 };
 
 export type RemoteServerMsg =
-  | { type: "hello_ok"; staffAuth: boolean }
+  | { type: "hello_ok"; staffAuth: boolean; serverNow: number }
   | { type: "hello_fail"; error: string }
   | { type: "staff"; staff: RemoteStaffState; sessionToken: string }
-  | { type: "snapshot"; snapshot: AppSnapshot; timers: TableTimerState[] }
+  | { type: "snapshot"; snapshot: AppSnapshot; timers: TableTimerState[]; serverNow: number }
   | { type: "error"; error: string };
 
 export type RemotePairingInfo = {

@@ -101,6 +101,16 @@ export function App() {
   const [, setTick] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const pinOkRef = useRef(false);
+  const clockOffsetRef = useRef(0);
+
+  function applyServerNow(serverNow: number) {
+    clockOffsetRef.current = serverNow - Date.now();
+  }
+
+  function remainingOf(timer: TableTimerState | undefined): number {
+    if (!timer) return 0;
+    return getDisplayRemainingMs(timer, Date.now() + clockOffsetRef.current);
+  }
 
   const send = useCallback((msg: RemoteClientMsg) => {
     const ws = wsRef.current;
@@ -134,6 +144,7 @@ export function App() {
         setPinOk(true);
         setStaffAuth(msg.staffAuth);
         setError(null);
+        if (typeof msg.serverNow === "number") applyServerNow(msg.serverNow);
         const sessionToken = localStorage.getItem(LS_SESSION);
         const claimId = initial.loginId || localStorage.getItem(LS_LOGIN) || "";
         if (msg.staffAuth && tok && claimId) {
@@ -165,6 +176,7 @@ export function App() {
         return;
       }
       if (msg.type === "snapshot") {
+        if (typeof msg.serverNow === "number") applyServerNow(msg.serverNow);
         setSnapshot(msg.snapshot);
         setTimers(msg.timers);
         return;
@@ -364,7 +376,7 @@ export function App() {
                   <small>
                     {statusLabel(t?.status)} · {isBreak ? "BREAK" : `Lv ${t?.blindLevel ?? 1}`} ·{" "}
                     {t && (t.status === "running" || t.status === "paused")
-                      ? formatRemainingMs(getDisplayRemainingMs(t))
+                      ? formatRemainingMs(remainingOf(t))
                       : "—"}
                   </small>
                 </span>
@@ -378,6 +390,7 @@ export function App() {
         <GamePad
           session={session}
           timer={timer}
+          remainingMs={remainingOf(timer)}
           moreOpen={moreOpen}
           onMore={() => setMoreOpen((v) => !v)}
           onCommand={(action, sec) => send({ type: "command", gameId: session.gameId, action, sec })}
@@ -413,6 +426,7 @@ export function App() {
 function GamePad({
   session,
   timer,
+  remainingMs,
   moreOpen,
   onMore,
   onCommand,
@@ -422,6 +436,7 @@ function GamePad({
 }: {
   session: GameSession;
   timer: TableTimerState | undefined;
+  remainingMs: number;
   moreOpen: boolean;
   onMore: () => void;
   onCommand: (action: RemoteTimerAction, sec?: number) => void;
@@ -429,7 +444,7 @@ function GamePad({
   onReset: () => void;
   onDelete: () => void;
 }) {
-  const remaining = timer ? getDisplayRemainingMs(timer) : 0;
+  const remaining = remainingMs;
   const isBreak = !!timer?.blindStructureId && timer.smallBlind === 0 && timer.bigBlind === 0;
   const running = timer?.status === "running";
   const rebuyTotal = (session.rebuys ?? []).reduce((sum, n) => sum + n, 0);
