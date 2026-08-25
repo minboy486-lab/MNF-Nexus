@@ -13,7 +13,7 @@ import {
 import { MpNumericInput } from "@/components/ui/MpNumericInput";
 import { NumericInput } from "@/components/ui/NumericInput";
 import { presetToFormState } from "@/lib/presets/preset-form";
-import { createDefaultStructure, countPlayLevels } from "@/lib/presets/structure";
+import { createDefaultStructure, countPlayLevels, validateStructureForSave } from "@/lib/presets/structure";
 import type {
   BlindStructureRow,
   GamePreset,
@@ -56,6 +56,9 @@ const defaultForm = {
   participationPoints: 0,
   prizePoolPercent: 100,
   structure: createDefaultStructure(),
+  gtdEnabled: false,
+  gtdAmount: 0,
+  gtdEntryThreshold: 0,
 };
 
 function FieldBlock({
@@ -64,12 +67,14 @@ function FieldBlock({
   value,
   onChange,
   mp,
+  emptyWhenZero,
 }: {
   label: string;
   id: string;
   value: number;
   onChange: (n: number) => void;
   mp?: boolean;
+  emptyWhenZero?: boolean;
 }) {
   return (
     <div>
@@ -83,11 +88,18 @@ function FieldBlock({
             valueWon={value}
             onChangeWon={onChange}
             className={`${fieldCls} flex-1`}
+            emptyWhenZero={emptyWhenZero}
           />
           <span className="text-xs text-on-surface-variant shrink-0">MP</span>
         </div>
       ) : (
-        <NumericInput id={id} value={value} onChange={onChange} className={fieldCls} />
+        <NumericInput
+          id={id}
+          value={value}
+          onChange={onChange}
+          className={fieldCls}
+          emptyWhenZero={emptyWhenZero}
+        />
       )}
     </div>
   );
@@ -133,7 +145,12 @@ export function PresetFormModal({ onClose, onSaved, preset }: Props) {
     initial?.prizePoolPercent ?? defaultForm.prizePoolPercent,
   );
   const [structure, setStructure] = useState<BlindStructureRow[]>(
-    initial?.structure ?? defaultForm.structure,
+    () => initial?.structure ?? createDefaultStructure(),
+  );
+  const [gtdEnabled, setGtdEnabled] = useState(initial?.gtdEnabled ?? defaultForm.gtdEnabled);
+  const [gtdAmount, setGtdAmount] = useState(initial?.gtdAmount ?? defaultForm.gtdAmount);
+  const [gtdEntryThreshold, setGtdEntryThreshold] = useState(
+    initial?.gtdEntryThreshold ?? defaultForm.gtdEntryThreshold,
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -154,6 +171,21 @@ export function PresetFormModal({ onClose, onSaved, preset }: Props) {
       setError("블라인드 레벨을 1개 이상 추가하세요.");
       return;
     }
+    const structureError = validateStructureForSave(structure);
+    if (structureError) {
+      setError(structureError);
+      return;
+    }
+    if (gtdEnabled) {
+      if (!gtdAmount) {
+        setError("GTD 금액을 입력하세요.");
+        return;
+      }
+      if (!gtdEntryThreshold) {
+        setError("GTD 기준 엔트리를 입력하세요.");
+        return;
+      }
+    }
     setPending(true);
     setError(null);
     const payload = {
@@ -173,6 +205,9 @@ export function PresetFormModal({ onClose, onSaved, preset }: Props) {
       win_points: winPoints,
       participation_points: participationPoints,
       prize_pool_percent: prizePoolPercent,
+      gtd_enabled: gtdEnabled,
+      gtd_amount: gtdAmount,
+      gtd_entry_threshold: gtdEntryThreshold,
     };
     const res = isEdit && preset
       ? await updatePresetFromPayload(preset.id, payload)
@@ -198,7 +233,6 @@ export function PresetFormModal({ onClose, onSaved, preset }: Props) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="preset-form-title"
-      onClick={onClose}
     >
       <div
         className="mx-auto w-full max-w-4xl sm:max-w-5xl shrink-0 rounded-2xl border border-white/12 shadow-2xl bg-[#0c0d14]/98 backdrop-blur-md my-auto"
@@ -270,8 +304,8 @@ export function PresetFormModal({ onClose, onSaved, preset }: Props) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div className="space-y-3 rounded-xl border border-white/10 p-4 bg-surface-container-low/20">
-              <FieldBlock label="바인비용" id="buy-in" value={buyIn} onChange={setBuyIn} mp />
-              <FieldBlock label="리바인비용" id="rebuy-cost" value={rebuyCost} onChange={setRebuyCost} mp />
+              <FieldBlock label="바인비용" id="buy-in" value={buyIn} onChange={setBuyIn} mp emptyWhenZero={false} />
+              <FieldBlock label="리바인비용" id="rebuy-cost" value={rebuyCost} onChange={setRebuyCost} mp emptyWhenZero={false} />
               <label className="flex items-center gap-3 cursor-pointer py-1">
                 <input
                   type="checkbox"
@@ -348,6 +382,26 @@ export function PresetFormModal({ onClose, onSaved, preset }: Props) {
                   <span className="text-[10px] text-on-surface-variant">%</span>
                 </div>
               </div>
+              <label className="flex items-center gap-3 cursor-pointer py-1 mb-2">
+                <input
+                  type="checkbox"
+                  checked={gtdEnabled}
+                  onChange={(e) => setGtdEnabled(e.target.checked)}
+                  className={checkCls}
+                />
+                <span className="text-sm font-medium">GTD게임</span>
+              </label>
+              {gtdEnabled && (
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <FieldBlock label="GTD" id="gtd-amount" value={gtdAmount} onChange={setGtdAmount} mp />
+                  <FieldBlock
+                    label="기준엔트리"
+                    id="gtd-entry-threshold"
+                    value={gtdEntryThreshold}
+                    onChange={setGtdEntryThreshold}
+                  />
+                </div>
+              )}
               <RankRowsEditor mode="prize" rows={placements} onChange={setPlacements} />
               {percentSum > 100 ? (
                 <p className="text-xs text-error mt-2 font-medium">

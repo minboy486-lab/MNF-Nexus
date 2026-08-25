@@ -1,4 +1,6 @@
 export const STAFF_TIMER_PAIRING_KEY = "mnf-staff-timer-pairing";
+export const CONTROLLER_REMOTE_PORT = 17890;
+export const LAN_WIFI_ERROR = "매장 와이파이에 연결한 뒤 다시 스캔해 주세요";
 
 export type StaffTimerPairing = {
   url: string;
@@ -7,13 +9,42 @@ export type StaffTimerPairing = {
   loginId: string;
 };
 
+export function isPrivateLanHostname(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === "localhost" || host.endsWith(".local")) return true;
+  const parts = host.split(".");
+  if (parts.length !== 4) return false;
+  const nums = parts.map((p) => Number(p));
+  if (nums.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  const [a, b] = nums;
+  if (a === 10 || a === 127) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  return false;
+}
+
+/** 컨트롤러 QR은 매장 PC의 LAN 주소(http://192.168.x.x:17890/...)만 인정한다. */
+export function isLanControllerUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "http:") return false;
+    const port = u.port ? Number(u.port) : 80;
+    if (port !== CONTROLLER_REMOTE_PORT) return false;
+    return isPrivateLanHostname(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export function parseControllerQr(text: string): { pin: string; tok: string; url: string } | null {
   try {
     const u = new URL(text.trim());
     const pin = u.searchParams.get("pin")?.trim() ?? "";
     const tok = u.searchParams.get("tok")?.trim() ?? "";
     if (!pin && !tok) return null;
-    return { pin, tok, url: u.toString() };
+    const url = u.toString();
+    if (!isLanControllerUrl(url)) return null;
+    return { pin, tok, url };
   } catch {
     return null;
   }
@@ -29,7 +60,7 @@ export function readTimerPairing(): StaffTimerPairing | null {
   if (!raw) return null;
   try {
     const v = JSON.parse(raw) as StaffTimerPairing;
-    if (!v?.url) return null;
+    if (!v?.url || !isLanControllerUrl(v.url)) return null;
     return v;
   } catch {
     return null;
@@ -56,7 +87,7 @@ export function markLanNavigation(): void {
 }
 
 /** 컨트롤러 연결에 실패하고 바로 돌아온 경우 */
-export function consumeFailedLanNavigation(windowMs = 15000): boolean {
+export function consumeFailedLanNavigation(windowMs = 60_000): boolean {
   const raw = sessionStorage.getItem(STAFF_LAN_NAV_KEY);
   if (!raw) return false;
   const t = Number(raw);

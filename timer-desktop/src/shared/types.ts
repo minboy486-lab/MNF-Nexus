@@ -5,6 +5,17 @@ export const TABLE_SLOTS = [1, 2, 3, 4, 5, 6] as const;
 export type MonitorSlot = (typeof MONITOR_SLOTS)[number];
 export type TableSlot = (typeof TABLE_SLOTS)[number];
 
+export const TABLE_LETTERS = ["A", "B", "C", "D", "E", "F"] as const;
+
+export function tableLetter(slot: number): string {
+  if (slot >= 1 && slot <= TABLE_LETTERS.length) return TABLE_LETTERS[slot - 1];
+  return String(slot);
+}
+
+export function tableName(slot: number): string {
+  return `${tableLetter(slot)} 테이블`;
+}
+
 /** 송출·컨트롤러 UI 테마 */
 export const UI_THEME_IDS = ["black-pink", "mnf-original", "cherry-blossom"] as const;
 export type UiThemeId = (typeof UI_THEME_IDS)[number];

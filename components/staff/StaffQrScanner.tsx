@@ -1,16 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import jsQR from "jsqr";
 
 type Props = {
   hint: string;
   paused?: boolean;
-  onResult: (text: string) => void;
+  busy?: boolean;
+  busyLabel?: string;
+  /** true면 화면을 멈춘 채 유지, false면 잠깐 보여 주고 다시 스캔 */
+  onDetect: (text: string) => boolean;
 };
 
 type DetectorCtor = new (opts: { formats: string[] }) => {
-  detect: (src: HTMLVideoElement | ImageBitmap) => Promise<Array<{ rawValue?: string }>>;
+  detect: (src: HTMLVideoElement | ImageBitmap | HTMLCanvasElement) => Promise<Array<{ rawValue?: string }>>;
 };
+
+type Phase = "scanning" | "captured" | "busy";
 
 function getDetector(): DetectorCtor | null {
   return (
@@ -18,95 +24,275 @@ function getDetector(): DetectorCtor | null {
   );
 }
 
-export function StaffQrScanner({ hint, paused, onResult }: Props) {
+async function openCamera(): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 720, max: 1080 },
+        frameRate: { ideal: 30, max: 30 },
+      },
+    });
+  } catch {
+    return navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+  }
+}
+
+async function preferContinuousFocus(stream: MediaStream): Promise<void> {
+  const track = stream.getVideoTracks()[0];
+  if (!track) return;
+  try {
+    const caps = track.getCapabilities?.() as { focusMode?: string[] } | undefined;
+    if (caps?.focusMode?.includes("continuous")) {
+      await track.applyConstraints({
+        advanced: [{ focusMode: "continuous" } as unknown as MediaTrackConstraintSet],
+      });
+    }
+  } catch {
+    /* some browsers reject focus constraints */
+  }
+}
+
+function drawFreezeFrame(video: HTMLVideoElement, canvas: HTMLCanvasElement) {
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (!w || !h) return;
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext("2d")?.drawImage(video, 0, 0, w, h);
+}
+
+function scanWithJsQR(video: HTMLVideoElement, canvas: HTMLCanvasElement): string | null {
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (!vw || !vh) return null;
+  const side = Math.min(vw, vh) * 0.78;
+  const sx = (vw - side) / 2;
+  const sy = (vh - side) / 2;
+  const out = 400;
+  if (canvas.width !== out || canvas.height !== out) {
+    canvas.width = out;
+    canvas.height = out;
+  }
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(video, sx, sy, side, side, 0, 0, out, out);
+  const imageData = ctx.getImageData(0, 0, out, out);
+  return jsQR(imageData.data, out, out, { inversionAttempts: "dontInvert" })?.data ?? null;
+}
+
+export function StaffQrScanner({ hint, paused, busy, busyLabel = "촬영됨 · 출근 등록 중", onDetect }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const onResultRef = useRef(onResult);
+  const scanCanvasRef = useRef<HTMLCanvasElement>(null);
+  const freezeCanvasRef = useRef<HTMLCanvasElement>(null);
+  const onDetectRef = useRef(onDetect);
   const pausedRef = useRef(!!paused);
+  const lockedRef = useRef(false);
+  const shutterTimer = useRef<number | null>(null);
+  const resumeTimer = useRef<number | null>(null);
   const [camError, setCamError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>("scanning");
+  const [flash, setFlash] = useState(false);
 
   useEffect(() => {
-    onResultRef.current = onResult;
-  }, [onResult]);
+    onDetectRef.current = onDetect;
+  }, [onDetect]);
 
   useEffect(() => {
     pausedRef.current = !!paused;
-  }, [paused]);
+    if (paused || busy) {
+      lockedRef.current = true;
+      setPhase("busy");
+      try {
+        videoRef.current?.pause();
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    lockedRef.current = false;
+    setPhase("scanning");
+    void videoRef.current?.play().catch(() => undefined);
+  }, [paused, busy]);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     let stream: MediaStream | null = null;
-    let timer: number | null = null;
     let stopped = false;
+    let inFlight = false;
+    let raf = 0;
+    let vfc = 0;
+    let detector: InstanceType<DetectorCtor> | null = null;
+    const videoWithVfc = video as HTMLVideoElement & {
+      requestVideoFrameCallback?: (cb: () => void) => number;
+      cancelVideoFrameCallback?: (id: number) => void;
+    };
+
+    const cancelLoop = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      if (vfc && videoWithVfc.cancelVideoFrameCallback) {
+        videoWithVfc.cancelVideoFrameCallback(vfc);
+      }
+      vfc = 0;
+    };
+
+    const schedule = (fn: () => void) => {
+      if (stopped) return;
+      if (videoWithVfc.requestVideoFrameCallback) {
+        vfc = videoWithVfc.requestVideoFrameCallback(() => fn());
+      } else {
+        raf = requestAnimationFrame(fn);
+      }
+    };
+
+    const capture = (raw: string) => {
+      if (lockedRef.current || stopped) return;
+      lockedRef.current = true;
+      const freeze = freezeCanvasRef.current;
+      if (freeze) drawFreezeFrame(video, freeze);
+      try {
+        video.pause();
+      } catch {
+        /* ignore */
+      }
+      setPhase("captured");
+      setFlash(true);
+      if (shutterTimer.current) window.clearTimeout(shutterTimer.current);
+      shutterTimer.current = window.setTimeout(() => setFlash(false), 220);
+      try {
+        navigator.vibrate?.(40);
+      } catch {
+        /* iOS */
+      }
+      const keepFrozen = onDetectRef.current(raw);
+      if (!keepFrozen) {
+        if (resumeTimer.current) window.clearTimeout(resumeTimer.current);
+        resumeTimer.current = window.setTimeout(() => {
+          if (stopped || pausedRef.current) return;
+          lockedRef.current = false;
+          setPhase("scanning");
+          void video.play().catch(() => undefined);
+        }, 700);
+      }
+    };
+
+    const tick = async () => {
+      if (stopped) return;
+      if (!inFlight && !pausedRef.current && !lockedRef.current && video.readyState >= 2) {
+        inFlight = true;
+        try {
+          let raw: string | null = null;
+          if (detector) {
+            const codes = await detector.detect(video);
+            raw = codes[0]?.rawValue?.trim() || null;
+          }
+          if (!raw && scanCanvasRef.current) {
+            raw = scanWithJsQR(video, scanCanvasRef.current);
+          }
+          if (raw) capture(raw);
+        } catch {
+          /* keep scanning */
+        } finally {
+          inFlight = false;
+        }
+      }
+      if (!stopped) schedule(() => void tick());
+    };
 
     async function start() {
+      if (!video) return;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
-          audio: false,
-        });
-        if (stopped || !video) return;
+        stream = await openCamera();
+        if (stopped) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        await preferContinuousFocus(stream);
         video.srcObject = stream;
+        video.setAttribute("playsinline", "true");
+        video.muted = true;
         await video.play();
       } catch {
         setCamError("카메라를 열 수 없습니다. 카메라 권한을 허용해 주세요.");
         return;
       }
-
       const Detector = getDetector();
-      const detector = Detector ? new Detector({ formats: ["qr_code"] }) : null;
-      const canvas = canvasRef.current;
-
-      const tick = async () => {
-        if (stopped || !videoRef.current) return;
-        if (!pausedRef.current) {
-          try {
-            if (detector) {
-              const codes = await detector.detect(videoRef.current);
-              const raw = codes[0]?.rawValue;
-              if (raw) onResultRef.current(raw);
-            } else if (canvas && videoRef.current.readyState >= 2) {
-              const w = videoRef.current.videoWidth;
-              const h = videoRef.current.videoHeight;
-              if (w && h) {
-                canvas.width = w;
-                canvas.height = h;
-                const ctx = canvas.getContext("2d");
-                if (ctx) {
-                  ctx.drawImage(videoRef.current, 0, 0, w, h);
-                  const imageData = ctx.getImageData(0, 0, w, h);
-                  const { default: jsQR } = await import("jsqr");
-                  const raw = jsQR(imageData.data, w, h)?.data;
-                  if (raw) onResultRef.current(raw);
-                }
-              }
-            }
-          } catch {
-            /* keep scanning */
-          }
-        }
-        timer = window.setTimeout(() => void tick(), 280);
-      };
-      void tick();
+      detector = Detector ? new Detector({ formats: ["qr_code"] }) : null;
+      schedule(() => void tick());
     }
 
     void start();
     return () => {
       stopped = true;
-      if (timer) window.clearTimeout(timer);
+      cancelLoop();
+      if (shutterTimer.current) window.clearTimeout(shutterTimer.current);
+      if (resumeTimer.current) window.clearTimeout(resumeTimer.current);
       stream?.getTracks().forEach((t) => t.stop());
     };
   }, []);
 
+  const frozen = phase !== "scanning";
+  const badge =
+    camError ??
+    (phase === "busy"
+      ? busyLabel
+      : phase === "captured"
+        ? "촬영됨 · QR 인식"
+        : "스캔 중 · QR을 네모 안에");
+
   return (
     <div className="space-y-3">
-      <div className="relative overflow-hidden rounded-2xl bg-black aspect-[3/4] max-h-[70dvh]">
-        <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
-        <canvas ref={canvasRef} className="hidden" />
-        <div className="pointer-events-none absolute inset-0 border-2 border-primary/40 rounded-2xl" />
+      <div className={`staff-qr ${frozen ? "staff-qr--frozen" : ""}`} data-phase={phase}>
+        <video
+          ref={videoRef}
+          className="staff-qr__video"
+          playsInline
+          muted
+          autoPlay
+        />
+        <canvas
+          ref={freezeCanvasRef}
+          className="staff-qr__freeze"
+          hidden={!frozen}
+          aria-hidden
+        />
+        <canvas ref={scanCanvasRef} className="hidden" />
+        <div className={`staff-qr__shutter${flash ? " is-on" : ""}`} aria-hidden />
+        <div className="staff-qr__frame" aria-hidden>
+          <span className="staff-qr__corner staff-qr__corner--tl" />
+          <span className="staff-qr__corner staff-qr__corner--tr" />
+          <span className="staff-qr__corner staff-qr__corner--bl" />
+          <span className="staff-qr__corner staff-qr__corner--br" />
+          {!frozen && <span className="staff-qr__scanline" />}
+        </div>
+        <div className={`staff-qr__badge${frozen ? " staff-qr__badge--ok" : ""}`}>
+          {phase === "busy" ? (
+            <svg className="staff-qr__badge-icon staff-qr__badge-icon--spin" viewBox="0 0 24 24" aria-hidden>
+              <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="2.4" strokeDasharray="36 14" />
+            </svg>
+          ) : frozen ? (
+            <svg className="staff-qr__badge-icon" viewBox="0 0 24 24" aria-hidden>
+              <circle cx="12" cy="12" r="9" fill="currentColor" opacity="0.18" />
+              <path d="M7.5 12.4 10.4 15.2 16.5 8.8" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : (
+            <svg className="staff-qr__badge-icon" viewBox="0 0 24 24" aria-hidden>
+              <rect x="4" y="4" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.8" />
+              <rect x="14" y="4" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.8" />
+              <rect x="4" y="14" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M14 14h3v3h-3zM19 14h1v1M14 19h1M18 18h2v2" fill="currentColor" />
+            </svg>
+          )}
+          {badge}
+        </div>
       </div>
-      <p className="text-sm text-on-surface-variant text-center">{camError ?? hint}</p>
+      <p className="text-sm text-on-surface-variant text-center">
+        {camError ?? (frozen ? "촬영된 화면입니다. 잠시만 기다려 주세요." : hint)}
+      </p>
     </div>
   );
 }

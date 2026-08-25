@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatRemainingMs, getDisplayRemainingMs } from "@mnf/timer/engine";
+import { formatTimerLevelShort, resolveTimerPauseKind } from "@mnf/timer/levels";
 import type { TableTimerState } from "@mnf/timer/types";
 import type { AppSnapshot, GameSession } from "../../shared/types";
 import type {
@@ -10,6 +11,7 @@ import type {
   RemoteTimerAction,
 } from "../../shared/remote";
 import logoUrl from "./mnf-logo.png";
+import { copyToClipboard, formatKakaoGameStatus, shareGameStatus } from "./kakaoStatus";
 
 const LS_LOGIN = "mnf-remote-login-id";
 const LS_SESSION = "mnf-remote-session";
@@ -97,7 +99,8 @@ export function App() {
   const [gameId, setGameId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [checkoutConfirm, setCheckoutConfirm] = useState(false);
+  const [shareFlash, setShareFlash] = useState<"shared" | "copied" | null>(null);
+  const [shareSheetText, setShareSheetText] = useState<string | null>(null);
   const [, setTick] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const pinOkRef = useRef(false);
@@ -240,13 +243,42 @@ export function App() {
     connect(pin);
   }
 
-  function checkout() {
-    send({ type: "checkout" });
-    setCheckoutConfirm(false);
-    setGameId(null);
-    setTok("");
-    const url = websiteUrl("/staff");
-    if (url) window.location.assign(url);
+  function flashShare(kind: "shared" | "copied") {
+    setShareFlash(kind);
+    window.setTimeout(() => setShareFlash(null), 1600);
+  }
+
+  async function shareKakaoStatus() {
+    const text = formatKakaoGameStatus(snapshot, timers);
+    const result = await shareGameStatus(text);
+    if (result === "cancelled") return;
+    if (result === "sheet") {
+      setShareSheetText(text);
+      setError(null);
+      return;
+    }
+    setError(null);
+    flashShare("shared");
+  }
+
+  async function copyShareSheet() {
+    if (!shareSheetText) return;
+    const ok = await copyToClipboard(shareSheetText);
+    if (!ok) {
+      setError("복사에 실패했습니다. 다시 눌러 주세요.");
+      return;
+    }
+    setShareSheetText(null);
+    setError(null);
+    flashShare("copied");
+  }
+
+  async function openKakaoFromSheet() {
+    if (!shareSheetText) return;
+    const ok = await copyToClipboard(shareSheetText);
+    setShareSheetText(null);
+    if (ok) flashShare("copied");
+    window.location.assign("kakaotalk://");
   }
 
   function logout() {
@@ -304,9 +336,9 @@ export function App() {
             로그아웃
           </button>
         )}
-        {staff?.canControl && gameId != null && (
-          <button type="button" className="text-btn" onClick={() => setCheckoutConfirm(true)}>
-            퇴근
+        {ready && (
+          <button type="button" className="kakao-share-btn" onClick={() => void shareKakaoStatus()}>
+            {shareFlash === "shared" ? "공유됨" : shareFlash === "copied" ? "복사됨" : "카톡 공유"}
           </button>
         )}
       </header>
@@ -367,14 +399,13 @@ export function App() {
           {snapshot.sessions.length === 0 && <p className="muted">진행 중인 게임이 없습니다.</p>}
           {snapshot.sessions.map((s) => {
             const t = timers.find((x) => x.tableId === s.gameId);
-            const isBreak = !!t?.blindStructureId && t.smallBlind === 0 && t.bigBlind === 0;
             return (
               <button key={s.gameId} type="button" className="game-row" onClick={() => setGameId(s.gameId)}>
                 <span className="gid">G{s.gameId}</span>
                 <span className="ginfo">
                   <strong>{s.structureName}</strong>
                   <small>
-                    {statusLabel(t?.status)} · {isBreak ? "BREAK" : `Lv ${t?.blindLevel ?? 1}`} ·{" "}
+                    {statusLabel(t?.status)} · {formatTimerLevelShort(t)} ·{" "}
                     {t && (t.status === "running" || t.status === "paused")
                       ? formatRemainingMs(remainingOf(t))
                       : "—"}
@@ -404,18 +435,32 @@ export function App() {
         />
       )}
 
-      {checkoutConfirm && (
-        <div className="confirm-overlay" role="dialog" aria-modal="true" onClick={() => setCheckoutConfirm(false)}>
-          <div className="confirm-card" onClick={(e) => e.stopPropagation()}>
-            <p>퇴근하시겠습니까?</p>
-            <div className="confirm-actions">
-              <button type="button" className="confirm-yes" onClick={checkout}>
-                예
-              </button>
-              <button type="button" className="confirm-no" onClick={() => setCheckoutConfirm(false)}>
-                아니오
-              </button>
-            </div>
+      {shareSheetText != null && (
+        <div
+          className="share-sheet-backdrop"
+          role="presentation"
+          onClick={() => setShareSheetText(null)}
+        >
+          <div
+            className="share-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-sheet-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p id="share-sheet-title" className="share-sheet__title">
+              카톡 공유
+            </p>
+            <p className="share-sheet__hint">카카오톡으로 보내거나, 복사해서 붙여넣을 수 있습니다.</p>
+            <button type="button" className="share-sheet__kakao" onClick={() => void openKakaoFromSheet()}>
+              카카오톡
+            </button>
+            <button type="button" className="share-sheet__copy" onClick={() => void copyShareSheet()}>
+              복사
+            </button>
+            <button type="button" className="share-sheet__cancel" onClick={() => setShareSheetText(null)}>
+              취소
+            </button>
           </div>
         </div>
       )}
@@ -445,7 +490,7 @@ function GamePad({
   onDelete: () => void;
 }) {
   const remaining = remainingMs;
-  const isBreak = !!timer?.blindStructureId && timer.smallBlind === 0 && timer.bigBlind === 0;
+  const pauseKind = resolveTimerPauseKind(timer);
   const running = timer?.status === "running";
   const rebuyTotal = (session.rebuys ?? []).reduce((sum, n) => sum + n, 0);
 
@@ -469,8 +514,8 @@ function GamePad({
           </div>
         </div>
         <p className="muted">
-          {statusLabel(timer?.status)} · {isBreak ? "BREAK" : `레벨 ${timer?.blindLevel ?? 1}`}
-          {timer && !isBreak ? ` · ${timer.smallBlind}/${timer.bigBlind}` : ""}
+          {statusLabel(timer?.status)} · {formatTimerLevelShort(timer, "레벨")}
+          {timer && !pauseKind ? ` · ${timer.smallBlind}/${timer.bigBlind}` : ""}
         </p>
       </div>
 

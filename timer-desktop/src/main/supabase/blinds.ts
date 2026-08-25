@@ -1,8 +1,9 @@
 import type { BlindStructureOption } from "@mnf/timer/types";
+import { levelsFromPresetRows } from "@mnf/timer/levels";
 import { getSupabase } from "./client";
 
 type RawBlindRow = {
-  kind?: "level" | "break";
+  kind?: "level" | "break" | "reg-close";
   level?: number;
   small?: number;
   big?: number;
@@ -49,45 +50,16 @@ export async function listBlindStructures(): Promise<BlindStructureOption[]> {
 
   const options: BlindStructureOption[] = (data as RawPreset[])
     .map((p) => {
-      // blind_structure JSONB → BlindLevelDef[]
-      // kind 필드가 없는 경우도 처리 (레거시/미입력 데이터 호환)
-      // break 레벨은 small=0, big=0 으로 포함 (Next Break 계산에 필요)
-      const isBreak = (row: RawBlindRow) =>
-        row.kind === "break" || (row.small === 0 && row.big === 0);
-      const isLevel = (row: RawBlindRow) =>
-        row.kind === "level" || (!row.kind && (row.big ?? 0) > 0);
-
-      // 원본 배열 순서를 유지하며 level 번호 할당
-      // 브레이크 행은 직전 플레이 레벨과 다음 레벨 사이 (예: 4 → 4.01 → 5)
-      const rawRows = p.blind_structure ?? [];
-      let lastPlayLevel = 0;
-      let breakSeq = 0;
-      const levels = rawRows
-        .map((row) => {
-          if (isBreak(row)) {
-            breakSeq += 1;
-            return {
-              // 직전 플레이 레벨과 다음 레벨 사이 (4 → 4.01 브레이크 → 5)
-              level: Number((lastPlayLevel + breakSeq / 100).toFixed(2)),
-              small: 0,
-              big: 0,
-              ante: 0,
-              durationSec: Math.max(1, row.minutes ?? 10) * 60,
-            };
-          }
-          if (!isLevel(row)) return null;
-          breakSeq = 0;
-          lastPlayLevel = row.level ?? lastPlayLevel + 1;
-          return {
-            level: lastPlayLevel,
-            small: row.small ?? 0,
-            big: row.big ?? 0,
-            ante: row.ante ?? 0,
-            durationSec: Math.max(1, row.minutes ?? 15) * 60,
-          };
-        })
-        .filter((r): r is NonNullable<typeof r> => r !== null)
-        .sort((a, b) => a.level - b.level);
+      const levels = levelsFromPresetRows(
+        (p.blind_structure ?? []).map((row) => ({
+          level: row.level ?? 0,
+          small: row.small ?? 0,
+          big: row.big ?? 0,
+          ante: row.ante ?? 0,
+          minutes: row.minutes ?? 15,
+          kind: row.kind,
+        })),
+      );
 
       if (levels.length === 0) return null;
 

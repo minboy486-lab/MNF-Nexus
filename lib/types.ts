@@ -27,6 +27,7 @@ export type BlindLevel = {
 export type BlindStructureRow =
   | {
       kind: "level";
+      id?: string;
       level: number;
       small: number;
       big: number;
@@ -35,6 +36,12 @@ export type BlindStructureRow =
     }
   | {
       kind: "break";
+      id?: string;
+      minutes: number;
+    }
+  | {
+      kind: "reg-close";
+      id?: string;
       minutes: number;
     };
 
@@ -125,6 +132,11 @@ export type PresetPrizeRules = {
   participation_points?: number;
   buy_in_chips?: number;
   rebuy_chips?: RebuyChipTier[];
+  gtd_enabled?: boolean;
+  /** 원 단위 개런티 */
+  gtd_amount?: number;
+  /** GTD 기준 엔트리 수 */
+  gtd_entry_threshold?: number;
 };
 
 export type PrizeStructure = {

@@ -14,6 +14,7 @@ import {
   readTimerPairingRaw,
   subscribeTimerPairing,
   timerRemoteHref,
+  LAN_WIFI_ERROR,
 } from "@/lib/staff/timer-pairing";
 
 type Props = {
@@ -54,18 +55,14 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
   }, []);
 
   function openTimer() {
-    if (!navigator.onLine) {
-      setWifiError(true);
-      return;
-    }
     const pairing = readTimerPairing();
-    if (pairing) {
-      setWifiError(false);
-      markLanNavigation();
-      window.location.assign(timerRemoteHref({ ...pairing, loginId: pairing.loginId || loginId }));
+    if (!pairing) {
+      window.location.assign("/staff/timer");
       return;
     }
-    window.location.assign("/staff/timer");
+    setWifiError(false);
+    markLanNavigation();
+    window.location.assign(timerRemoteHref({ ...pairing, loginId: pairing.loginId || loginId }));
   }
 
   return (
@@ -83,7 +80,7 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
       </section>
 
       {wifiError && (
-        <p className="text-sm text-error bg-error/10 rounded-xl px-3 py-2">와이파이 연결을 확인해주세요</p>
+        <p className="text-sm text-error bg-error/10 rounded-xl px-3 py-2">{LAN_WIFI_ERROR}</p>
       )}
 
       {!working ? (
@@ -93,7 +90,7 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
         >
           <span className="material-symbols-outlined text-4xl text-primary">qr_code_scanner</span>
           <p className="text-xl font-bold mt-2">출근 등록</p>
-          <p className="text-sm text-on-surface-variant mt-1">컨트롤러 QR을 스캔하면 출근 처리됩니다</p>
+          <p className="text-sm text-on-surface-variant mt-1">매장 와이파이에서 컨트롤러 QR을 스캔하면 출근됩니다</p>
         </Link>
       ) : (
         <button

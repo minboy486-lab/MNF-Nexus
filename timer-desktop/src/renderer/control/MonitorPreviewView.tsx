@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import type { TableTimerState } from "@mnf/timer/types";
 import { formatNextBreakRemaining } from "@mnf/timer/engine";
+import {
+  formatNextPauseVal,
+  formatPauseBanner,
+  formatTimerLevelHeadline,
+  isBreakBlind,
+  resolveTimerPauseKind,
+} from "@mnf/timer/levels";
 import type { GameSession } from "../../shared/types";
 import { formatTotalElapsedMs, getSessionTotalElapsedMs, noticeHtmlIsEmpty, sanitizeNoticeHtml } from "../../shared/types";
 import logoDisplayUrl from "./mnf-logo-display.png";
@@ -40,6 +47,7 @@ export function MonitorPreviewView({ slot, session, timerState }: Props) {
   const mpCurIdx = mpSortedLevels.findIndex((l) => l.level === currentLevel);
   const nextLevel = mpCurIdx >= 0 ? (mpSortedLevels[mpCurIdx + 1] ?? null) : null;
   const mpIsBreak = (timerState?.bigBlind ?? -1) === 0 && (timerState?.smallBlind ?? -1) === 0 && hasGame;
+  const mpPauseKind = resolveTimerPauseKind(timerState);
   const totalRebuy = session ? session.rebuys.reduce((a, b) => a + b, 0) : 0;
   const totalChip = session
     ? session.entries * session.entryChip
@@ -87,12 +95,12 @@ export function MonitorPreviewView({ slot, session, timerState }: Props) {
                   ) : null}
                 </aside>
                 <main className="ds-center">
-                  <p className="ds-level">{mpIsBreak ? "BREAK" : `LEVEL ${timerState?.blindLevel ?? 1}`}</p>
+                  <p className="ds-level">{formatTimerLevelHeadline(timerState)}</p>
                   <p className={`ds-timer${isRunning ? " ds-timer--running" : ""}${isPaused ? " ds-timer--paused" : ""}`}>
                     {timeStr}
                   </p>
                   {mpIsBreak ? (
-                    <DsBlinds isBreak small={0} big={0} ante={0} />
+                    <DsBlinds isBreak pauseLabel={formatPauseBanner(mpPauseKind)} small={0} big={0} ante={0} />
                   ) : (
                     <DsBlinds
                       small={timerState?.smallBlind ?? 0}
@@ -102,10 +110,10 @@ export function MonitorPreviewView({ slot, session, timerState }: Props) {
                   )}
                   {nextLevel && (
                     <div className="ds-next">
-                      {nextLevel.big === 0 ? (
+                      {isBreakBlind(nextLevel) ? (
                         <>
                           <span className="ds-next__label">NEXT</span>
-                          <span className="ds-next__val">BREAK ({Math.round(nextLevel.durationSec / 60)}min)</span>
+                          <span className="ds-next__val">{formatNextPauseVal(nextLevel)}</span>
                         </>
                       ) : (
                         <>

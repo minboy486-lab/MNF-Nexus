@@ -3,6 +3,7 @@
 import { countPlayLevels, normalizeStructure } from "@/lib/presets/structure";
 import {
   getPresetBuyInChips,
+  getPresetGtd,
   getPresetParticipationPoints,
   getPresetPlacements,
   getPresetRebuyChips,
@@ -77,13 +78,25 @@ function StructureTable({ rows }: { rows: BlindStructureRow[] }) {
       </div>
       <div className="divide-y divide-white/5 max-h-72 overflow-y-auto">
         {normalized.map((row, i) =>
-          row.kind === "break" ? (
+          row.kind === "break" || row.kind === "reg-close" ? (
             <div
-              key={`b-${i}`}
-              className="flex items-center gap-2 px-3 py-2 bg-secondary/5 border-y border-dashed border-secondary/20 text-on-surface-variant"
+              key={row.id ?? `p-${i}`}
+              className={`flex items-center gap-2 px-3 py-2 border-y border-dashed text-on-surface-variant ${
+                row.kind === "reg-close"
+                  ? "bg-primary/5 border-primary/20"
+                  : "bg-secondary/5 border-secondary/20"
+              }`}
             >
-              <span className="material-symbols-outlined text-base text-secondary">coffee</span>
-              <span>쉬는 시간 · {row.minutes}분</span>
+              <span
+                className={`material-symbols-outlined text-base ${
+                  row.kind === "reg-close" ? "text-primary" : "text-secondary"
+                }`}
+              >
+                {row.kind === "reg-close" ? "lock_clock" : "coffee"}
+              </span>
+              <span>
+                {row.kind === "reg-close" ? "레지 마감" : "쉬는 시간"} · {row.minutes}분
+              </span>
             </div>
           ) : (
             <div
@@ -116,6 +129,7 @@ export function PresetDetailPanel({
   const winPoints = getPresetWinPoints(preset);
   const participationPoints = getPresetParticipationPoints(preset);
   const buyInChips = getPresetBuyInChips(preset);
+  const gtd = getPresetGtd(preset);
   const levels = countPlayLevels(normalizeStructure(preset.blind_structure));
   const percentSum = placements.reduce((s, p) => s + p.percent, 0);
   const kind = preset.game_kind ?? "daily";
@@ -193,7 +207,7 @@ export function PresetDetailPanel({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <RankReadOnly
             title="프라이즈"
-            empty={placements.length === 0}
+            empty={placements.length === 0 && !gtd.enabled}
             headerRight={
               <span className="text-[10px] text-on-surface-variant tabular-nums whitespace-nowrap">
                 프라이즈 풀{" "}
@@ -203,6 +217,14 @@ export function PresetDetailPanel({
               </span>
             }
           >
+            {gtd.enabled && (
+              <li className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border border-primary/20 bg-primary/10">
+                <span className="text-xs font-semibold text-primary shrink-0">GTD</span>
+                <span className="flex-1 text-on-surface-variant text-xs">
+                  {formatMp(gtd.amount)} · 기준 {gtd.entryThreshold.toLocaleString("ko-KR")}엔트리
+                </span>
+              </li>
+            )}
             {placements.map((p) => (
               <li
                 key={p.rank}

@@ -2,12 +2,16 @@ export type TimerStatus = "running" | "paused" | "stopped";
 
 export type TimerAction = "start" | "pause" | "stop" | "levelUp" | "levelDown" | "reset" | "setDuration" | "setRemainingMs" | "adjustSec";
 
+export type PauseKind = "break" | "reg-close";
+
 export interface BlindLevelDef {
   level: number;
   small: number;
   big: number;
   ante: number;
   durationSec: number;
+  /** 쉬는 시간 vs 레지 마감. 둘 다 small/big 0. */
+  pauseKind?: PauseKind;
 }
 
 export interface TableTimerState {
@@ -19,6 +23,7 @@ export interface TableTimerState {
   smallBlind: number;
   bigBlind: number;
   ante: number;
+  pauseKind?: PauseKind | null;
   blindStructureId: string | null;
   blindStructureName: string | null;
   levels: BlindLevelDef[];

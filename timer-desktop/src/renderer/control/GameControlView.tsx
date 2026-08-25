@@ -3,6 +3,14 @@ import type { TableTimerState, TimerAction } from "@mnf/timer/types";
 import type { GameSession, LeftNotice } from "../../shared/types";
 import { formatTotalElapsedMs, getSessionTotalElapsedMs, noticeHtmlIsEmpty, sanitizeNoticeHtml } from "../../shared/types";
 import { formatNextBreakRemaining, formatRemainingMs, getDisplayRemainingMs } from "@mnf/timer/engine";
+import {
+  formatNextPauseVal,
+  formatPauseBanner,
+  formatTimerLevelHeadline,
+  formatTimerLevelShort,
+  isBreakBlind,
+  resolveTimerPauseKind,
+} from "@mnf/timer/levels";
 import logoDisplayUrl from "./mnf-logo-display.png";
 import { NoticeRichEditor, type NoticeRichEditorHandle } from "./NoticeRichEditor";
 import { DsBlinds } from "../shared/DsBlinds";
@@ -470,6 +478,7 @@ export function GameControlView({
   const gcCurIdx = gcSortedLevels.findIndex(l => l.level === currentLevel);
   const nextLevel = gcCurIdx >= 0 ? (gcSortedLevels[gcCurIdx + 1] ?? null) : null;
   const gcIsBreak = (state?.bigBlind ?? -1) === 0 && (state?.smallBlind ?? -1) === 0 && !!state?.blindStructureId;
+  const gcPauseKind = resolveTimerPauseKind(state);
 
   // 총 경과 시간 (최초 시작부터, 일시정지 시 멈춤)
   const totalTimeText = session.startedAt
@@ -537,7 +546,7 @@ export function GameControlView({
                     </aside>
 
                     <main className="ds-center">
-                      <p className="ds-level">{gcIsBreak ? "BREAK" : `LEVEL ${currentLevel}`}</p>
+                      <p className="ds-level">{formatTimerLevelHeadline(state)}</p>
                       <button
                         type="button"
                         className={`ds-timer${state?.status === "running" ? " ds-timer--running" : ""}${state?.status === "paused" ? " ds-timer--paused" : ""}`}
@@ -547,7 +556,7 @@ export function GameControlView({
                         {timerText}
                       </button>
                       {gcIsBreak ? (
-                        <DsBlinds isBreak small={0} big={0} ante={0} />
+                        <DsBlinds isBreak pauseLabel={formatPauseBanner(gcPauseKind)} small={0} big={0} ante={0} />
                       ) : (
                         <DsBlinds
                           small={state?.smallBlind ?? 0}
@@ -557,10 +566,10 @@ export function GameControlView({
                       )}
                       {nextLevel && (
                         <div className="ds-next">
-                          {nextLevel.big === 0 ? (
+                          {isBreakBlind(nextLevel) ? (
                             <>
                               <span className="ds-next__label">NEXT</span>
-                              <span className="ds-next__val">BREAK ({Math.round(nextLevel.durationSec / 60)}min)</span>
+                              <span className="ds-next__val">{formatNextPauseVal(nextLevel)}</span>
                             </>
                           ) : (
                             <>
@@ -617,7 +626,7 @@ export function GameControlView({
           {/* 블라인드 레벨 −+ */}
           <CounterRow
             label="블라인드"
-            value={gcIsBreak ? "BREAK" : `Lv ${state?.blindLevel ?? 1}`}
+            value={formatTimerLevelShort(state)}
             onMinus={() => onCommand("levelDown")}
             onPlus={() => onCommand("levelUp")}
           />

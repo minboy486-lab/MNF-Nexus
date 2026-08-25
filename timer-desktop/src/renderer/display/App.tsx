@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import type { TableTimerState } from "@mnf/timer/types";
 import { formatNextBreakRemaining, formatRemainingMs, getDisplayRemainingMs } from "@mnf/timer/engine";
+import {
+  formatNextPauseVal,
+  formatPauseBanner,
+  formatTimerLevelHeadline,
+  isBreakBlind,
+  resolveTimerPauseKind,
+} from "@mnf/timer/levels";
 import type { GameSession } from "../../shared/types";
 import {
   applyDocumentTheme,
@@ -53,6 +60,7 @@ export function App() {
   const currentIdx = sortedLevels.findIndex((l) => l.level === currentLevel);
   const nextLevel = currentIdx >= 0 ? (sortedLevels[currentIdx + 1] ?? null) : null;
   const isBreakLevel = (state?.bigBlind ?? -1) === 0 && (state?.smallBlind ?? -1) === 0 && !!state?.blindStructureId;
+  const pauseKind = resolveTimerPauseKind(state);
 
   const totalRebuy = session ? session.rebuys.reduce((a, b) => a + b, 0) : 0;
   const totalChip = session
@@ -107,12 +115,12 @@ export function App() {
                 </aside>
 
                 <main className="ds-center">
-                  <p className="ds-level">{isBreakLevel ? "BREAK" : `LEVEL ${state?.blindLevel ?? 1}`}</p>
+                  <p className="ds-level">{formatTimerLevelHeadline(state)}</p>
                   <p className={`ds-timer${isRunning ? " ds-timer--running" : ""}${isPaused ? " ds-timer--paused" : ""}`}>
                     {timerText}
                   </p>
                   {isBreakLevel ? (
-                    <DsBlinds isBreak small={0} big={0} ante={0} />
+                    <DsBlinds isBreak pauseLabel={formatPauseBanner(pauseKind)} small={0} big={0} ante={0} />
                   ) : (
                     <DsBlinds
                       small={state?.smallBlind ?? 0}
@@ -122,10 +130,10 @@ export function App() {
                   )}
                   {nextLevel && (
                     <div className="ds-next">
-                      {nextLevel.big === 0 ? (
+                      {isBreakBlind(nextLevel) ? (
                         <>
                           <span className="ds-next__label">NEXT</span>
-                          <span className="ds-next__val">BREAK ({Math.round(nextLevel.durationSec / 60)}min)</span>
+                          <span className="ds-next__val">{formatNextPauseVal(nextLevel)}</span>
                         </>
                       ) : (
                         <>

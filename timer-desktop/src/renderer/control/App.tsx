@@ -6,10 +6,12 @@ import {
   applyDocumentTheme,
   DEFAULT_UI_THEME,
   normalizeUiTheme,
+  tableName,
   UI_THEME_OPTIONS,
 } from "../../shared/types";
 import { APP_VERSION, APP_VERSION_LABEL } from "../../shared/appVersion";
 import { AssignPopup } from "./AssignPopup";
+import headerLogoUrl from "./mnf-logo.png";
 import { BlindSelectView } from "./BlindSelectView";
 import { FloorPlanView } from "./FloorPlanView";
 import { GameControlView } from "./GameControlView";
@@ -452,7 +454,7 @@ export function App() {
               title="직원 리모컨 QR"
               aria-label="직원 리모컨 QR 생성"
             >
-              <img src="./mnf-logo.png" alt="MNF" className="header-logo" />
+              <img src={headerLogoUrl} alt="MNF" className="header-logo" />
             </button>
             <span className="header-heading">
               <span className="header-title">
@@ -550,7 +552,7 @@ export function App() {
 
       {popup?.kind === "table" && (
         <AssignPopup
-          title={`T${popup.slot} 게임 연결`}
+          title={`${tableName(popup.slot)} 게임 연결`}
           mousePos={popup.pos}
           currentGameId={snapshot.tableAssignments[popup.slot] ?? null}
           sessions={snapshot.sessions}
@@ -585,8 +587,16 @@ export function App() {
           return "업데이트 확인";
         })();
         const updaterAction = () => {
-          if (updaterStatus?.status === "available") { void window.controlApi.downloadUpdate(); return; }
-          if (updaterStatus?.status === "downloaded") { void window.controlApi.installUpdate(); return; }
+          if (updaterStatus?.status === "available") {
+            void window.controlApi.downloadUpdate();
+            return;
+          }
+          if (updaterStatus?.status === "downloaded") {
+            void window.controlApi.installUpdate();
+            return;
+          }
+          if (updaterStatus?.status === "downloading") return;
+          setUpdaterStatus({ status: "checking" });
           void window.controlApi.checkUpdate();
         };
         const themeLabel =
@@ -661,11 +671,16 @@ export function App() {
                   key={i}
                   type="button"
                   data-settings-update={item.update ? "" : undefined}
-                  className={`settings-popup__btn${item.variant ? ` settings-popup__btn--${item.variant}` : ""}`}
+                  className={`settings-popup__btn${item.variant ? ` settings-popup__btn--${item.variant}` : ""}${item.update ? " settings-popup__btn--update" : ""}`}
                   onClick={item.action}
                 >
                   <span className="settings-popup__num">{i + 1}</span>
-                  {item.label}
+                  <span className="settings-popup__btn-copy">
+                    <span>{item.label}</span>
+                    {item.update && updaterStatus?.status === "error" && updaterStatus.message ? (
+                      <span className="settings-popup__hint">{updaterStatus.message}</span>
+                    ) : null}
+                  </span>
                 </button>
               ))}
               <button

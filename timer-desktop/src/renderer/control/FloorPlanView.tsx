@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { AppSnapshot, GameSession } from "../../shared/types";
+import { tableLetter } from "../../shared/types";
 
 type Props = {
   snapshot: AppSnapshot;
@@ -81,7 +82,7 @@ export function FloorPlanView({ snapshot, onTableClick, onMonitorClick }: Props)
     const s = sessionForTable(snapshot, slot);
     return (
       <SlotBtn
-        label={`T${slot}`}
+        label={tableLetter(slot)}
         hotkey={TABLE_HOTKEY[slot]}
         sub={s ? `G${s.gameId}` : undefined}
         active={!!s}

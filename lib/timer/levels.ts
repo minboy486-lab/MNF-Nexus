@@ -1,4 +1,4 @@
-import type { BlindLevelDef } from "./types";
+import type { BlindLevelDef, PauseKind, TableTimerState } from "./types";
 import { BLIND_LEVELS } from "./blind-levels";
 
 const LEVEL_EPS = 1e-6;
@@ -13,6 +13,73 @@ export function sortedBlindLevels(levels: BlindLevelDef[]): BlindLevelDef[] {
 
 export function isBreakBlind(def: Pick<BlindLevelDef, "small" | "big">): boolean {
   return def.small === 0 && def.big === 0;
+}
+
+export function pauseKindOf(def: BlindLevelDef | null | undefined): PauseKind | null {
+  if (!def) return null;
+  if (def.pauseKind) return def.pauseKind;
+  if (isBreakBlind(def)) return "break";
+  return null;
+}
+
+export function resolveTimerPauseKind(
+  state: Pick<
+    TableTimerState,
+    "smallBlind" | "bigBlind" | "pauseKind" | "levels" | "blindLevel" | "blindStructureId"
+  > | null | undefined,
+): PauseKind | null {
+  if (!state?.blindStructureId) return null;
+  if (!isBreakBlind({ small: state.smallBlind, big: state.bigBlind })) return null;
+  if (state.pauseKind) return state.pauseKind;
+  return pauseKindOf(getLevelDef(state.levels ?? [], state.blindLevel));
+}
+
+export function formatTimerLevelHeadline(
+  state: Pick<
+    TableTimerState,
+    "smallBlind" | "bigBlind" | "pauseKind" | "levels" | "blindLevel" | "blindStructureId"
+  > | null | undefined,
+): string {
+  const kind = resolveTimerPauseKind(state);
+  if (kind === "reg-close") return "레지마감";
+  if (kind === "break") return "BREAK";
+  return `LEVEL ${state?.blindLevel ?? 1}`;
+}
+
+export function formatTimerLevelShort(
+  state: Pick<
+    TableTimerState,
+    "smallBlind" | "bigBlind" | "pauseKind" | "levels" | "blindLevel" | "blindStructureId"
+  > | null | undefined,
+  playPrefix = "Lv",
+): string {
+  const kind = resolveTimerPauseKind(state);
+  if (kind === "reg-close") return "레지마감";
+  if (kind === "break") return "BREAK";
+  const level = state?.blindLevel ?? 1;
+  return playPrefix ? `${playPrefix} ${level}` : String(level);
+}
+
+export function formatPauseBanner(kind: PauseKind | null | undefined): string {
+  return kind === "reg-close" ? "레지마감" : "BREAK TIME";
+}
+
+export function formatNextPauseVal(next: BlindLevelDef): string {
+  const min = Math.round(next.durationSec / 60);
+  return pauseKindOf(next) === "reg-close" ? `레지마감 (${min}min)` : `BREAK (${min}min)`;
+}
+
+export function firstRegCloseLevel(levels: BlindLevelDef[] | undefined): number | null {
+  const found = (levels ?? []).find((l) => pauseKindOf(l) === "reg-close");
+  return found?.level ?? null;
+}
+
+export function hasReachedRegClose(
+  timer: Pick<TableTimerState, "blindLevel" | "levels"> | null | undefined,
+): boolean {
+  if (!timer) return false;
+  const at = firstRegCloseLevel(timer.levels);
+  return at != null && timer.blindLevel >= at;
 }
 
 function sameLevel(a: number, b: number): boolean {
@@ -58,9 +125,11 @@ export function levelsFromStructureRows(
   let breakSeq = 0;
   return rows
     .map((row) => {
-      const isBreak =
-        row.level_kind === "break" || (row.small_blind === 0 && row.big_blind === 0);
-      if (isBreak) {
+      const isPause =
+        row.level_kind === "break" ||
+        row.level_kind === "reg-close" ||
+        (row.small_blind === 0 && row.big_blind === 0);
+      if (isPause) {
         breakSeq += 1;
         return {
           level: assignBreakLevel(lastPlayLevel, breakSeq),
@@ -68,7 +137,8 @@ export function levelsFromStructureRows(
           big: 0,
           ante: 0,
           durationSec: Math.max(1, row.duration_minutes) * 60,
-        };
+          pauseKind: row.level_kind === "reg-close" ? "reg-close" : "break",
+        } satisfies BlindLevelDef;
       }
       breakSeq = 0;
       lastPlayLevel = Number.isFinite(row.level_number) ? row.level_number : lastPlayLevel + 1;
@@ -90,8 +160,11 @@ export function levelsFromPresetRows(
   let breakSeq = 0;
   return rows
     .map((row) => {
-      const isBreak = row.kind === "break" || (row.small === 0 && row.big === 0 && row.kind !== "level");
-      if (isBreak) {
+      const isPause =
+        row.kind === "break" ||
+        row.kind === "reg-close" ||
+        (row.small === 0 && row.big === 0 && row.kind !== "level");
+      if (isPause) {
         breakSeq += 1;
         return {
           level: assignBreakLevel(lastPlayLevel, breakSeq),
@@ -99,7 +172,8 @@ export function levelsFromPresetRows(
           big: 0,
           ante: 0,
           durationSec: Math.max(1, row.minutes) * 60,
-        };
+          pauseKind: row.kind === "reg-close" ? "reg-close" : "break",
+        } satisfies BlindLevelDef;
       }
       breakSeq = 0;
       lastPlayLevel = Number.isFinite(row.level) ? row.level : lastPlayLevel + 1;

@@ -1,15 +1,27 @@
 import { autoUpdater } from "electron-updater";
-import { BrowserWindow, ipcMain } from "electron";
+import { BrowserWindow, ipcMain, app } from "electron";
 
-autoUpdater.autoDownload = false; // 자동 다운로드 비활성화 (사용자 확인 후 진행)
+autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 
-function getControlWindow(): BrowserWindow | null {
-  return BrowserWindow.getAllWindows().find((w) => !w.isDestroyed()) ?? null;
+function friendlyUpdaterError(raw: string): string {
+  const msg = raw.replace(/^Error:\s*/i, "").trim();
+  if (/not packed|dev update config/i.test(msg)) {
+    return "설치된 앱에서만 업데이트할 수 있습니다.";
+  }
+  if (/404|latest\.yml/i.test(msg)) {
+    return "업데이트 파일을 찾지 못했습니다.";
+  }
+  if (/net::|ENOTFOUND|ECONN|ETIMEDOUT|offline/i.test(msg)) {
+    return "인터넷 연결을 확인하세요.";
+  }
+  return msg || "업데이트 확인에 실패했습니다.";
 }
 
 function send(event: string, data?: unknown) {
-  getControlWindow()?.webContents.send(event, data);
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send(event, data);
+  }
 }
 
 export function setupAutoUpdater(): void {
@@ -30,7 +42,7 @@ export function setupAutoUpdater(): void {
   });
 
   autoUpdater.on("error", (err) => {
-    send("updater:status", { status: "error", message: err.message });
+    send("updater:status", { status: "error", message: friendlyUpdaterError(err.message) });
   });
 
   autoUpdater.on("download-progress", (progress) => {
@@ -41,25 +53,30 @@ export function setupAutoUpdater(): void {
     send("updater:status", { status: "downloaded", version: info.version });
   });
 
-  // IPC: 업데이트 확인
   ipcMain.handle("updater:check", async () => {
+    if (!app.isPackaged) {
+      send("updater:status", {
+        status: "error",
+        message: "설치된 앱에서만 업데이트할 수 있습니다.",
+      });
+      return;
+    }
     try {
+      send("updater:status", { status: "checking" });
       await autoUpdater.checkForUpdates();
     } catch (e) {
-      send("updater:status", { status: "error", message: String(e) });
+      send("updater:status", { status: "error", message: friendlyUpdaterError(String(e)) });
     }
   });
 
-  // IPC: 다운로드 시작
   ipcMain.handle("updater:download", async () => {
     try {
       await autoUpdater.downloadUpdate();
     } catch (e) {
-      send("updater:status", { status: "error", message: String(e) });
+      send("updater:status", { status: "error", message: friendlyUpdaterError(String(e)) });
     }
   });
 
-  // IPC: 재시작 후 설치
   ipcMain.handle("updater:install", () => {
     autoUpdater.quitAndInstall();
   });

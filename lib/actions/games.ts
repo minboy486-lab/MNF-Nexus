@@ -8,7 +8,7 @@ import { requireOpenSession } from "@/lib/venue/session";
 import { recordBuyIn, recordRebuy, type PaymentMethod } from "@/lib/actions/ledger";
 import { renumberRanks, renumberRebuyOrders } from "@/lib/presets/preset-form";
 import { insertGamePresetRow, updateGamePresetRow } from "@/lib/presets/preset-db";
-import { getPlayLevels, serializeStructure } from "@/lib/presets/structure";
+import { getPlayLevels, serializeStructure, validateStructureForSave } from "@/lib/presets/structure";
 import { isUuid } from "@/lib/utils/uuid";
 import { formatMp } from "@/lib/utils/mp";
 import type {
@@ -47,6 +47,9 @@ export type CreatePresetPayload = {
   win_points: { rank: number; points: number }[];
   participation_points: number;
   prize_pool_percent: number;
+  gtd_enabled?: boolean;
+  gtd_amount?: number;
+  gtd_entry_threshold?: number;
 };
 
 export type PresetMutationResult =
@@ -64,10 +67,8 @@ export async function createPresetFromPayload(
     return { error: "이름을 입력하세요." };
   }
 
-  const playLevels = getPlayLevels(payload.blind_structure);
-  if (playLevels.length === 0) {
-    return { error: "블라인드 레벨을 1개 이상 추가하세요." };
-  }
+  const structureError = validatePresetPayload(payload);
+  if (structureError) return { error: structureError };
 
   const supabase = await createClient();
   const result = await insertGamePresetRow(supabase, buildPresetRow(payload));
@@ -77,14 +78,28 @@ export async function createPresetFromPayload(
   return { success: true, id: result.id };
 }
 
+function validatePresetPayload(payload: CreatePresetPayload): string | null {
+  const structureError = validateStructureForSave(payload.blind_structure);
+  if (structureError) return structureError;
+  if (payload.gtd_enabled) {
+    if (!payload.gtd_amount) return "GTD 금액을 입력하세요.";
+    if (!payload.gtd_entry_threshold) return "GTD 기준 엔트리를 입력하세요.";
+  }
+  return null;
+}
+
 function buildPresetRow(payload: CreatePresetPayload) {
   const blind_structure = serializeStructure(payload.blind_structure);
+  const gtdEnabled = Boolean(payload.gtd_enabled);
   const prize_rules = {
     placements: renumberRanks(payload.placements),
     win_points: renumberRanks(payload.win_points),
     participation_points: Math.max(0, payload.participation_points),
     buy_in_chips: payload.buy_in_chips,
     rebuy_chips: renumberRebuyOrders(payload.rebuy_chips),
+    gtd_enabled: gtdEnabled,
+    gtd_amount: gtdEnabled ? Math.max(0, payload.gtd_amount ?? 0) : 0,
+    gtd_entry_threshold: gtdEnabled ? Math.max(0, payload.gtd_entry_threshold ?? 0) : 0,
   };
   return {
     name: payload.name.trim(),
@@ -120,9 +135,8 @@ export async function updatePresetFromPayload(
   if (!payload.name.trim()) {
     return { error: "이름을 입력하세요." };
   }
-  if (getPlayLevels(payload.blind_structure).length === 0) {
-    return { error: "블라인드 레벨을 1개 이상 추가하세요." };
-  }
+  const structureError = validatePresetPayload(payload);
+  if (structureError) return { error: structureError };
 
   const supabase = await createClient();
   const result = await updateGamePresetRow(supabase, id, buildPresetRow(payload));

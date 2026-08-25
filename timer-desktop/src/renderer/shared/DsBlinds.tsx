@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 
 type Props = {
   isBreak?: boolean;
+  pauseLabel?: string;
   small: number;
   big: number;
   ante: number;
@@ -12,7 +13,7 @@ function overflows(el: HTMLElement): boolean {
 }
 
 /** 블라인드 한 줄 유지. 넘치면 엔티를 아래로, 그래도 넘치면 글자만 같이 축소. */
-export function DsBlinds({ isBreak, small, big, ante }: Props) {
+export function DsBlinds({ isBreak, pauseLabel = "BREAK TIME", small, big, ante }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -48,12 +49,12 @@ export function DsBlinds({ isBreak, small, big, ante }: Props) {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [isBreak, small, big, ante]);
+  }, [isBreak, pauseLabel, small, big, ante]);
 
   if (isBreak) {
     return (
       <div className="ds-blinds" ref={rootRef}>
-        <span className="ds-blinds__val ds-blinds__val--break">BREAK TIME</span>
+        <span className="ds-blinds__val ds-blinds__val--break">{pauseLabel}</span>
       </div>
     );
   }

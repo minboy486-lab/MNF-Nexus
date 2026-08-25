@@ -1,4 +1,4 @@
-import { getLevelDef, getNextLevelDef, getPrevLevelDef, resolveLevels, sortedBlindLevels } from "./levels";
+import { getLevelDef, getNextLevelDef, getPrevLevelDef, pauseKindOf, resolveLevels, sortedBlindLevels } from "./levels";
 import type { BlindLevelDef, BlindStructureOption, TableTimerState, TimerAction, TimerStatus } from "./types";
 
 export function createInitialTimerState(tableId: number): TableTimerState {
@@ -11,6 +11,7 @@ export function createInitialTimerState(tableId: number): TableTimerState {
     smallBlind: 0,
     bigBlind: 0,
     ante: 0,
+    pauseKind: null,
     blindStructureId: null,
     blindStructureName: null,
     levels: [],
@@ -28,6 +29,7 @@ export function openTableGame(tableId: number, structure: BlindStructureOption):
     smallBlind: first.small,
     bigBlind: first.big,
     ante: first.ante,
+    pauseKind: pauseKindOf(first),
     blindStructureId: structure.id,
     blindStructureName: structure.name,
     levels: structure.levels,
@@ -86,6 +88,7 @@ function applyLevel(state: TableTimerState, levelNum: number): TableTimerState {
     smallBlind: level.small,
     bigBlind: level.big,
     ante: level.ante,
+    pauseKind: pauseKindOf(level),
   };
 }
 

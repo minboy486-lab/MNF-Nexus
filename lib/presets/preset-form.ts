@@ -102,5 +102,21 @@ export function presetToFormState(preset: GamePreset) {
     placements: placements.length > 0 ? placements : [{ rank: 1, percent: 50 }],
     winPoints: winPoints.length > 0 ? winPoints : [{ rank: 1, points: 100 }],
     structure: normalizeStructure(preset.blind_structure),
+    gtdEnabled: Boolean(getRules(preset)?.gtd_enabled),
+    gtdAmount: getRules(preset)?.gtd_amount ?? 0,
+    gtdEntryThreshold: getRules(preset)?.gtd_entry_threshold ?? 0,
+  };
+}
+
+export function getPresetGtd(preset: GamePreset): {
+  enabled: boolean;
+  amount: number;
+  entryThreshold: number;
+} {
+  const rules = getRules(preset);
+  return {
+    enabled: Boolean(rules?.gtd_enabled),
+    amount: rules?.gtd_amount ?? 0,
+    entryThreshold: rules?.gtd_entry_threshold ?? 0,
   };
 }

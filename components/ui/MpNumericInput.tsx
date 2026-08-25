@@ -9,6 +9,7 @@ type Props = {
   onChangeWon: (won: number) => void;
   className?: string;
   "aria-label"?: string;
+  emptyWhenZero?: boolean;
 };
 
 export function MpNumericInput({
@@ -17,6 +18,7 @@ export function MpNumericInput({
   onChangeWon,
   className,
   "aria-label": ariaLabel,
+  emptyWhenZero,
 }: Props) {
   return (
     <NumericInput
@@ -26,6 +28,7 @@ export function MpNumericInput({
       onChange={(mp) => onChangeWon(mpToWon(mp))}
       className={className}
       aria-label={ariaLabel}
+      emptyWhenZero={emptyWhenZero}
     />
   );
 }

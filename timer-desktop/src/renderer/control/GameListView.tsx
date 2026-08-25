@@ -1,6 +1,7 @@
 import type { AppSnapshot, GameSession } from "../../shared/types";
 import type { TableTimerState } from "@mnf/timer/types";
 import { formatRemainingMs, getDisplayRemainingMs } from "@mnf/timer/engine";
+import { formatTimerLevelShort } from "@mnf/timer/levels";
 
 type Props = {
   snapshot: AppSnapshot;
@@ -38,9 +39,7 @@ export function GameListView({ snapshot, timers, onSelectGame, onNewGame }: Prop
           const isRunning = timer?.status === "running";
 
           const fKey = idx < 6 ? `F${idx + 1}` : null;
-          const isBreak =
-            !!timer?.blindStructureId && timer.smallBlind === 0 && timer.bigBlind === 0;
-          const levelLabel = isBreak ? "BREAK" : String(timer?.blindLevel ?? 1);
+          const levelLabel = formatTimerLevelShort(timer, "");
           const rebuyTotal = session.rebuys.reduce((a, b) => a + b, 0);
           return (
             <li key={session.gameId} className={`game-card${isRunning ? " game-card--running" : ""}`} onClick={() => onSelectGame(session)}>
