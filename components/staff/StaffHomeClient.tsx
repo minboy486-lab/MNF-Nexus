@@ -8,6 +8,7 @@ import { StaffCheckoutConfirm } from "@/components/staff/StaffCheckoutConfirm";
 import { formatTimeHHmmKST } from "@/lib/utils/format";
 import {
   clearTimerPairing,
+  consumeClockInGoHome,
   consumeFailedLanNavigation,
   markLanNavigation,
   readTimerPairing,
@@ -49,8 +50,10 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
   }
 
   useEffect(() => {
+    if (consumeClockInGoHome()) router.refresh();
     if (consumeFailedLanNavigation()) setWifiError(true);
     function onShow() {
+      if (consumeClockInGoHome()) router.refresh();
       if (consumeFailedLanNavigation()) setWifiError(true);
     }
     window.addEventListener("pageshow", onShow);

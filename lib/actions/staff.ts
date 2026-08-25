@@ -477,6 +477,15 @@ export async function getMyStaffHome(): Promise<MyStaffHome | { error: string }>
   const monthStart = new Date(`${toISODate(year, month, 1)}T00:00:00+09:00`);
   const nextMonth = month === 12 ? new Date(`${year + 1}-01-01T00:00:00+09:00`) : new Date(`${toISODate(year, month + 1, 1)}T00:00:00+09:00`);
 
+  const { data: openShift } = await me.supabase
+    .from("staff_shifts")
+    .select("id, checked_in_at")
+    .eq("staff_id", me.staffId)
+    .is("checked_out_at", null)
+    .order("checked_in_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const { data: shifts } = await me.supabase
     .from("staff_shifts")
     .select("id, checked_in_at, checked_out_at")
@@ -487,8 +496,8 @@ export async function getMyStaffHome(): Promise<MyStaffHome | { error: string }>
 
   const now = Date.now();
   let monthHours = 0;
-  let working = false;
-  let checkedInAt: string | null = null;
+  const working = !!openShift;
+  const checkedInAt: string | null = openShift?.checked_in_at ?? null;
   const rows: MyShiftRow[] = [];
 
   for (const sh of shifts ?? []) {
@@ -496,10 +505,6 @@ export async function getMyStaffHome(): Promise<MyStaffHome | { error: string }>
     const outAt = sh.checked_out_at ? new Date(sh.checked_out_at).getTime() : now;
     const hours = Math.max(0, (outAt - inAt) / 3600000);
     monthHours += hours;
-    if (!sh.checked_out_at) {
-      working = true;
-      checkedInAt = sh.checked_in_at;
-    }
     rows.push({
       id: sh.id,
       checkedInAt: sh.checked_in_at,

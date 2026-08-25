@@ -81,6 +81,22 @@ export function subscribeTimerPairing(onChange: () => void): () => void {
 }
 
 export const STAFF_LAN_NAV_KEY = "mnf-staff-lan-nav";
+export const CLOCK_IN_HOME_KEY = "mnf-clock-in-go-home";
+
+export function markClockInGoHome(): void {
+  sessionStorage.setItem(CLOCK_IN_HOME_KEY, "1");
+  sessionStorage.removeItem(STAFF_LAN_NAV_KEY);
+}
+
+export function consumeClockInGoHome(): boolean {
+  const v = sessionStorage.getItem(CLOCK_IN_HOME_KEY);
+  sessionStorage.removeItem(CLOCK_IN_HOME_KEY);
+  return v === "1";
+}
+
+export function hasClockInGoHome(): boolean {
+  return sessionStorage.getItem(CLOCK_IN_HOME_KEY) === "1";
+}
 
 export function markLanNavigation(): void {
   sessionStorage.setItem(STAFF_LAN_NAV_KEY, String(Date.now()));

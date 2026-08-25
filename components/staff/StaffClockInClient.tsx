@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { punchMeIn } from "@/lib/actions/staff";
 import { StaffQrScanner } from "@/components/staff/StaffQrScanner";
 import {
   parseControllerQr,
   saveTimerPairing,
   markLanNavigation,
+  markClockInGoHome,
+  hasClockInGoHome,
   timerRemoteHref,
   pairingUrlWithoutTok,
   consumeFailedLanNavigation,
@@ -25,12 +28,20 @@ export function StaffClockInClient({ loginId, mode = "clock-in" }: Props) {
   const pairingOnly = mode === "pair";
 
   useEffect(() => {
+    if (hasClockInGoHome()) {
+      window.location.replace("/staff");
+      return;
+    }
     if (consumeFailedLanNavigation()) {
       busyRef.current = false;
       setBusy(false);
       setError(LAN_WIFI_ERROR);
     }
     function onShow() {
+      if (hasClockInGoHome()) {
+        window.location.replace("/staff");
+        return;
+      }
       if (consumeFailedLanNavigation()) {
         busyRef.current = false;
         setBusy(false);
@@ -63,8 +74,23 @@ export function StaffClockInClient({ loginId, mode = "clock-in" }: Props) {
         loginId,
       };
       saveTimerPairing(pairing);
-      if (pairingOnly) markLanNavigation();
-      window.location.assign(timerRemoteHref({ ...pairing, loginId }, pairingOnly ? "resume" : "clock-in"));
+
+      if (pairingOnly) {
+        markLanNavigation();
+        window.location.replace(timerRemoteHref({ ...pairing, loginId }, "resume"));
+        return true;
+      }
+
+      markClockInGoHome();
+      void punchMeIn().then((result) => {
+        if ("error" in result) {
+          busyRef.current = false;
+          setBusy(false);
+          setError(result.error);
+          return;
+        }
+        window.location.replace("/staff");
+      });
       return true;
     },
     [loginId, pairingOnly],

@@ -51,12 +51,12 @@ function sendStaffAuth(ws: WebSocket): void {
   const q = pairingFromSearch(location.search);
   const sessionToken = localStorage.getItem(LS_SESSION) || "";
   const loginId = q.loginId || localStorage.getItem(LS_LOGIN) || "";
-  if (sessionToken) {
-    ws.send(JSON.stringify({ type: "resume", sessionToken } satisfies RemoteClientMsg));
-    return;
-  }
   if (q.tok && loginId) {
     ws.send(JSON.stringify({ type: "claim", token: q.tok, loginId } satisfies RemoteClientMsg));
+    return;
+  }
+  if (sessionToken) {
+    ws.send(JSON.stringify({ type: "resume", sessionToken } satisfies RemoteClientMsg));
     return;
   }
   if (loginId) {
