@@ -1,5 +1,6 @@
 export const STAFF_TIMER_PAIRING_KEY = "mnf-staff-timer-pairing";
 export const CONTROLLER_REMOTE_PORT = 17890;
+const PAIRING_COOKIE = "mnf-staff-timer-pairing";
 
 export type StaffTimerPairing = {
   url: string;
@@ -49,9 +50,28 @@ export function parseControllerQr(text: string): { pin: string; tok: string; url
   }
 }
 
+function cookiePairing(): string | null {
+  if (typeof document === "undefined") return null;
+  const parts = document.cookie.split("; ");
+  const row = parts.find((p) => p.startsWith(`${PAIRING_COOKIE}=`));
+  if (!row) return null;
+  try {
+    return decodeURIComponent(row.slice(PAIRING_COOKIE.length + 1));
+  } catch {
+    return null;
+  }
+}
+
 export function readTimerPairingRaw(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(STAFF_TIMER_PAIRING_KEY);
+  const ls = localStorage.getItem(STAFF_TIMER_PAIRING_KEY);
+  if (ls) return ls;
+  const fromCookie = cookiePairing();
+  if (fromCookie) {
+    localStorage.setItem(STAFF_TIMER_PAIRING_KEY, fromCookie);
+    return fromCookie;
+  }
+  return null;
 }
 
 export function readTimerPairing(): StaffTimerPairing | null {
@@ -67,16 +87,25 @@ export function readTimerPairing(): StaffTimerPairing | null {
 }
 
 export function saveTimerPairing(pairing: StaffTimerPairing): void {
-  localStorage.setItem(STAFF_TIMER_PAIRING_KEY, JSON.stringify(pairing));
+  const raw = JSON.stringify(pairing);
+  localStorage.setItem(STAFF_TIMER_PAIRING_KEY, raw);
+  document.cookie = `${PAIRING_COOKIE}=${encodeURIComponent(raw)}; path=/; max-age=${60 * 60 * 18}; SameSite=Lax`;
+  window.dispatchEvent(new Event("mnf-timer-pairing"));
 }
 
 export function clearTimerPairing(): void {
   localStorage.removeItem(STAFF_TIMER_PAIRING_KEY);
+  document.cookie = `${PAIRING_COOKIE}=; path=/; max-age=0; SameSite=Lax`;
+  window.dispatchEvent(new Event("mnf-timer-pairing"));
 }
 
 export function subscribeTimerPairing(onChange: () => void): () => void {
   window.addEventListener("storage", onChange);
-  return () => window.removeEventListener("storage", onChange);
+  window.addEventListener("mnf-timer-pairing", onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener("mnf-timer-pairing", onChange);
+  };
 }
 
 export const CLOCK_IN_HOME_KEY = "mnf-clock-in-go-home";
@@ -95,16 +124,13 @@ export function hasClockInGoHome(): boolean {
   return sessionStorage.getItem(CLOCK_IN_HOME_KEY) === "1";
 }
 
-export function timerRemoteHref(
-  pairing: StaffTimerPairing,
-  mode: "clock-in" | "resume" = "resume",
-): string {
+/** 출근 이후 매장 컨트롤용. tok/next 없이 PIN+아이디만 넘긴다. */
+export function timerRemoteHref(pairing: StaffTimerPairing): string {
   try {
     const u = new URL(pairing.url);
     u.searchParams.delete("tok");
+    u.searchParams.delete("next");
     if (pairing.pin) u.searchParams.set("pin", pairing.pin);
-    if (mode === "clock-in" && pairing.tok) u.searchParams.set("tok", pairing.tok);
-    if (mode === "clock-in") u.searchParams.set("next", "staff");
     if (pairing.loginId) u.searchParams.set("id", pairing.loginId);
     if (typeof window !== "undefined" && window.location.origin) {
       u.searchParams.set("from", window.location.origin);
@@ -119,6 +145,7 @@ export function pairingUrlWithoutTok(url: string): string {
   try {
     const u = new URL(url);
     u.searchParams.delete("tok");
+    u.searchParams.delete("next");
     return u.toString();
   } catch {
     return url;

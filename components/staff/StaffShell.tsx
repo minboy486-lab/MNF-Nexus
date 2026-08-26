@@ -18,10 +18,10 @@ export function StaffShell({
   const hideNav = pathname.startsWith("/staff/clock-in") || pathname.startsWith("/staff/timer");
 
   return (
-    <div className="min-h-dvh bg-surface flex flex-col">
-      <header className="sticky top-0 z-40 border-b border-outline-variant/30 bg-surface/95 backdrop-blur-md px-4 py-3 flex justify-between items-center shrink-0">
+    <div className="min-h-dvh bg-surface flex flex-col staff-shell">
+      <header className="staff-shell__header sticky top-0 z-40 border-b border-outline-variant/30 bg-surface/95 backdrop-blur-md px-4 flex justify-between items-center shrink-0">
         {isHome ? (
-          <Link href="/staff" className="font-bold text-primary">
+          <Link href="/staff" className="font-bold text-primary leading-none py-1">
             MNF · 직원
           </Link>
         ) : (

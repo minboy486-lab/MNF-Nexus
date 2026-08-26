@@ -55,12 +55,12 @@ function sendStaffAuth(ws: WebSocket): void {
     ws.send(JSON.stringify({ type: "claim", token: q.tok, loginId } satisfies RemoteClientMsg));
     return;
   }
-  if (sessionToken) {
-    ws.send(JSON.stringify({ type: "resume", sessionToken } satisfies RemoteClientMsg));
-    return;
-  }
   if (loginId) {
     ws.send(JSON.stringify({ type: "rejoin", loginId } satisfies RemoteClientMsg));
+    return;
+  }
+  if (sessionToken) {
+    ws.send(JSON.stringify({ type: "resume", sessionToken } satisfies RemoteClientMsg));
   }
 }
 
@@ -240,13 +240,6 @@ export function App() {
         if (msg.staff.canControl) {
           setTok("");
           stripTokFromUrl();
-          if (initial.next === "staff") {
-            const home = websiteUrl("/staff");
-            if (home) {
-              window.location.replace(home);
-              return;
-            }
-          }
         }
         return;
       }
@@ -410,7 +403,6 @@ export function App() {
   const session = selected?.session ?? null;
   const timer = selected?.timer;
   const ready = pinOk && (staffAuth === false || !!staff?.canControl);
-  const goingHome = initial.next === "staff";
   const hostField = selected?.host ? { host: selected.host } : {};
 
   return (
@@ -458,7 +450,7 @@ export function App() {
             로그아웃
           </button>
         )}
-        {ready && !goingHome && (
+        {ready && (
           <button type="button" className="kakao-share-btn" onClick={() => void shareKakaoStatus()}>
             {shareFlash === "shared" ? "공유됨" : shareFlash === "copied" ? "복사됨" : "카톡 공유"}
           </button>
@@ -493,11 +485,11 @@ export function App() {
 
       {pinOk && staffAuth && !staff && !loginId && (
         <div className="card">
-          <p className="card-title">웹에서 출근 등록</p>
-          <p className="muted">직원 웹에 로그인한 뒤 컨트롤러 QR을 스캔하면 연결됩니다.</p>
-          {websiteUrl("/login") && (
-            <a className="primary-btn" href={websiteUrl("/login") ?? "/login"}>
-              로그인 화면으로
+          <p className="card-title">직원 웹에서 출근</p>
+          <p className="muted">직원 앱에서 로그인한 뒤 매장 컨트롤을 누르세요.</p>
+          {websiteUrl("/staff") && (
+            <a className="primary-btn" href={websiteUrl("/staff") ?? "/staff"}>
+              직원 홈으로
             </a>
           )}
         </div>
@@ -505,23 +497,31 @@ export function App() {
 
       {pinOk && staffAuth && staff && !staff.canControl && (
         <div className="card">
-          <p className="card-title">웹에서 출근 등록</p>
-          <p className="muted">직원 웹의 출근 등록에서 컨트롤러 QR을 카메라로 스캔하세요.</p>
-          {websiteUrl("/staff/clock-in") && (
-            <a className="primary-btn" href={websiteUrl("/staff/clock-in") ?? "/staff/clock-in"}>
-              출근 등록으로
+          <p className="card-title">출근이 필요합니다</p>
+          <p className="muted">직원 앱에서 출근한 뒤 매장 컨트롤을 다시 누르세요.</p>
+          {websiteUrl("/staff") && (
+            <a className="primary-btn" href={websiteUrl("/staff") ?? "/staff"}>
+              직원 홈으로
             </a>
           )}
         </div>
       )}
 
-      {goingHome && pinOk && !error && (
-        <p className="muted">출근 등록 중...</p>
-      )}
-
-      {ready && !selected && !goingHome && (
+      {ready && !selected && (
         <div className="game-list">
-          <p className="card-title">진행 중 게임</p>
+          <div className="game-list-head">
+            <p className="card-title">진행 중 게임</p>
+            <button
+              type="button"
+              className="game-list-refresh"
+              onClick={() => {
+                setError(null);
+                connect(pin || storedPin());
+              }}
+            >
+              새로고침
+            </button>
+          </div>
           {games.length === 0 && <p className="muted">진행 중인 게임이 없습니다.</p>}
           {games.map((g) => {
             const t = g.timer;
@@ -549,7 +549,7 @@ export function App() {
         </div>
       )}
 
-      {ready && session && selected && !goingHome && (
+      {ready && session && selected && (
         <GamePad
           session={session}
           timer={timer}

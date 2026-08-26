@@ -50,6 +50,20 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+.staff-shell {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  .staff-shell {
+    padding-top: max(12px, env(safe-area-inset-top, 0px));
+  }
+}
+.staff-shell__header {
+  min-height: 52px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
 html {
   color-scheme: dark;
 }

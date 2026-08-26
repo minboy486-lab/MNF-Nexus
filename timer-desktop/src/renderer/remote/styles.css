@@ -154,6 +154,27 @@ body {
   gap: 10px;
 }
 .card-title { font-weight: 700; font-size: 16px; }
+.game-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.game-list-head .card-title { margin: 0; }
+.game-list-refresh {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 182, 201, 0.45);
+  background: rgba(255, 182, 201, 0.16);
+  color: #ffb6c9;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
 .muted { color: #9b9298; font-size: 13px; line-height: 1.45; }
 
 .field, .primary-btn, .row2 button, .row4 button, .counter button, .hold-btn, .more-toggle, .game-row {

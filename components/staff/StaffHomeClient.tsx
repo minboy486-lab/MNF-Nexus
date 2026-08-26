@@ -26,6 +26,7 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [confirmOut, setConfirmOut] = useState(false);
+  const [connectHint, setConnectHint] = useState<string | null>(null);
   const hasPairing =
     useSyncExternalStore(subscribeTimerPairing, readTimerPairingRaw, () => null) != null;
 
@@ -54,9 +55,10 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
   function openTimer() {
     const pairing = readTimerPairing();
     if (!pairing) {
-      window.location.assign("/staff/timer");
+      setConnectHint("저장된 컨트롤러가 없습니다. 매장 와이파이를 확인한 뒤 다시 눌러 주세요.");
       return;
     }
+    setConnectHint(null);
     window.location.assign(timerRemoteHref({ ...pairing, loginId: pairing.loginId || loginId }));
   }
 
@@ -74,6 +76,10 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
         )}
       </section>
 
+      {connectHint && (
+        <p className="text-sm text-error bg-error/10 rounded-xl px-3 py-2">{connectHint}</p>
+      )}
+
       {!working ? (
         <Link
           href="/staff/clock-in"
@@ -81,31 +87,20 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
         >
           <span className="material-symbols-outlined text-4xl text-primary">qr_code_scanner</span>
           <p className="text-xl font-bold mt-2">출근 등록</p>
-          <p className="text-sm text-on-surface-variant mt-1">컨트롤러 QR을 스캔하세요</p>
+          <p className="text-sm text-on-surface-variant mt-1">컨트롤러 QR을 한 번 스캔하세요</p>
         </Link>
       ) : (
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={openTimer}
-            className="block w-full text-left rounded-2xl p-5 border border-primary/35 bg-primary/12"
-          >
-            <span className="material-symbols-outlined text-4xl text-primary">timer</span>
-            <p className="text-xl font-bold mt-2">매장 컨트롤</p>
-            <p className="text-sm text-on-surface-variant mt-1">
-              {hasPairing ? "진행 중 게임을 조작합니다" : "컨트롤러 QR을 한 번 스캔합니다"}
-            </p>
-          </button>
-          {hasPairing && (
-            <button
-              type="button"
-              onClick={openTimer}
-              className="w-full h-12 rounded-xl border border-white/15 bg-white/8 text-sm font-bold active:scale-[0.97] transition-transform"
-            >
-              새로고침
-            </button>
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={openTimer}
+          className="block w-full text-left rounded-2xl p-5 border border-primary/35 bg-primary/12"
+        >
+          <span className="material-symbols-outlined text-4xl text-primary">timer</span>
+          <p className="text-xl font-bold mt-2">매장 컨트롤</p>
+          <p className="text-sm text-on-surface-variant mt-1">
+            {hasPairing ? "진행 중 게임 목록을 엽니다" : "저장된 컨트롤러로 연결합니다"}
+          </p>
+        </button>
       )}
 
       <p className="text-[11px] text-on-surface-variant/80 px-1">직원 메뉴</p>

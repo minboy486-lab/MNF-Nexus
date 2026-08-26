@@ -45,8 +45,17 @@ export async function loginStaff(loginId: string, password: string): Promise<Sta
   }
 
   let staff = (
-    await sb.from("staff").select("id, name, is_active").eq("profile_id", userId).eq("is_active", true).maybeSingle()
-  ).data;
+    await sb
+      .from("staff")
+      .select("id, name, is_active")
+      .eq("profile_id", userId)
+      .order("is_active", { ascending: false })
+      .limit(1)
+  ).data?.[0] ?? null;
+
+  if (staff && !staff.is_active) {
+    return { error: "비활성화된 직원 계정입니다." };
+  }
 
   if (!staff) {
     const name = profile?.display_name || loginId;
@@ -95,8 +104,16 @@ async function findActiveStaffByLoginId(loginId: string): Promise<StaffAuthOk | 
   }
 
   let staff = (
-    await sb.from("staff").select("id, name, is_active").eq("profile_id", profile.id).eq("is_active", true).maybeSingle()
-  ).data;
+    await sb
+      .from("staff")
+      .select("id, name, is_active")
+      .eq("profile_id", profile.id)
+      .order("is_active", { ascending: false })
+      .limit(1)
+  ).data?.[0] ?? null;
+  if (staff && !staff.is_active) {
+    return { error: "비활성화된 직원 계정입니다." };
+  }
   if (!staff) {
     const name = profile.display_name || id;
     const { data: created, error } = await sb
@@ -143,7 +160,7 @@ export async function rejoinStaffByLoginId(loginId: string): Promise<StaffAuthOk
   const found = await findActiveStaffByLoginId(loginId);
   if ("error" in found) return found;
   if (!found.checkedIn) {
-    return { error: "출근되어 있지 않습니다. 컨트롤러 QR을 한 번 스캔해 주세요." };
+    return { error: "직원 웹에서 출근한 뒤 매장 컨트롤을 눌러 주세요." };
   }
   return found;
 }
