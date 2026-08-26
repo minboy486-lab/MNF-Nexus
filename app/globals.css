@@ -224,6 +224,56 @@ body {
   line-height: 1;
 }
 
+.venue-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.venue-switcher__pills {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.venue-switcher__pill {
+  flex: 1;
+  min-width: 0;
+  height: 2rem;
+  padding: 0 0.6rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--on-surface-variant);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.venue-switcher__pill[data-active="true"] {
+  background: rgba(255, 22, 240, 0.16);
+  border-color: rgba(255, 22, 240, 0.35);
+  color: var(--primary);
+}
+
+.venue-switcher__pill:disabled {
+  opacity: 0.55;
+}
+
+.venue-switcher--compact .venue-switcher__pill {
+  flex: 0 0 auto;
+  height: 1.75rem;
+  font-size: 0.7rem;
+}
+
+.venue-switcher__error {
+  font-size: 0.65rem;
+  color: var(--error, #ff6b7a);
+}
+
 .glass-header {
   background: rgba(10, 11, 16, 0.65);
   backdrop-filter: blur(16px);

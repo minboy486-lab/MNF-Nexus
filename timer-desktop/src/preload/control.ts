@@ -8,6 +8,7 @@ export type ControlApi = {
   getDisplays: () => Promise<DisplayInfo[]>;
   getConfig: () => Promise<AppConfig | null>;
   saveConfig: (config: AppConfig) => Promise<{ ok: true } | { ok: false; error: string }>;
+  setVenue: (opts: { venueId: string; pin: string }) => Promise<{ ok: true } | { ok: false; error: string }>;
   onSetupRequired: (cb: () => void) => () => void;
   getTheme: () => Promise<UiThemeId>;
   setTheme: (theme: UiThemeId) => Promise<{ ok: true; theme: UiThemeId } | { ok: false; error: string }>;
@@ -61,6 +62,7 @@ const api: ControlApi = {
   getDisplays: () => ipcRenderer.invoke("displays:get"),
   getConfig: () => ipcRenderer.invoke("config:get"),
   saveConfig: (config) => ipcRenderer.invoke("config:save", config),
+  setVenue: (opts) => ipcRenderer.invoke("venue:set", opts),
   onSetupRequired: (cb) => {
     const h = () => cb();
     ipcRenderer.on("config:setup-required", h);

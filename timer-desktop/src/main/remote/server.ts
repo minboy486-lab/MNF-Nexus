@@ -20,12 +20,14 @@ import {
 import type { TimerHub } from "../timer/timerHub";
 import { clockInStaff, clockOutStaff, claimStaffByLoginId, loginStaff, rejoinStaffByLoginId, refreshStaffClock, type StaffAuthOk } from "../supabase/staffAuth";
 import { getSupabase } from "../supabase/client";
+import { getConfiguredVenueId } from "../supabase/venue";
 import { hostname } from "node:os";
 import { getDisplayRemainingMs } from "@mnf/timer/engine";
 import { listLanIPv4 } from "./lan";
 import { loadRemoteAuth, saveRemoteAuth } from "./authStore";
 import type { LanHostGames } from "../../shared/lanView";
 import { LanCluster, normalizeRemoteIp } from "./lanCluster";
+import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 import type { AppSnapshot } from "../../shared/types";
 import type { TableTimerState } from "@mnf/timer/types";
 
@@ -124,6 +126,7 @@ export class RemoteServer {
       getPin: () => this.pin,
       adoptPin: (pin) => this.adoptPin(pin),
       hostname: () => hostname() || "pc",
+      getVenueId: () => getConfiguredVenueId(),
       getLocalSnapshot: () => this.localSnapshotPayload(),
       onPeersChange: () => this.broadcastToOperators(),
     });
@@ -379,6 +382,12 @@ export class RemoteServer {
       return;
     }
     if (msg.type === "peer_hello") {
+      const peerVenue = isKnownVenueId(msg.venueId) ? msg.venueId : YEOKSAM_VENUE_ID;
+      if (peerVenue !== getConfiguredVenueId()) {
+        sendJson(ws, { type: "hello_fail", error: "지점이 다릅니다." });
+        ws.close();
+        return;
+      }
       if (msg.pin !== this.pin) {
         sendJson(ws, { type: "hello_fail", error: "PIN이 올바르지 않습니다." });
         ws.close();
@@ -725,6 +734,7 @@ export class RemoteServer {
       ok: true,
       hostname: hostname() || "pc",
       pin: this.pin,
+      venueId: getConfiguredVenueId(),
     };
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
@@ -755,6 +765,7 @@ export class RemoteServer {
       hostname: hostname(),
       theme: this.getThemeId(),
       soundVolume: this.getVolume(),
+      venueId: getConfiguredVenueId(),
       games,
     };
     res.writeHead(200, {

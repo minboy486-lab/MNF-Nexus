@@ -20,19 +20,22 @@ import type {
   Seat,
   VenueSession,
 } from "@/lib/types";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { getActiveVenueId } from "@/lib/venue/active";
+import { YEOKSAM_VENUE_ID } from "@/lib/venue/constants";
 
 export async function getPhysicalTables() {
   if (!isSupabaseConfigured()) return demoTables;
 
+  const venueId = await getActiveVenueId();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("physical_tables")
     .select("*")
+    .eq("venue_id", venueId)
     .order("code");
 
-  if (error || !data?.length) return demoTables;
-  return data as PhysicalTable[];
+  if (error) return demoTables;
+  return (data ?? []) as PhysicalTable[];
 }
 
 export async function getPhysicalTable(id: string) {
@@ -43,8 +46,14 @@ export async function getPhysicalTable(id: string) {
 export async function getGamePresets() {
   if (!isSupabaseConfigured()) return demoPresets;
 
+  const venueId = await getActiveVenueId();
   const supabase = await createClient();
-  const { data, error } = await supabase.from("game_presets").select("*").order("name");
+  let query = supabase.from("game_presets").select("*").order("name");
+  query =
+    venueId === YEOKSAM_VENUE_ID
+      ? query.or(`venue_id.eq.${venueId},venue_id.is.null`)
+      : query.eq("venue_id", venueId);
+  const { data, error } = await query;
   if (error) return [];
   return data ?? [];
 }
@@ -52,9 +61,15 @@ export async function getGamePresets() {
 export async function getGames() {
   if (!isSupabaseConfigured()) return demoGames;
 
+  const venueId = await getActiveVenueId();
   const supabase = await createClient();
-  const { data } = await supabase.from("games").select("*").order("created_at", { ascending: false });
-  return data?.length ? data : demoGames;
+  let query = supabase.from("games").select("*").order("created_at", { ascending: false });
+  query =
+    venueId === YEOKSAM_VENUE_ID
+      ? query.or(`venue_id.eq.${venueId},venue_id.is.null`)
+      : query.eq("venue_id", venueId);
+  const { data } = await query;
+  return data ?? [];
 }
 
 export async function getGame(gameId: string): Promise<GameWithRelations | null> {
@@ -167,7 +182,7 @@ export async function getMembers(search?: string) {
   let query = supabase
     .from("members")
     .select("*")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .order("nickname", { ascending: true });
 
   const { data } = await query;
@@ -195,7 +210,7 @@ export async function getMemberVisitCounts(): Promise<Record<string, number>> {
   const { data } = await supabase
     .from("member_visits")
     .select("member_id")
-    .eq("venue_id", DEFAULT_VENUE_ID);
+    .eq("venue_id", await getActiveVenueId());
 
   const counts: Record<string, number> = {};
   for (const row of data ?? []) {
@@ -220,7 +235,7 @@ export async function getActiveMemberVisits() {
   const { data: session } = await supabase
     .from("venue_sessions")
     .select("id")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .eq("status", "open")
     .order("opened_at", { ascending: false })
     .limit(1)
@@ -246,7 +261,7 @@ export async function getOpenVenueSession(): Promise<VenueSession | null> {
   const { data } = await supabase
     .from("venue_sessions")
     .select("*")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .eq("status", "open")
     .order("opened_at", { ascending: false })
     .limit(1)

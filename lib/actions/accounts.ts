@@ -14,13 +14,19 @@ import {
 } from "@/lib/auth/staff-login";
 import type { UserRole } from "@/lib/types";
 import { PROFILE_ROLES } from "@/lib/auth/roles";
-import { ensureVenueStaffRow } from "@/lib/staff/ensure-row";
+import { syncStaffRowsForVenues } from "@/lib/staff/ensure-row";
+import {
+  KNOWN_VENUE_IDS,
+  defaultVenuesForRole,
+  isKnownVenueId,
+} from "@/lib/venue/constants";
 
 export type AccountRow = {
   id: string;
   login_id: string;
   display_name: string | null;
   role: UserRole;
+  venue_ids: string[];
   created_at: string;
   last_sign_in_at: string | null;
 };
@@ -48,6 +54,34 @@ async function requireAccountAdmin(): Promise<AccountAdminGate> {
   return { user: { id: user.id } };
 }
 
+function normalizeAccountVenues(
+  role: UserRole,
+  requested: string[] | undefined,
+): { venueIds: string[] } | { error: string } {
+  if (role === "admin") return { venueIds: [...KNOWN_VENUE_IDS] };
+  if (role === "guest") return { venueIds: [] };
+  const venueIds = [...new Set((requested ?? []).filter(isKnownVenueId))];
+  if (venueIds.length === 0) {
+    return { error: "지점을 하나 이상 선택하세요." };
+  }
+  return { venueIds };
+}
+
+async function replaceProfileVenues(
+  admin: ReturnType<typeof createAdminClient>,
+  profileId: string,
+  venueIds: string[],
+): Promise<{ error?: string }> {
+  const { error: delError } = await admin.from("profile_venues").delete().eq("profile_id", profileId);
+  if (delError) return { error: delError.message };
+  if (!venueIds.length) return {};
+  const { error } = await admin.from("profile_venues").insert(
+    venueIds.map((venue_id) => ({ profile_id: profileId, venue_id })),
+  );
+  if (error) return { error: error.message };
+  return {};
+}
+
 export async function listAccounts(): Promise<
   { accounts: AccountRow[] } | { error: string }
 > {
@@ -68,6 +102,18 @@ export async function listAccounts(): Promise<
 
   if (profError) return { error: profError.message };
 
+  const { data: memberships } = await admin
+    .from("profile_venues")
+    .select("profile_id, venue_id")
+    .in("profile_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
+
+  const venuesByProfile = new Map<string, string[]>();
+  for (const row of memberships ?? []) {
+    const list = venuesByProfile.get(row.profile_id) ?? [];
+    if (isKnownVenueId(row.venue_id)) list.push(row.venue_id);
+    venuesByProfile.set(row.profile_id, list);
+  }
+
   const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]));
 
   const accounts: AccountRow[] = listData.users.map((u) => {
@@ -86,6 +132,10 @@ export async function listAccounts(): Promise<
       login_id: loginId,
       display_name: p?.display_name ?? metaName,
       role: (p?.role ?? "guest") as UserRole,
+      venue_ids:
+        venuesByProfile.get(u.id)?.length
+          ? (venuesByProfile.get(u.id) as string[])
+          : defaultVenuesForRole(p?.role ?? "guest"),
       created_at: p?.created_at ?? u.created_at,
       last_sign_in_at: u.last_sign_in_at ?? null,
     };
@@ -100,6 +150,7 @@ export async function createAccount(payload: {
   password: string;
   display_name: string;
   role: UserRole;
+  venue_ids?: string[];
 }): Promise<{ success: true } | { error: string }> {
   const gate = await requireAccountAdmin();
   if ("error" in gate) return { error: gate.error };
@@ -118,6 +169,8 @@ export async function createAccount(payload: {
   if (!PROFILE_ROLES.includes(role)) {
     return { error: "유효하지 않은 권한입니다." };
   }
+  const venues = normalizeAccountVenues(role, payload.venue_ids);
+  if ("error" in venues) return { error: venues.error };
 
   const admin = createAdminClient();
 
@@ -149,11 +202,15 @@ export async function createAccount(payload: {
 
   if (profileError) return { error: profileError.message };
 
+  const pv = await replaceProfileVenues(admin, created.user.id, venues.venueIds);
+  if (pv.error) return { error: pv.error };
+
   if (role === "staff" || role === "manager") {
-    const staffErr = await ensureVenueStaffRow(admin, {
+    const staffErr = await syncStaffRowsForVenues(admin, {
       profileId: created.user.id,
       name: displayName || loginId,
       role: role === "manager" ? "manager" : "staff",
+      venueIds: venues.venueIds,
     });
     if (staffErr.error) return { error: staffErr.error };
     revalidatePath("/admin/staff");
@@ -168,6 +225,7 @@ export async function updateAccount(payload: {
   role: UserRole;
   display_name: string;
   password?: string;
+  venue_ids?: string[];
 }): Promise<{ success: true } | { error: string }> {
   const gate = await requireAccountAdmin();
   if ("error" in gate) return { error: gate.error };
@@ -176,6 +234,8 @@ export async function updateAccount(payload: {
   if (!PROFILE_ROLES.includes(role)) {
     return { error: "유효하지 않은 권한입니다." };
   }
+  const venues = normalizeAccountVenues(role, payload.venue_ids);
+  if ("error" in venues) return { error: venues.error };
   if (userId === gate.user.id && role !== "admin") {
     return { error: "본인 계정의 관리자 권한은 해제할 수 없습니다." };
   }
@@ -204,11 +264,15 @@ export async function updateAccount(payload: {
 
   if (profileError) return { error: profileError.message };
 
+  const pv = await replaceProfileVenues(admin, userId, venues.venueIds);
+  if (pv.error) return { error: pv.error };
+
   if (role === "staff" || role === "manager") {
-    await ensureVenueStaffRow(admin, {
+    await syncStaffRowsForVenues(admin, {
       profileId: userId,
       name: display_name.trim() || "직원",
       role: role === "manager" ? "manager" : "staff",
+      venueIds: venues.venueIds,
     });
     revalidatePath("/admin/staff");
   }

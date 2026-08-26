@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { getActiveVenueId } from "@/lib/venue/active";
 import { getOpenVenueSession } from "@/lib/venue/session";
 
 export async function openVenueSession() {
@@ -20,7 +20,7 @@ export async function openVenueSession() {
   const { data, error } = await supabase
     .from("venue_sessions")
     .insert({
-      venue_id: DEFAULT_VENUE_ID,
+      venue_id: await getActiveVenueId(),
       status: "open",
       opened_by: user?.id ?? null,
     })

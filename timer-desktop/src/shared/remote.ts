@@ -42,7 +42,7 @@ export type RemoteClientMsg =
   | { type: "counters"; gameId: number; op: RemoteCounterOp; rebuyIndex?: number; host?: string }
   | { type: "deleteGame"; gameId: number; host?: string }
   | { type: "view"; gameId: number }
-  | { type: "peer_hello"; pin: string }
+  | { type: "peer_hello"; pin: string; venueId?: string }
   | { type: "peer_command"; gameId: number; action: RemoteTimerAction; sec?: number }
   | { type: "peer_counters"; gameId: number; op: RemoteCounterOp; rebuyIndex?: number }
   | { type: "peer_deleteGame"; gameId: number }

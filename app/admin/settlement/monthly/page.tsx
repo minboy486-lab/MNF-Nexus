@@ -3,7 +3,7 @@ import { MonthlySettlementClient } from "@/components/settlement/MonthlySettleme
 import { computeSessionLedgerTotals } from "@/lib/actions/settlement";
 import { getStaffPayrollSummary } from "@/lib/actions/staff";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { getActiveVenueId } from "@/lib/venue/active";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +17,7 @@ export default async function MonthlySettlementPage() {
   let winPoints: { nickname: string; points: number }[] = [];
 
   if (isSupabaseConfigured()) {
+    const venueId = await getActiveVenueId();
     const supabase = await createClient();
     const [y, m] = yearMonth.split("-").map(Number);
     const start = new Date(y, m - 1, 1).toISOString();
@@ -25,7 +26,7 @@ export default async function MonthlySettlementPage() {
     const { data: sessions } = await supabase
       .from("venue_sessions")
       .select("id")
-      .eq("venue_id", DEFAULT_VENUE_ID)
+      .eq("venue_id", venueId)
       .gte("opened_at", start)
       .lt("opened_at", end);
 
@@ -37,7 +38,7 @@ export default async function MonthlySettlementPage() {
     const { data: exp } = await supabase
       .from("expenses")
       .select("amount")
-      .eq("venue_id", DEFAULT_VENUE_ID)
+      .eq("venue_id", venueId)
       .gte("spent_at", start)
       .lt("spent_at", end);
 
@@ -46,7 +47,7 @@ export default async function MonthlySettlementPage() {
     const { data: ledger } = await supabase
       .from("win_point_ledger")
       .select("points, members(nickname)")
-      .eq("venue_id", DEFAULT_VENUE_ID)
+      .eq("venue_id", venueId)
       .gte("created_at", start)
       .lt("created_at", end);
 

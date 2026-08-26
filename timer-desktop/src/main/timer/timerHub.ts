@@ -276,7 +276,10 @@ export class TimerHub {
   dispatch(gameId: number, action: TimerAction, options?: { minutes?: number; ms?: number; sec?: number }): TableTimerState | null {
     const current = this.timers.get(gameId);
     if (!current) return null;
-    const next = applyTimerAction(current, action, options);
+    const next = applyTimerAction(current, action, {
+      ...options,
+      muteLevelAnnounce: action === "levelUp" || action === "levelDown",
+    });
     this.timers.set(gameId, next);
     this.syncTotalPlayTime(gameId, current.status, next.status, action);
     this.pushToGame(gameId, next);

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { app } from "electron";
+import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 import {
   CONFIG_VERSION,
   MONITOR_SLOTS,
@@ -88,6 +89,7 @@ export function loadConfig(): AppConfig | null {
       ...parsed,
       theme: normalizeUiTheme(parsed.theme),
       soundVolume: normalizeSoundVolume(parsed.soundVolume),
+      venueId: isKnownVenueId(parsed.venueId) ? parsed.venueId : YEOKSAM_VENUE_ID,
     };
   } catch {
     return null;
@@ -126,12 +128,19 @@ export function parseConfigInput(raw: unknown): { config: AppConfig } | { error:
       ? normalizeSoundVolume(existing?.soundVolume)
       : normalizeSoundVolume(input.soundVolume);
 
+  const venueId = isKnownVenueId(typeof input.venueId === "string" ? input.venueId : null)
+    ? (input.venueId as string)
+    : isKnownVenueId(existing?.venueId ?? null)
+      ? (existing?.venueId as string)
+      : YEOKSAM_VENUE_ID;
+
   const config: AppConfig = {
     version: CONFIG_VERSION,
     controlDisplayId,
     mappings,
     theme,
     soundVolume,
+    venueId,
   };
   const err = validateConfig(config);
   if (err) return { error: err };

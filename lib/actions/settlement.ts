@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { getActiveVenueId } from "@/lib/venue/active";
 import { getOpenVenueSession } from "@/lib/venue/session";
 
 export type SessionLedgerTotals = {
@@ -160,7 +160,7 @@ export async function getCreditOutstanding() {
   const { data } = await supabase
     .from("members")
     .select("id, nickname, phone, credit_balance")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .lt("credit_balance", 0)
     .order("credit_balance", { ascending: true });
 
@@ -187,7 +187,7 @@ export async function finalizeDailyCloseout(notes?: string) {
     .from("daily_closeouts")
     .upsert(
       {
-        venue_id: DEFAULT_VENUE_ID,
+        venue_id: await getActiveVenueId(),
         venue_session_id: session.id,
         total_buy_in: buyInTotal,
         total_prize: totals.totalPrize,

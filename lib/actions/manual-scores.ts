@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { hashPassword } from "@/lib/auth/password";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { getActiveVenueId } from "@/lib/venue/active";
 
 function revalidateScores() {
   revalidateScores();
@@ -29,7 +29,7 @@ async function ensureMemberByNickname(nickname: string) {
   const { data: existing } = await supabase
     .from("members")
     .select("id, nickname")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .eq("nickname", nick)
     .maybeSingle();
 
@@ -42,7 +42,7 @@ async function ensureMemberByNickname(nickname: string) {
   const { data, error } = await supabase
     .from("members")
     .insert({
-      venue_id: DEFAULT_VENUE_ID,
+      venue_id: await getActiveVenueId(),
       login_id: loginId,
       password_hash: passwordHash,
       nickname: nick,
@@ -56,7 +56,7 @@ async function ensureMemberByNickname(nickname: string) {
       const { data: retry } = await supabase
         .from("members")
         .select("id, nickname")
-        .eq("venue_id", DEFAULT_VENUE_ID)
+        .eq("venue_id", await getActiveVenueId())
         .eq("nickname", nick)
         .maybeSingle();
       if (retry) return { memberId: retry.id, nickname: retry.nickname, created: false };
@@ -90,7 +90,7 @@ export async function addManualScore(input: AddManualScoreInput) {
   const { data: existing } = await supabase
     .from("manual_score_daily")
     .select("*")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .eq("play_date", playDate)
     .eq("game_no", gameNo)
     .eq("nickname", nickname)
@@ -112,7 +112,7 @@ export async function addManualScore(input: AddManualScoreInput) {
     if (error) return { error: error.message };
   } else {
     const { error } = await supabase.from("manual_score_daily").insert({
-      venue_id: DEFAULT_VENUE_ID,
+      venue_id: await getActiveVenueId(),
       member_id: memberResult.memberId,
       play_date: playDate,
       game_no: gameNo,
@@ -157,7 +157,7 @@ export async function setManualScoreRow(input: AddManualScoreInput) {
   const { data: existing } = await supabase
     .from("manual_score_daily")
     .select("*")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .eq("play_date", playDate)
     .eq("game_no", gameNo)
     .eq("nickname", nickname)
@@ -190,7 +190,7 @@ export async function setManualScoreRow(input: AddManualScoreInput) {
   const { data, error } = await supabase
     .from("manual_score_daily")
     .insert({
-      venue_id: DEFAULT_VENUE_ID,
+      venue_id: await getActiveVenueId(),
       member_id: memberResult.memberId,
       play_date: playDate,
       game_no: gameNo,
@@ -237,7 +237,7 @@ export async function updateManualScoreRow(recordId: string, input: AddManualSco
   const { data: conflict } = await supabase
     .from("manual_score_daily")
     .select("id")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .eq("play_date", playDate)
     .eq("game_no", gameNo)
     .eq("nickname", nickname)

@@ -1,6 +1,7 @@
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { getActiveVenueId } from "@/lib/venue/active";
+import { YEOKSAM_VENUE_ID } from "@/lib/venue/constants";
 import type {
   AttendanceRow,
   ManualScoreDaily,
@@ -37,14 +38,18 @@ export function currentMonthRange() {
   return defaultFromTo();
 }
 
-export async function getManualScoresForDate(playDate: string): Promise<ManualScoreDaily[]> {
+export async function getManualScoresForDate(
+  playDate: string,
+  venueId?: string,
+): Promise<ManualScoreDaily[]> {
   if (!isSupabaseConfigured()) return [];
 
+  const vid = venueId ?? (await getActiveVenueId());
   const supabase = await createClient();
   const { data } = await supabase
     .from("manual_score_daily")
     .select("*")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", vid)
     .eq("play_date", playDate)
     .order("game_no", { ascending: true })
     .order("nickname", { ascending: true });
@@ -52,14 +57,19 @@ export async function getManualScoresForDate(playDate: string): Promise<ManualSc
   return (data ?? []) as ManualScoreDaily[];
 }
 
-export async function getScoreRanking(from: string, to: string): Promise<ScoreRankingRow[]> {
+export async function getScoreRanking(
+  from: string,
+  to: string,
+  venueId?: string,
+): Promise<ScoreRankingRow[]> {
   if (!isSupabaseConfigured()) return [];
 
+  const vid = venueId ?? (await getActiveVenueId());
   const supabase = await createClient();
   const { data } = await supabase
     .from("manual_score_daily")
     .select("nickname, member_id, buy_in_points, rebuy_points, money_in_points, play_date")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", vid)
     .gte("play_date", from)
     .lte("play_date", to);
 
@@ -91,17 +101,22 @@ export async function getScoreRanking(from: string, to: string): Promise<ScoreRa
 
 /** 손님 공개 랭킹: 이번 달 점수 기록이 있는 회원만 */
 export async function getPublicScoreRanking(from: string, to: string): Promise<ScoreRankingRow[]> {
-  return getScoreRanking(from, to);
+  return getScoreRanking(from, to, YEOKSAM_VENUE_ID);
 }
 
-export async function getAttendanceSummary(from: string, to: string): Promise<AttendanceRow[]> {
+export async function getAttendanceSummary(
+  from: string,
+  to: string,
+  venueId?: string,
+): Promise<AttendanceRow[]> {
   if (!isSupabaseConfigured()) return [];
 
+  const vid = venueId ?? (await getActiveVenueId());
   const supabase = await createClient();
   const { data } = await supabase
     .from("manual_score_daily")
     .select("nickname, member_id, play_date")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", vid)
     .gte("play_date", from)
     .lte("play_date", to)
     .order("play_date", { ascending: false });
@@ -148,7 +163,7 @@ export async function getNicknameVisitCounts(): Promise<Record<string, number>> 
   const { data } = await supabase
     .from("manual_score_daily")
     .select("nickname, play_date")
-    .eq("venue_id", DEFAULT_VENUE_ID);
+    .eq("venue_id", await getActiveVenueId());
 
   const byNick = new Map<string, Set<string>>();
   for (const row of data ?? []) {

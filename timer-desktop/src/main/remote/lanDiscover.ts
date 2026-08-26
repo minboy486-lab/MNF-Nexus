@@ -33,6 +33,7 @@ async function fetchHost(ip: string): Promise<LanDiscoveredGame[]> {
       hostname: data.hostname || ip,
       theme: data.theme,
       soundVolume: data.soundVolume,
+      venueId: typeof data.venueId === "string" ? data.venueId : undefined,
     }));
   } catch {
     return [];
@@ -70,6 +71,7 @@ export type LanClusterHello = {
   host: string;
   hostname: string;
   pin: string;
+  venueId?: string;
 };
 
 async function fetchCluster(ip: string): Promise<LanClusterHello | null> {
@@ -80,12 +82,13 @@ async function fetchCluster(ip: string): Promise<LanClusterHello | null> {
       signal: ctrl.signal,
     });
     if (!r.ok) return null;
-    const data = (await r.json()) as { ok?: boolean; hostname?: string; pin?: string };
+    const data = (await r.json()) as { ok?: boolean; hostname?: string; pin?: string; venueId?: string };
     if (!data?.ok || typeof data.pin !== "string" || !/^\d{4}$/.test(data.pin)) return null;
     return {
       host: ip,
       hostname: typeof data.hostname === "string" && data.hostname.trim() ? data.hostname.trim() : ip,
       pin: data.pin,
+      venueId: typeof data.venueId === "string" ? data.venueId : undefined,
     };
   } catch {
     return null;

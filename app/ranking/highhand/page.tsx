@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PublicHighHandClient } from "@/components/ranking/PublicHighHandClient";
 import { getHighHandsForDate } from "@/lib/data/high-hand-queries";
+import { YEOKSAM_VENUE_ID } from "@/lib/venue/constants";
 import { getVenueOperatingDate } from "@/lib/venue/operating-date";
 
 export const metadata: Metadata = {
@@ -18,7 +19,7 @@ export default async function PublicHighHandPage({ searchParams }: Props) {
   const params = await searchParams;
   const hasDateInUrl = Boolean(params.date);
   const playDate = params.date ?? getVenueOperatingDate();
-  const entries = await getHighHandsForDate(playDate);
+  const entries = await getHighHandsForDate(playDate, YEOKSAM_VENUE_ID);
 
   return (
     <PublicHighHandClient

@@ -3,6 +3,7 @@
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { LiveBadge } from "@/components/admin/LiveBadge";
 import { AdminNavToggle } from "@/components/admin/AdminNavToggle";
+import { VenueSwitcher } from "@/components/venue/VenueSwitcher";
 
 type Props = {
   title: string;
@@ -25,6 +26,9 @@ export function AdminTopBar({ title, subtitle, children }: Props) {
         )}
       </div>
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="md:hidden">
+          <VenueSwitcher compact />
+        </div>
         {!isSupabaseConfigured() && (
           <span className="hidden sm:inline text-xs px-2 sm:px-3 py-1.5 rounded-full bg-white/5 border border-tertiary/30 text-tertiary backdrop-blur-md">
             데모 모드

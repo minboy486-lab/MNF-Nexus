@@ -2071,6 +2071,61 @@ h2 { font-size: 1rem; font-weight: 700; }
   gap: 8px;
 }
 
+.setup-venue {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-mid);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setup-venue__label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.setup-venue__pills {
+  display: flex;
+  gap: 8px;
+}
+
+.setup-venue__pill {
+  flex: 1;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.setup-venue__pill[data-active="true"] {
+  border-color: var(--primary, #ff16f0);
+  background: rgba(255, 22, 240, 0.14);
+}
+
+.setup-venue__pin {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.setup-venue__pin input {
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 10px;
+}
+
 .primary {
   border: none;
   background: var(--primary);

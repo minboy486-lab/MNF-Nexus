@@ -224,7 +224,7 @@ export function useTimerAnnounce(
       return;
     }
 
-    if (level > (prev.level ?? level)) {
+    if (level > (prev.level ?? level) && !state.muteLevelAnnounce) {
       if (breakNow) {
         void playClips(["breakStart"], matchDisplayAudio);
       } else {

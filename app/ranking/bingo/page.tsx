@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PublicBingoClient } from "@/components/ranking/PublicBingoClient";
+import { YEOKSAM_VENUE_ID } from "@/lib/venue/constants";
 import { getBingoMonthSheet } from "@/lib/data/bingo-queries";
 import { currentMonthKey } from "@/lib/events/types";
 
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PublicBingoPage() {
   const monthKey = currentMonthKey();
-  const sheet = await getBingoMonthSheet(monthKey);
+  const sheet = await getBingoMonthSheet(monthKey, YEOKSAM_VENUE_ID);
 
   return <PublicBingoClient sheet={sheet} />;
 }

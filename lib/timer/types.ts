@@ -27,6 +27,8 @@ export interface TableTimerState {
   blindStructureId: string | null;
   blindStructureName: string | null;
   levels: BlindLevelDef[];
+  /** 버튼으로 레벨을 바꾼 경우 true. 블라인드업 안내음을 내지 않음 */
+  muteLevelAnnounce?: boolean;
 }
 
 export interface BlindStructureOption {

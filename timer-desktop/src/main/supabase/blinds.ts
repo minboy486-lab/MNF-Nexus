@@ -1,6 +1,8 @@
 import type { BlindStructureOption } from "@mnf/timer/types";
 import { levelsFromPresetRows } from "@mnf/timer/levels";
 import { getSupabase } from "./client";
+import { YEOKSAM_VENUE_ID } from "@mnf/venue";
+import { getConfiguredVenueId } from "./venue";
 
 type RawBlindRow = {
   kind?: "level" | "break" | "reg-close";
@@ -32,12 +34,19 @@ export async function listBlindStructures(): Promise<BlindStructureOption[]> {
     throw new Error("[blinds] Supabase 클라이언트 없음 (env 미설정)");
   }
 
-  const { data, error } = await supabase
+  const venueId = getConfiguredVenueId();
+  let query = supabase
     .from("game_presets")
     .select(
       "id, name, buy_in, game_kind, buy_in_chips, rebuy1_chips, rebuy2_chips, addon_enabled, addon_chips, bonus_enabled, bonus_chips, blind_structure",
     )
     .order("name");
+  query =
+    venueId === YEOKSAM_VENUE_ID
+      ? query.or(`venue_id.eq.${venueId},venue_id.is.null`)
+      : query.eq("venue_id", venueId);
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(`[blinds] game_presets 로드 에러: ${error.message}`);

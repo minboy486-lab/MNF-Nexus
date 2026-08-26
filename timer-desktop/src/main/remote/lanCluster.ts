@@ -11,6 +11,7 @@ import type { AppSnapshot } from "../../shared/types";
 import type { TableTimerState } from "@mnf/timer/types";
 import { discoverLanCluster, type LanClusterHello } from "./lanDiscover";
 import { listLanIPv4 } from "./lan";
+import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 
 const TICK_MS = 8000;
 const EMPTY_SNAP: AppSnapshot = {
@@ -24,6 +25,10 @@ export function normalizeRemoteIp(addr: string | undefined | null): string {
   if (addr.startsWith("::ffff:")) return addr.slice(7);
   if (addr === "::1") return "127.0.0.1";
   return addr;
+}
+
+function clusterVenueId(id?: string): string {
+  return isKnownVenueId(id) ? id : YEOKSAM_VENUE_ID;
 }
 
 function isPin(v: unknown): v is string {
@@ -54,6 +59,7 @@ export class LanCluster {
       getPin: () => string;
       adoptPin: (pin: string) => void;
       hostname: () => string;
+      getVenueId: () => string;
       getLocalSnapshot: () => {
         snapshot: AppSnapshot;
         timers: TableTimerState[];
@@ -178,7 +184,9 @@ export class LanCluster {
       this.fullScanAt = now;
     }
     this.ticks += 1;
-    const others = this.lastFound.filter((p) => !this.ownHosts.has(p.host));
+    const others = this.lastFound.filter(
+      (p) => !this.ownHosts.has(p.host) && clusterVenueId(p.venueId) === clusterVenueId(this.opts.getVenueId()),
+    );
     this.syncPin(mine[0] ?? "0.0.0.0", others);
     const live = new Set(others.map((p) => p.host));
     for (const host of live) this.ensureOutbound(host);
@@ -223,7 +231,7 @@ export class LanCluster {
         return;
       }
       this.outbound.set(host, ws);
-      const hello: RemoteClientMsg = { type: "peer_hello", pin: this.opts.getPin() };
+      const hello: RemoteClientMsg = { type: "peer_hello", pin: this.opts.getPin(), venueId: this.opts.getVenueId() };
       ws.send(JSON.stringify(hello));
       const local = this.opts.getLocalSnapshot();
       const snap: RemoteClientMsg = {

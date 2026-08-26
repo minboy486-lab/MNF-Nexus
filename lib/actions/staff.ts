@@ -12,7 +12,7 @@ import { ensureVenueStaffRow } from "@/lib/staff/ensure-row";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseAdminConfigured, isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { getActiveVenueId } from "@/lib/venue/active";
 import { getKSTNowParts, toISODate } from "@/lib/venue/operating-date";
 import { getOpenVenueSession } from "@/lib/venue/session";
 
@@ -42,7 +42,7 @@ export async function getStaffList(): Promise<StaffListRow[]> {
   const { data } = await supabase
     .from("staff")
     .select("*")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .eq("is_active", true)
     .order("name");
 
@@ -177,7 +177,14 @@ export async function createStaffAccount(payload: {
     name,
     role: "staff",
     hourlyWage,
+    venueId: await getActiveVenueId(),
   });
+  if (staffErr.error) return { error: staffErr.error };
+
+  await admin.from("profile_venues").upsert(
+    { profile_id: created.user.id, venue_id: await getActiveVenueId() },
+    { onConflict: "profile_id,venue_id" },
+  );
   if (staffErr.error) return { error: staffErr.error };
 
   revalidatePath("/admin/staff");
@@ -264,7 +271,7 @@ export async function recordStaffAdvance(
 
   const { error } = await supabase.from("staff_advances").insert({
     staff_id: staffId,
-    venue_id: DEFAULT_VENUE_ID,
+    venue_id: await getActiveVenueId(),
     amount,
     memo: memo ?? null,
     created_by: user?.id ?? null,
@@ -327,7 +334,7 @@ export async function getStaffPayrollSummary(yearMonth: string) {
   const { data: period } = await supabase
     .from("payroll_periods")
     .select("*")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .eq("year_month", yearMonth)
     .maybeSingle();
 
@@ -348,7 +355,7 @@ export async function closePayrollPeriod(yearMonth: string) {
     .from("payroll_periods")
     .upsert(
       {
-        venue_id: DEFAULT_VENUE_ID,
+        venue_id: await getActiveVenueId(),
         year_month: yearMonth,
         status: "closed",
         total_gross: totalGross,
@@ -424,10 +431,12 @@ async function requireMyStaffRow(): Promise<MyStaffCtx> {
     .eq("id", user.id)
     .maybeSingle();
 
+  const venueId = await getActiveVenueId();
   const { data: staffRows } = await supabase
     .from("staff")
     .select("id, name, is_active")
     .eq("profile_id", user.id)
+    .eq("venue_id", venueId)
     .order("is_active", { ascending: false })
     .limit(1);
   let staff = staffRows?.[0] ?? null;
@@ -438,19 +447,21 @@ async function requireMyStaffRow(): Promise<MyStaffCtx> {
 
   if (!staff) {
     if (!isSupabaseAdminConfigured()) {
-      return { error: "직원 프로필이 없습니다. 관리자에게 계정 연결을 요청하세요." };
+      return { error: "이 지점 직원 프로필이 없습니다. 관리자에게 계정 연결을 요청하세요." };
     }
     const name = profile?.display_name || profile?.login_id || "직원";
     const ensured = await ensureVenueStaffRow(createAdminClient(), {
       profileId: user.id,
       name,
       role: "staff",
+      venueId,
     });
     if (ensured.error) return { error: ensured.error };
     const { data: created } = await supabase
       .from("staff")
       .select("id, name, is_active")
       .eq("profile_id", user.id)
+      .eq("venue_id", venueId)
       .eq("is_active", true)
       .limit(1)
       .maybeSingle();

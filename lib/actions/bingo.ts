@@ -5,7 +5,7 @@ import { DEFAULT_BINGO_MISSIONS } from "@/lib/events/types";
 import { ensureMemberByNickname } from "@/lib/members/ensure-by-nickname";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { getActiveVenueId } from "@/lib/venue/active";
 
 function revalidateBingo() {
   revalidatePath("/admin/scores/bingo");
@@ -22,7 +22,7 @@ export async function saveBingoCellLabels(monthKey: string, cellLabels: string[]
   const supabase = await createClient();
   const { error } = await supabase.from("bingo_month_settings").upsert(
     {
-      venue_id: DEFAULT_VENUE_ID,
+      venue_id: await getActiveVenueId(),
       month_key: monthKey,
       cell_labels: labels,
       updated_at: new Date().toISOString(),
@@ -47,7 +47,7 @@ export async function addBingoMark(monthKey: string, cellNo: number, nickname: s
 
   const supabase = await createClient();
   const { error } = await supabase.from("bingo_marks").insert({
-    venue_id: DEFAULT_VENUE_ID,
+    venue_id: await getActiveVenueId(),
     month_key: monthKey,
     cell_no: cell,
     nickname: memberResult.nickname,
@@ -71,7 +71,7 @@ export async function removeBingoMark(markId: string) {
     .from("bingo_marks")
     .delete()
     .eq("id", markId)
-    .eq("venue_id", DEFAULT_VENUE_ID);
+    .eq("venue_id", await getActiveVenueId());
 
   if (error) return { error: error.message };
   revalidateBingo();

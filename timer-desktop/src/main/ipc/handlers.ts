@@ -2,6 +2,8 @@ import { ipcMain, app } from "electron";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadConfig, parseConfigInput, saveConfig } from "../config/configStore";
+import { getConfiguredVenueId, verifyVenueControlPin } from "../supabase/venue";
+import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 import { getAllDisplaysInfo } from "../screen/displayMapper";
 import { listBlindStructures } from "../supabase/blinds";
 import type { TimerHub } from "../timer/timerHub";
@@ -85,6 +87,25 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const saved = saveConfig(parsed.config);
     if (!saved.ok) return saved;
     await wm.applyConfig(parsed.config);
+    return { ok: true as const };
+  });
+  ipcMain.handle("venue:set", async (_e, raw: unknown) => {
+    if (!raw || typeof raw !== "object") return { ok: false as const, error: "잘못된 요청입니다." };
+    const input = raw as { venueId?: unknown; pin?: unknown };
+    const venueId = typeof input.venueId === "string" ? input.venueId : "";
+    const pin = typeof input.pin === "string" ? input.pin : "";
+    if (!isKnownVenueId(venueId)) return { ok: false as const, error: "알 수 없는 지점입니다." };
+    const current = getConfiguredVenueId();
+    if (venueId === current) return { ok: true as const };
+    const verified = await verifyVenueControlPin(venueId, pin);
+    if (!verified.ok) return { ok: false as const, error: verified.error };
+    const currentCfg = wm.getConfig() ?? loadConfig();
+    if (currentCfg) {
+      const next = { ...currentCfg, venueId };
+      const saved = saveConfig(next);
+      if (!saved.ok) return saved;
+      await wm.applyConfig(next);
+    }
     return { ok: true as const };
   });
   ipcMain.handle("theme:get", () => wm.getTheme());
@@ -194,7 +215,14 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     hub.assignAllMonitors(gameId);
     return { ok: true as const };
   });
-  ipcMain.handle("lan:discover", () => discoverLanGames());
+  ipcMain.handle("lan:discover", async () => {
+    const games = await discoverLanGames();
+    const mine = getConfiguredVenueId();
+    return games.filter((g) => {
+      const id = g.venueId && isKnownVenueId(g.venueId) ? g.venueId : YEOKSAM_VENUE_ID;
+      return id === mine;
+    });
+  });
   ipcMain.handle("lan:view-start", async (_e, raw: unknown) => {
     const p = raw as Record<string, unknown>;
     const host = typeof p?.host === "string" ? p.host.trim() : "";

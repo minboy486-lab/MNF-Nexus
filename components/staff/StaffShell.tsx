@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { StaffBackLink } from "@/components/staff/StaffBackLink";
 import { StaffNav } from "@/components/staff/StaffNav";
+import { VenueSwitcher } from "@/components/venue/VenueSwitcher";
 import { signOut } from "@/lib/actions/auth";
 
 export function StaffShell({
@@ -20,12 +21,25 @@ export function StaffShell({
   return (
     <div className="min-h-dvh bg-surface flex flex-col staff-shell">
       <header className="staff-shell__header sticky top-0 z-40 border-b border-outline-variant/30 bg-surface/95 backdrop-blur-md px-4 flex justify-between items-center shrink-0">
-        {isHome ? (
-          <Link href="/staff" className="font-bold text-primary leading-none py-1">
-            MNF · 직원
-          </Link>
+        {hideNav ? (
+          isHome ? (
+            <Link href="/staff" className="font-bold text-primary leading-none py-1">
+              MNF · 직원
+            </Link>
+          ) : (
+            <StaffBackLink />
+          )
         ) : (
-          <StaffBackLink />
+          <div className="flex items-center gap-3 min-w-0">
+            {isHome ? (
+              <Link href="/staff" className="font-bold text-primary leading-none py-1 shrink-0">
+                MNF · 직원
+              </Link>
+            ) : (
+              <StaffBackLink />
+            )}
+            <VenueSwitcher compact />
+          </div>
         )}
         {!working && (
           <form action={signOut}>

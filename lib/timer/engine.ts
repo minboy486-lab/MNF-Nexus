@@ -112,7 +112,7 @@ function patchCurrentLevelDuration(state: TableTimerState, minutes: number): Tab
 export function applyTimerAction(
   state: TableTimerState,
   action: TimerAction,
-  options?: { minutes?: number; ms?: number; sec?: number },
+  options?: { minutes?: number; ms?: number; sec?: number; muteLevelAnnounce?: boolean },
   now = Date.now(),
 ): TableTimerState {
   const level = getLevelDef(state.levels, state.blindLevel);
@@ -147,25 +147,27 @@ export function applyTimerAction(
       const next = getNextLevelDef(state.levels, state.blindLevel);
       if (!next) return state;
       const leveled = applyLevel(state, next.level);
+      const mute = options?.muteLevelAnnounce === true;
       if (leveled.status === "running") {
-        return toRunning(leveled, next.durationSec * 1000, now);
+        return { ...toRunning(leveled, next.durationSec * 1000, now), muteLevelAnnounce: mute };
       }
       if (leveled.status === "paused") {
-        return { ...leveled, remainingMs: next.durationSec * 1000 };
+        return { ...leveled, remainingMs: next.durationSec * 1000, muteLevelAnnounce: mute };
       }
-      return leveled;
+      return { ...leveled, muteLevelAnnounce: mute };
     }
     case "levelDown": {
       const prev = getPrevLevelDef(state.levels, state.blindLevel);
       if (!prev) return state;
       const leveled = applyLevel(state, prev.level);
+      const mute = options?.muteLevelAnnounce === true;
       if (leveled.status === "running") {
-        return toRunning(leveled, prev.durationSec * 1000, now);
+        return { ...toRunning(leveled, prev.durationSec * 1000, now), muteLevelAnnounce: mute };
       }
       if (leveled.status === "paused") {
-        return { ...leveled, remainingMs: prev.durationSec * 1000 };
+        return { ...leveled, remainingMs: prev.durationSec * 1000, muteLevelAnnounce: mute };
       }
-      return leveled;
+      return { ...leveled, muteLevelAnnounce: mute };
     }
     case "setDuration": {
       const minutes = options?.minutes;

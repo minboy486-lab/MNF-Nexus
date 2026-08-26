@@ -1,6 +1,6 @@
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { getActiveVenueId } from "@/lib/venue/active";
 import type {
   GameFinishPlacement,
   GameIcmChop,
@@ -17,7 +17,7 @@ export async function getPrizeStructures() {
   const { data } = await supabase
     .from("prize_structures")
     .select("*")
-    .or(`venue_id.eq.${DEFAULT_VENUE_ID},venue_id.is.null`)
+    .or(`venue_id.eq.${await getActiveVenueId()},venue_id.is.null`)
     .order("name");
 
   return (data ?? []) as PrizeStructure[];

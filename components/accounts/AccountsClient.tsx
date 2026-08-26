@@ -9,9 +9,11 @@ import {
   updateAccount,
   type AccountRow,
 } from "@/lib/actions/accounts";
+import { updateVenueControlPin } from "@/lib/actions/venue-context";
 import { PROFILE_ROLE_LABELS, PROFILE_ROLES } from "@/lib/auth/roles";
 import type { UserRole } from "@/lib/types";
 import { formatDateTimeKST } from "@/lib/utils/format";
+import { KNOWN_VENUES, YEOKSAM_VENUE_ID, venueById } from "@/lib/venue/constants";
 
 type Props = {
   accounts: AccountRow[];
@@ -24,6 +26,7 @@ type FormState = {
   password: string;
   display_name: string;
   role: UserRole;
+  venue_ids: string[];
 };
 
 const emptyForm: FormState = {
@@ -31,7 +34,12 @@ const emptyForm: FormState = {
   password: "",
   display_name: "",
   role: "staff",
+  venue_ids: [YEOKSAM_VENUE_ID],
 };
+
+function roleNeedsVenues(role: UserRole): boolean {
+  return role === "admin" || role === "manager" || role === "staff" || role === "screen";
+}
 
 function AccountFormModal({
   mode,
@@ -138,6 +146,37 @@ function AccountFormModal({
           </div>
         </fieldset>
 
+        {roleNeedsVenues(form.role) && (
+          <fieldset className="space-y-2.5">
+            <legend className="app-modal-label">지점</legend>
+            {form.role === "admin" ? (
+              <p className="text-xs text-on-surface-variant">관리자는 역삼점·미사점 모두 사용합니다.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {KNOWN_VENUES.map((v) => {
+                  const checked = form.venue_ids.includes(v.id);
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      data-active={checked}
+                      className="app-role-chip"
+                      onClick={() => {
+                        const next = checked
+                          ? form.venue_ids.filter((id) => id !== v.id)
+                          : [...form.venue_ids, v.id];
+                        onFormChange({ venue_ids: next });
+                      }}
+                    >
+                      {v.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </fieldset>
+        )}
+
         <label>
           <span className="app-modal-label">
             {mode === "create" ? "비밀번호" : "새 비밀번호"}
@@ -164,6 +203,72 @@ function AccountFormModal({
         </label>
       </form>
     </AppModal>
+  );
+}
+
+function ControlPinCard({ disabled }: { disabled: boolean }) {
+  const [venueId, setVenueId] = useState(YEOKSAM_VENUE_ID);
+  const [pin, setPin] = useState("");
+  const [pending, setPending] = useState(false);
+
+  async function save() {
+    setPending(true);
+    const result = await updateVenueControlPin({ venueId, pin });
+    setPending(false);
+    if ("error" in result) {
+      alert(result.error);
+      return;
+    }
+    setPin("");
+    alert("타이머 지점 비밀번호를 저장했습니다.");
+  }
+
+  return (
+    <div className="app-panel-solid rounded-2xl p-4 sm:p-5 space-y-3">
+      <p className="text-sm font-semibold">타이머 지점 비밀번호</p>
+      <p className="text-xs text-on-surface-variant">
+        매장 PC에서 지점을 바꿀 때 묻는 숫자 4자리입니다. 초기값은 1234입니다.
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="min-w-[8rem]">
+          <span className="app-modal-label">지점</span>
+          <select
+            className="app-modal-field"
+            value={venueId}
+            disabled={disabled || pending}
+            onChange={(e) => setVenueId(e.target.value)}
+          >
+            {KNOWN_VENUES.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="min-w-[8rem]">
+          <span className="app-modal-label">새 비밀번호</span>
+          <input
+            type="password"
+            inputMode="numeric"
+            pattern="\d{4}"
+            maxLength={4}
+            placeholder="4자리"
+            className="app-modal-field"
+            value={pin}
+            disabled={disabled || pending}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+          />
+        </label>
+        <button
+          type="button"
+          disabled={disabled || pending || pin.length !== 4}
+          onClick={() => void save()}
+          className="h-11 px-4 rounded-xl text-sm font-bold btn-primary disabled:opacity-50"
+        >
+          {pending ? "저장 중…" : "저장"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -195,6 +300,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
       password: "",
       display_name: row.display_name ?? "",
       role: row.role === "counter" ? "screen" : row.role,
+      venue_ids: row.venue_ids?.length ? row.venue_ids : [YEOKSAM_VENUE_ID],
     });
     setNewPassword("");
     setModal({ edit: row });
@@ -214,6 +320,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
       password: form.password,
       display_name: form.display_name,
       role: form.role,
+      venue_ids: form.venue_ids,
     });
     setPending(false);
     if ("error" in result && result.error) {
@@ -233,6 +340,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
       role: form.role,
       display_name: form.display_name,
       password: newPassword || undefined,
+      venue_ids: form.venue_ids,
     });
     setPending(false);
     if ("error" in result && result.error) {
@@ -308,7 +416,9 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
         </button>
       </div>
 
-        <div className="app-panel-solid rounded-2xl overflow-hidden flex-1 min-h-0 flex flex-col">
+      <ControlPinCard disabled={!configured || pending} />
+
+      <div className="app-panel-solid rounded-2xl overflow-hidden flex-1 min-h-0 flex flex-col">
         <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10 bg-[#181a24] text-on-surface-variant text-[11px] uppercase tracking-wider">
@@ -316,6 +426,9 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
                 <th className="text-left px-5 py-3.5 font-semibold">아이디</th>
                 <th className="text-left px-5 py-3.5 font-semibold">표시 이름</th>
                 <th className="text-left px-5 py-3.5 font-semibold">권한</th>
+                <th className="text-left px-5 py-3.5 font-semibold hidden md:table-cell">
+                  지점
+                </th>
                 <th className="text-left px-5 py-3.5 font-semibold hidden lg:table-cell">
                   최근 로그인
                 </th>
@@ -336,6 +449,11 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
                     <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-primary/12 text-primary border border-primary/20">
                       {PROFILE_ROLE_LABELS[row.role === "counter" ? "screen" : row.role]}
                     </span>
+                  </td>
+                  <td className="px-5 py-3.5 text-xs text-on-surface-variant hidden md:table-cell">
+                    {row.venue_ids?.length
+                      ? row.venue_ids.map((id) => venueById(id)?.shortName ?? id).join(" · ")
+                      : "—"}
                   </td>
                   <td className="px-5 py-3.5 text-on-surface-variant text-xs hidden lg:table-cell">
                     {row.last_sign_in_at ? formatDateTimeKST(row.last_sign_in_at) : "—"}
@@ -364,7 +482,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
               ))}
               {accounts.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-5 py-16 text-center text-on-surface-variant">
+                  <td colSpan={6} className="px-5 py-16 text-center text-on-surface-variant">
                     <span className="material-symbols-outlined text-4xl opacity-30 block mb-2">
                       group_off
                     </span>
@@ -387,7 +505,19 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
           roleOptions={roleOptions}
           onClose={closeModal}
           onSubmit={modal === "create" ? handleCreate : handleUpdate}
-          onFormChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+          onFormChange={(patch) =>
+            setForm((f) => {
+              const next = { ...f, ...patch };
+              if (patch.role === "admin") {
+                next.venue_ids = KNOWN_VENUES.map((v) => v.id);
+              } else if (patch.role === "guest") {
+                next.venue_ids = [];
+              } else if (patch.role && roleNeedsVenues(patch.role) && next.venue_ids.length === 0) {
+                next.venue_ids = [YEOKSAM_VENUE_ID];
+              }
+              return next;
+            })
+          }
           onNewPasswordChange={setNewPassword}
         />
       )}

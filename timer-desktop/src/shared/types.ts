@@ -86,6 +86,8 @@ export interface AppConfig {
   theme?: UiThemeId;
   /** 타이머 효과음 볼륨 0–100. 없으면 100 */
   soundVolume?: number;
+  /** 이 PC가 속한 지점. 없으면 역삼 */
+  venueId?: string;
 }
 
 export interface DisplayInfo {

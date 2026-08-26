@@ -21,6 +21,7 @@ export type LanHostGames = {
   hostname: string;
   theme?: string;
   soundVolume?: number;
+  venueId?: string;
   games: LanGameInfo[];
 };
 
@@ -29,6 +30,7 @@ export type LanDiscoveredGame = LanGameInfo & {
   hostname: string;
   theme?: string;
   soundVolume?: number;
+  venueId?: string;
 };
 
 export type LanViewState = {

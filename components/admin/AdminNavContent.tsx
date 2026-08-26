@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { signOut } from "@/lib/actions/auth";
 import { AdminNavAccountLink } from "@/components/admin/AdminNavAccountLink";
 import { AdminNavCloseButton } from "@/components/admin/AdminNavCloseButton";
+import { VenueSwitcher } from "@/components/venue/VenueSwitcher";
 
 type NavChild = {
   href: string;
@@ -191,6 +192,9 @@ export function AdminNavContent({ onNavigate, showAccountLink = false }: Props) 
           </p>
         </Link>
         <AdminNavCloseButton className="admin-sidebar-close shrink-0" />
+      </div>
+      <div className="px-3 pb-3">
+        <VenueSwitcher />
       </div>
       <nav className="flex-1 px-3 space-y-1 overflow-y-auto min-h-0">
         <NavGroupBlock

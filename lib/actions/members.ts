@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { hashPassword } from "@/lib/auth/password";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { getActiveVenueId } from "@/lib/venue/active";
 import { requireOpenSession } from "@/lib/venue/session";
 
 function normalizePhone(raw: string) {
@@ -25,7 +25,7 @@ export async function checkNicknameAvailable(nickname: string) {
   const { data } = await supabase
     .from("members")
     .select("id")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .eq("nickname", nick)
     .maybeSingle();
 
@@ -42,7 +42,7 @@ export async function checkLoginIdAvailable(loginId: string) {
   const { data } = await supabase
     .from("members")
     .select("id")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .eq("login_id", id)
     .maybeSingle();
 
@@ -86,7 +86,7 @@ export async function createMember(input: CreateMemberInput) {
   const { data, error } = await supabase
     .from("members")
     .insert({
-      venue_id: DEFAULT_VENUE_ID,
+      venue_id: await getActiveVenueId(),
       login_id: loginId,
       password_hash: passwordHash,
       nickname,
@@ -130,7 +130,7 @@ export async function lookupMemberByPhone(phone: string) {
   const { data } = await supabase
     .from("members")
     .select("*")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .eq("phone", digits)
     .maybeSingle();
 
@@ -147,7 +147,7 @@ export async function lookupMemberByNicknameOrLogin(query: string) {
   const { data: byNick } = await supabase
     .from("members")
     .select("*")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .eq("nickname", q)
     .maybeSingle();
 
@@ -156,7 +156,7 @@ export async function lookupMemberByNicknameOrLogin(query: string) {
   const { data: byLogin } = await supabase
     .from("members")
     .select("*")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .eq("login_id", normalizeLoginId(q))
     .maybeSingle();
 
@@ -186,7 +186,7 @@ export async function checkInVisit(memberId: string) {
   const { data, error } = await supabase
     .from("member_visits")
     .insert({
-      venue_id: DEFAULT_VENUE_ID,
+      venue_id: await getActiveVenueId(),
       venue_session_id: sessionResult.session.id,
       member_id: memberId,
       status: "on_floor",

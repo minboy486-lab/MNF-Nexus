@@ -1,4 +1,5 @@
-import { getSupabase, DEFAULT_VENUE_ID, loginEmails, createPasswordClient } from "./client";
+import { getSupabase, loginEmails, createPasswordClient } from "./client";
+import { getConfiguredVenueId } from "./venue";
 
 export type StaffAuthOk = {
   userId: string;
@@ -8,6 +9,21 @@ export type StaffAuthOk = {
   checkedIn: boolean;
   checkedInAt: string | null;
 };
+
+async function denyIfNoVenueAccess(
+  sb: NonNullable<ReturnType<typeof getSupabase>>,
+  profileId: string,
+): Promise<string | null> {
+  const { data, error } = await sb
+    .from("profile_venues")
+    .select("venue_id")
+    .eq("profile_id", profileId)
+    .eq("venue_id", getConfiguredVenueId())
+    .maybeSingle();
+  if (error) return null;
+  if (!data) return "이 PC 지점에 대한 권한이 없습니다.";
+  return null;
+}
 
 export async function loginStaff(loginId: string, password: string): Promise<StaffAuthOk | { error: string }> {
   const sb = getSupabase();
@@ -44,11 +60,15 @@ export async function loginStaff(loginId: string, password: string): Promise<Sta
     return { error: "직원 계정이 아닙니다." };
   }
 
+  const denied = await denyIfNoVenueAccess(sb, userId);
+  if (denied) return { error: denied };
+
   let staff = (
     await sb
       .from("staff")
       .select("id, name, is_active")
       .eq("profile_id", userId)
+      .eq("venue_id", getConfiguredVenueId())
       .order("is_active", { ascending: false })
       .limit(1)
   ).data?.[0] ?? null;
@@ -62,7 +82,7 @@ export async function loginStaff(loginId: string, password: string): Promise<Sta
     const { data: created, error } = await sb
       .from("staff")
       .insert({
-        venue_id: DEFAULT_VENUE_ID,
+        venue_id: getConfiguredVenueId(),
         profile_id: userId,
         name,
         role: "staff",
@@ -103,11 +123,15 @@ async function findActiveStaffByLoginId(loginId: string): Promise<StaffAuthOk | 
     return { error: "직원 계정이 아닙니다." };
   }
 
+  const denied = await denyIfNoVenueAccess(sb, profile.id);
+  if (denied) return { error: denied };
+
   let staff = (
     await sb
       .from("staff")
       .select("id, name, is_active")
       .eq("profile_id", profile.id)
+      .eq("venue_id", getConfiguredVenueId())
       .order("is_active", { ascending: false })
       .limit(1)
   ).data?.[0] ?? null;
@@ -119,7 +143,7 @@ async function findActiveStaffByLoginId(loginId: string): Promise<StaffAuthOk | 
     const { data: created, error } = await sb
       .from("staff")
       .insert({
-        venue_id: DEFAULT_VENUE_ID,
+        venue_id: getConfiguredVenueId(),
         profile_id: profile.id,
         name,
         role: "staff",
@@ -194,7 +218,7 @@ async function openVenueSessionId(): Promise<string | null> {
   const { data } = await sb
     .from("venue_sessions")
     .select("id")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", getConfiguredVenueId())
     .eq("status", "open")
     .order("opened_at", { ascending: false })
     .limit(1)

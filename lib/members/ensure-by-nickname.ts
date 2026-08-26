@@ -1,17 +1,18 @@
 import { hashPassword } from "@/lib/auth/password";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { getActiveVenueId } from "@/lib/venue/active";
 import { revalidatePath } from "next/cache";
 
 export async function ensureMemberByNickname(nickname: string) {
   const nick = nickname.trim();
   if (!nick) return { error: "닉네임을 입력하세요." as const };
 
+  const venueId = await getActiveVenueId();
   const supabase = await createClient();
   const { data: existing } = await supabase
     .from("members")
     .select("id, nickname")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", venueId)
     .eq("nickname", nick)
     .maybeSingle();
 
@@ -24,7 +25,7 @@ export async function ensureMemberByNickname(nickname: string) {
   const { data, error } = await supabase
     .from("members")
     .insert({
-      venue_id: DEFAULT_VENUE_ID,
+      venue_id: venueId,
       login_id: loginId,
       password_hash: passwordHash,
       nickname: nick,
@@ -38,7 +39,7 @@ export async function ensureMemberByNickname(nickname: string) {
       const { data: retry } = await supabase
         .from("members")
         .select("id, nickname")
-        .eq("venue_id", DEFAULT_VENUE_ID)
+        .eq("venue_id", venueId)
         .eq("nickname", nick)
         .maybeSingle();
       if (retry) return { memberId: retry.id, nickname: retry.nickname, created: false };

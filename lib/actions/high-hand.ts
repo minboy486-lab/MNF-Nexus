@@ -10,7 +10,7 @@ import {
 import { ensureMemberByNickname } from "@/lib/members/ensure-by-nickname";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { getActiveVenueId } from "@/lib/venue/active";
 
 function handMp(handType: HighHandType): number {
   return HIGH_HAND_TYPES.find((h) => h.id === handType)?.mp ?? 0;
@@ -31,7 +31,7 @@ async function syncHighHandToBingo(
 ) {
   await supabase.from("bingo_marks").upsert(
     {
-      venue_id: DEFAULT_VENUE_ID,
+      venue_id: await getActiveVenueId(),
       month_key: monthKeyFromPlayDate(playDate),
       cell_no: HIGH_HAND_BINGO_CELL_NO,
       nickname,
@@ -60,7 +60,7 @@ export async function saveHighHand(input: {
   const supabase = await createClient();
   const { error } = await supabase.from("high_hand_daily").upsert(
     {
-      venue_id: DEFAULT_VENUE_ID,
+      venue_id: await getActiveVenueId(),
       play_date: playDate,
       hand_type: input.handType,
       nickname: memberResult.nickname,
@@ -87,7 +87,7 @@ export async function clearHighHand(playDate: string, handType: HighHandType) {
   const { error } = await supabase
     .from("high_hand_daily")
     .delete()
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", await getActiveVenueId())
     .eq("play_date", playDate)
     .eq("hand_type", handType);
 

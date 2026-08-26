@@ -4,7 +4,6 @@ import {
   currentMonthRange,
   formatMonthLabel,
   getPublicScoreRanking,
-  getScoreRanking,
   previousMonthRange,
 } from "@/lib/data/manual-scores-queries";
 
@@ -21,7 +20,7 @@ export default async function PublicRankingPage() {
 
   const [ranking, prevRanking] = await Promise.all([
     getPublicScoreRanking(month.from, month.to),
-    getScoreRanking(prevMonth.from, prevMonth.to),
+    getPublicScoreRanking(prevMonth.from, prevMonth.to),
   ]);
 
   return (

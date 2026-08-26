@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { AppConfig, DisplayInfo } from "../../shared/types";
 import { CONFIG_VERSION, MONITOR_SLOTS } from "../../shared/types";
+import { KNOWN_VENUES, YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 
 type Props = {
   displays: DisplayInfo[];
@@ -28,7 +29,13 @@ export function SetupScreen({ displays, initialConfig, onSaved }: Props) {
     displays[0]?.id ??
     0;
 
+  const currentVenueId = isKnownVenueId(initialConfig?.venueId)
+    ? initialConfig.venueId
+    : YEOKSAM_VENUE_ID;
+
   const [controlId, setControlId] = useState(defaultControl);
+  const [venueId, setVenueId] = useState(currentVenueId);
+  const [pin, setPin] = useState("");
   const [assignments, setAssignments] = useState<Record<number, AssignValue>>(() => {
     const draft: Record<number, AssignValue> = {};
     for (const d of displays) {
@@ -49,6 +56,8 @@ export function SetupScreen({ displays, initialConfig, onSaved }: Props) {
     [assignments, controlId],
   );
 
+  const venueChanged = venueId !== currentVenueId;
+
   function setAssignment(displayId: number, value: AssignValue): void {
     setAssignments((prev) => {
       const next = { ...prev, [displayId]: value };
@@ -67,11 +76,21 @@ export function SetupScreen({ displays, initialConfig, onSaved }: Props) {
     setPending(true);
     setError(null);
 
+    if (venueChanged) {
+      const verified = await window.controlApi.setVenue({ venueId, pin });
+      if (!verified.ok) {
+        setError(verified.error);
+        setPending(false);
+        return;
+      }
+    }
+
     const config: AppConfig = {
       version: CONFIG_VERSION,
       controlDisplayId: controlId,
       theme: initialConfig?.theme,
       soundVolume: initialConfig?.soundVolume,
+      venueId,
       mappings: displays.map((d, i) => {
         const v = assignments[d.id] ?? "unused";
         const slot = d.id === controlId ? null : fromAssignValue(v);
@@ -97,11 +116,44 @@ export function SetupScreen({ displays, initialConfig, onSaved }: Props) {
 
   return (
     <section className="panel">
-      <h2>모니터 설정</h2>
+      <h2>모니터 · 지점 설정</h2>
       <p className="muted">
-        Control 모니터 1개와 Display 모니터(M1~M6)를 지정하세요.
-        <br />같은 M번호를 여러 모니터에 지정하면 동일한 게임이 표시됩니다.
+        이 PC가 속한 지점을 고르고, Control 모니터와 Display(M1~M6)를 지정하세요.
+        <br />지점을 바꿀 때는 지점 비밀번호(초기 1234)가 필요합니다.
       </p>
+
+      <div className="setup-venue">
+        <p className="setup-venue__label">지점</p>
+        <div className="setup-venue__pills">
+          {KNOWN_VENUES.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              className="setup-venue__pill"
+              data-active={venueId === v.id}
+              onClick={() => {
+                setVenueId(v.id);
+                if (v.id === currentVenueId) setPin("");
+              }}
+            >
+              {v.name}
+            </button>
+          ))}
+        </div>
+        {venueChanged && (
+          <label className="setup-venue__pin">
+            <span>지점 비밀번호</span>
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={4}
+              placeholder="4자리"
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            />
+          </label>
+        )}
+      </div>
 
       <ul className="setup-list">
         {displays.map((d) => {

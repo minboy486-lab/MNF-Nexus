@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { getActiveVenueId } from "@/lib/venue/active";
 import { formatMp } from "@/lib/utils/mp";
 import { requireOpenSession } from "@/lib/venue/session";
 
@@ -30,7 +30,7 @@ export async function recordMoneyTransaction(params: {
   } = await supabase.auth.getUser();
 
   const { error } = await supabase.from("money_transactions").insert({
-    venue_id: DEFAULT_VENUE_ID,
+    venue_id: await getActiveVenueId(),
     venue_session_id: sessionResult.session.id,
     game_id: params.gameId ?? null,
     member_id: params.memberId,

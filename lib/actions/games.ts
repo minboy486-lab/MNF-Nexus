@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { getActiveVenueId } from "@/lib/venue/active";
 import { requireOpenSession } from "@/lib/venue/session";
 import { recordBuyIn, recordRebuy, type PaymentMethod } from "@/lib/actions/ledger";
 import { renumberRanks, renumberRebuyOrders } from "@/lib/presets/preset-form";
@@ -71,7 +71,10 @@ export async function createPresetFromPayload(
   if (structureError) return { error: structureError };
 
   const supabase = await createClient();
-  const result = await insertGamePresetRow(supabase, buildPresetRow(payload));
+  const result = await insertGamePresetRow(supabase, {
+    ...buildPresetRow(payload),
+    venue_id: await getActiveVenueId(),
+  });
 
   if ("error" in result) return { error: result.error };
   revalidatePath("/admin/presets");
@@ -248,7 +251,7 @@ export async function startGameFromSelection(input: {
     .from("games")
     .insert({
       preset_id: presetId,
-      venue_id: DEFAULT_VENUE_ID,
+      venue_id: await getActiveVenueId(),
       venue_session_id: sessionResult.session.id,
       daily_game_number: dailyNumber,
       status: "running",
@@ -332,6 +335,7 @@ export async function quickStartGameOnTable(physicalTableId: string, presetId?: 
     const { data: presets } = await supabase
       .from("game_presets")
       .select("id")
+      .eq("venue_id", await getActiveVenueId())
       .order("name")
       .limit(1);
     pid = presets?.[0]?.id;
