@@ -1,5 +1,5 @@
-import type { AppSnapshot } from "./types";
-import type { TableTimerState } from "@mnf/timer/types";
+import type { AppSnapshot, GameSession, YeoksamRole } from "./types";
+import type { TableTimerState, TimerAction, BlindStructureOption } from "@mnf/timer/types";
 
 export const REMOTE_PORT = 17890;
 export const LAN_CLUSTER_PATH = "/lan/cluster";
@@ -42,16 +42,34 @@ export type RemoteClientMsg =
   | { type: "counters"; gameId: number; op: RemoteCounterOp; rebuyIndex?: number; host?: string }
   | { type: "deleteGame"; gameId: number; host?: string }
   | { type: "view"; gameId: number }
-  | { type: "peer_hello"; pin: string; venueId?: string }
+  | { type: "peer_hello"; pin: string; venueId?: string; yeoksamRole?: YeoksamRole }
   | { type: "peer_command"; gameId: number; action: RemoteTimerAction; sec?: number }
   | { type: "peer_counters"; gameId: number; op: RemoteCounterOp; rebuyIndex?: number }
   | { type: "peer_deleteGame"; gameId: number }
+  | {
+      type: "peer_timer";
+      gameId: number;
+      action: TimerAction;
+      minutes?: number;
+      ms?: number;
+      sec?: number;
+    }
+  | { type: "peer_assign_table"; tableSlot: number; gameId: number | null }
+  | { type: "peer_assign_monitor"; monitorSlot: number; gameId: number | null }
+  | { type: "peer_assign_all_monitors"; gameId: number }
+  | {
+      type: "peer_session_patch";
+      gameId: number;
+      patch: Partial<Pick<GameSession, "players" | "entries" | "rebuys" | "addon" | "bonusChip" | "leftNotice">>;
+    }
+  | { type: "peer_create_game"; structure: BlindStructureOption }
   | {
       type: "peer_snapshot";
       hostname: string;
       snapshot: AppSnapshot;
       timers: TableTimerState[];
       serverNow: number;
+      yeoksamRole?: YeoksamRole;
     };
 
 export type RemoteStaffState = {
@@ -68,6 +86,7 @@ export type RemotePeerSnapshot = {
   snapshot: AppSnapshot;
   timers: TableTimerState[];
   serverNow: number;
+  yeoksamRole?: YeoksamRole;
 };
 
 export type RemoteServerMsg =
@@ -80,6 +99,7 @@ export type RemoteServerMsg =
       timers: TableTimerState[];
       serverNow: number;
       hostname?: string;
+      yeoksamRole?: YeoksamRole;
       peers?: RemotePeerSnapshot[];
     }
   | { type: "view_ok"; gameId: number; theme: string; soundVolume: number; serverNow: number }

@@ -1,62 +1,81 @@
 import { useMemo, useState } from "react";
-import type { AppConfig, DisplayInfo } from "../../shared/types";
+import type { AppConfig, DisplayInfo, MonitorSlot } from "../../shared/types";
 import { CONFIG_VERSION, MONITOR_SLOTS } from "../../shared/types";
-import { KNOWN_VENUES, YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
+import { YEOKSAM_VENUE_ID, isKnownVenueId, venueName } from "@mnf/venue";
+import { YEOKSAM_SHOP_OUTPUTS, controlOutputSlotOf, isYeoksamFloor } from "../../shared/floorPlan";
 
 type Props = {
   displays: DisplayInfo[];
   initialConfig: AppConfig | null;
   onSaved: (config: AppConfig) => void;
+  onOpenControl?: () => void;
 };
 
 type AssignValue = "control" | "unused" | `monitor-${number}`;
-
-function toAssignValue(displayId: number, controlId: number, monitorSlot: number | null): AssignValue {
-  if (displayId === controlId) return "control";
-  if (!monitorSlot) return "unused";
-  return `monitor-${monitorSlot}`;
-}
 
 function fromAssignValue(v: AssignValue): number | null {
   if (v === "control" || v === "unused") return null;
   return Number(v.replace("monitor-", ""));
 }
 
-export function SetupScreen({ displays, initialConfig, onSaved }: Props) {
+function asMonitorSlot(slot: number): MonitorSlot {
+  return slot as MonitorSlot;
+}
+
+function initialAssignments(
+  displays: DisplayInfo[],
+  config: AppConfig | null,
+  defaultControl: number,
+  yeoksam: boolean,
+): Record<number, AssignValue> {
+  const draft: Record<number, AssignValue> = {};
+  const controlId = config?.controlDisplayId ?? defaultControl;
+  const outputSlot = yeoksam ? controlOutputSlotOf(config) : null;
+  for (const d of displays) {
+    const m = config?.mappings.find((row) => row.displayId === d.id);
+    const slot = m?.monitorSlot ?? null;
+    if (yeoksam) {
+      if (d.id === controlId && outputSlot) {
+        draft[d.id] = `monitor-${outputSlot}`;
+        continue;
+      }
+      if (d.id === controlId) {
+        draft[d.id] = "control";
+        continue;
+      }
+      draft[d.id] = slot ? `monitor-${slot}` : "unused";
+      continue;
+    }
+    if (d.id === controlId) draft[d.id] = "control";
+    else if (!slot) draft[d.id] = "unused";
+    else draft[d.id] = `monitor-${slot}`;
+  }
+  return draft;
+}
+
+export function SetupScreen({ displays, initialConfig, onSaved, onOpenControl }: Props) {
   const defaultControl =
     initialConfig?.controlDisplayId ??
     displays.find((d) => d.isPrimary)?.id ??
     displays[0]?.id ??
     0;
 
-  const currentVenueId = isKnownVenueId(initialConfig?.venueId)
+  const venueId = isKnownVenueId(initialConfig?.venueId)
     ? initialConfig.venueId
     : YEOKSAM_VENUE_ID;
+  const yeoksam = isYeoksamFloor(venueId);
 
   const [controlId, setControlId] = useState(defaultControl);
-  const [venueId, setVenueId] = useState(currentVenueId);
-  const [pin, setPin] = useState("");
-  const [assignments, setAssignments] = useState<Record<number, AssignValue>>(() => {
-    const draft: Record<number, AssignValue> = {};
-    for (const d of displays) {
-      const m = initialConfig?.mappings.find((m) => m.displayId === d.id);
-      const slot = m?.monitorSlot ?? null;
-      draft[d.id] = toAssignValue(d.id, initialConfig?.controlDisplayId ?? defaultControl, slot);
-    }
-    return draft;
-  });
+  const [assignments, setAssignments] = useState<Record<number, AssignValue>>(() =>
+    initialAssignments(displays, initialConfig, defaultControl, yeoksam),
+  );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const displayCount = useMemo(
-    () =>
-      Object.entries(assignments).filter(
-        ([id, v]) => Number(id) !== controlId && v.startsWith("monitor-"),
-      ).length,
-    [assignments, controlId],
+    () => Object.values(assignments).filter((v) => v.startsWith("monitor-")).length,
+    [assignments],
   );
-
-  const venueChanged = venueId !== currentVenueId;
 
   function setAssignment(displayId: number, value: AssignValue): void {
     setAssignments((prev) => {
@@ -76,32 +95,46 @@ export function SetupScreen({ displays, initialConfig, onSaved }: Props) {
     setPending(true);
     setError(null);
 
-    if (venueChanged) {
-      const verified = await window.controlApi.setVenue({ venueId, pin });
-      if (!verified.ok) {
-        setError(verified.error);
-        setPending(false);
-        return;
-      }
-    }
+    const controlAssigned = displays.find((d) => assignments[d.id] === "control");
+    const hostId = yeoksam
+      ? (controlAssigned?.id ?? defaultControl ?? displays[0]?.id ?? 0)
+      : controlId;
+    const hostSlot = fromAssignValue(assignments[hostId] ?? "unused");
+    const controlOutputSlot = yeoksam && hostSlot ? asMonitorSlot(hostSlot) : null;
 
     const config: AppConfig = {
       version: CONFIG_VERSION,
-      controlDisplayId: controlId,
+      controlDisplayId: hostId,
       theme: initialConfig?.theme,
       soundVolume: initialConfig?.soundVolume,
       venueId,
-      mappings: displays.map((d, i) => {
-        const v = assignments[d.id] ?? "unused";
-        const slot = d.id === controlId ? null : fromAssignValue(v);
-        return {
-          displayId: d.id,
-          monitorSlot: (slot ?? (i + 1)) as (typeof MONITOR_SLOTS)[number],
-          gameId: null,
-          label: d.label,
-          bounds: d.bounds,
-        };
-      }),
+      yeoksamRole: initialConfig?.yeoksamRole,
+      controlOutputSlot,
+      mappings: yeoksam
+        ? displays.flatMap((d) => {
+            const slot = fromAssignValue(assignments[d.id] ?? "unused");
+            if (!slot) return [];
+            return [
+              {
+                displayId: d.id,
+                monitorSlot: asMonitorSlot(slot),
+                gameId: null,
+                label: d.label,
+                bounds: d.bounds,
+              },
+            ];
+          })
+        : displays.map((d, i) => {
+            const v = assignments[d.id] ?? "unused";
+            const slot = d.id === hostId ? null : fromAssignValue(v);
+            return {
+              displayId: d.id,
+              monitorSlot: asMonitorSlot(slot ?? i + 1),
+              gameId: null,
+              label: d.label,
+              bounds: d.bounds,
+            };
+          }),
     };
 
     const result = await window.controlApi.saveConfig(config);
@@ -116,44 +149,12 @@ export function SetupScreen({ displays, initialConfig, onSaved }: Props) {
 
   return (
     <section className="panel">
-      <h2>모니터 · 지점 설정</h2>
+      <h2>모니터 설정 · {venueName(venueId)}</h2>
       <p className="muted">
-        이 PC가 속한 지점을 고르고, Control 모니터와 Display(M1~M6)를 지정하세요.
-        <br />지점을 바꿀 때는 지점 비밀번호(초기 1234)가 필요합니다.
+        {yeoksam
+          ? "이 PC 화면을 Dt·Bm 등으로 지정하세요. 지정하면 블라인드가 나오고, Esc로 이 설정, M으로 매장 컨트롤을 엽니다."
+          : "Control 모니터와 Display(M1~M6)를 지정하세요."}
       </p>
-
-      <div className="setup-venue">
-        <p className="setup-venue__label">지점</p>
-        <div className="setup-venue__pills">
-          {KNOWN_VENUES.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              className="setup-venue__pill"
-              data-active={venueId === v.id}
-              onClick={() => {
-                setVenueId(v.id);
-                if (v.id === currentVenueId) setPin("");
-              }}
-            >
-              {v.name}
-            </button>
-          ))}
-        </div>
-        {venueChanged && (
-          <label className="setup-venue__pin">
-            <span>지점 비밀번호</span>
-            <input
-              type="password"
-              inputMode="numeric"
-              maxLength={4}
-              placeholder="4자리"
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-            />
-          </label>
-        )}
-      </div>
 
       <ul className="setup-list">
         {displays.map((d) => {
@@ -172,9 +173,17 @@ export function SetupScreen({ displays, initialConfig, onSaved }: Props) {
               >
                 <option value="control">Control (관리자)</option>
                 <option value="unused">미사용</option>
-                {MONITOR_SLOTS.map((slot) => (
-                  <option key={slot} value={`monitor-${slot}`}>M{slot} Display</option>
-                ))}
+                {yeoksam
+                  ? YEOKSAM_SHOP_OUTPUTS.map((out) => (
+                      <option key={out.slot} value={`monitor-${out.slot}`}>
+                        {out.label}
+                      </option>
+                    ))
+                  : MONITOR_SLOTS.map((slot) => (
+                      <option key={slot} value={`monitor-${slot}`}>
+                        M{slot} Display
+                      </option>
+                    ))}
               </select>
             </li>
           );
@@ -182,7 +191,12 @@ export function SetupScreen({ displays, initialConfig, onSaved }: Props) {
       </ul>
 
       <div className="setup-footer">
-        <span className="muted">Display: {displayCount}개</span>
+        <span className="muted">{yeoksam ? `송출 ${displayCount}개` : `Display: ${displayCount}개`}</span>
+        {yeoksam && onOpenControl && (
+          <button type="button" disabled={pending} onClick={onOpenControl}>
+            매장 컨트롤
+          </button>
+        )}
         <button type="button" className="primary" disabled={pending} onClick={() => void handleSave()}>
           {pending ? "저장 중..." : "저장"}
         </button>

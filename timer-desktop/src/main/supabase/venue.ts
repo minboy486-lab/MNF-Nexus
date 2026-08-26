@@ -2,10 +2,15 @@ import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 import { controlPinMatches, isControlPin } from "@mnf/venue/control-pin";
 import { getSupabase } from "./client";
 import { loadConfig } from "../config/configStore";
+import { normalizeYeoksamRole, type YeoksamRole } from "../../shared/types";
 
 export function getConfiguredVenueId(): string {
   const id = loadConfig()?.venueId;
   return isKnownVenueId(id) ? id : YEOKSAM_VENUE_ID;
+}
+
+export function getConfiguredYeoksamRole(): YeoksamRole {
+  return normalizeYeoksamRole(loadConfig()?.yeoksamRole);
 }
 
 export async function verifyVenueControlPin(

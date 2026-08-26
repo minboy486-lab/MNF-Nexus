@@ -16,6 +16,7 @@ export {
   normalizeUiTheme,
   DEFAULT_SOUND_VOLUME,
   normalizeSoundVolume,
+  normalizeYeoksamRole,
   type AppConfig,
   type AppSnapshot,
   type DisplayBounds,
@@ -27,4 +28,5 @@ export {
   type GameNumber,
   type TableNumber,
   type UiThemeId,
+  type YeoksamRole,
 } from "../../shared/types";

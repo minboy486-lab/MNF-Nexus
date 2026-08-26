@@ -8,6 +8,7 @@ import {
   MAX_MONITORS,
   normalizeUiTheme,
   normalizeSoundVolume,
+  normalizeYeoksamRole,
   type AppConfig,
   type MonitorMapping,
   type MonitorSlot,
@@ -90,6 +91,11 @@ export function loadConfig(): AppConfig | null {
       theme: normalizeUiTheme(parsed.theme),
       soundVolume: normalizeSoundVolume(parsed.soundVolume),
       venueId: isKnownVenueId(parsed.venueId) ? parsed.venueId : YEOKSAM_VENUE_ID,
+      yeoksamRole: normalizeYeoksamRole(parsed.yeoksamRole),
+      controlOutputSlot:
+        typeof parsed.controlOutputSlot === "number" && isMonitorSlot(parsed.controlOutputSlot)
+          ? parsed.controlOutputSlot
+          : null,
     };
   } catch {
     return null;
@@ -134,6 +140,16 @@ export function parseConfigInput(raw: unknown): { config: AppConfig } | { error:
       ? (existing?.venueId as string)
       : YEOKSAM_VENUE_ID;
 
+  const controlOutputRaw = input.controlOutputSlot;
+  const controlOutputSlot =
+    typeof controlOutputRaw === "number" && isMonitorSlot(controlOutputRaw)
+      ? controlOutputRaw
+      : controlOutputRaw === null
+        ? null
+        : typeof existing?.controlOutputSlot === "number" && isMonitorSlot(existing.controlOutputSlot)
+          ? existing.controlOutputSlot
+          : null;
+
   const config: AppConfig = {
     version: CONFIG_VERSION,
     controlDisplayId,
@@ -141,6 +157,10 @@ export function parseConfigInput(raw: unknown): { config: AppConfig } | { error:
     theme,
     soundVolume,
     venueId,
+    yeoksamRole: normalizeYeoksamRole(
+      input.yeoksamRole !== undefined ? input.yeoksamRole : existing?.yeoksamRole,
+    ),
+    controlOutputSlot,
   };
   const err = validateConfig(config);
   if (err) return { error: err };

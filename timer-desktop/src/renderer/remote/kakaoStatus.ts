@@ -31,7 +31,7 @@ function tableLabel(slots: number[]): string {
   const letters = slots.map((s) => tableLetter(s));
   if (letters.length === 0) return "";
   if (letters.length === 1) return `${letters[0]} 테이블`;
-  return `${letters.join(", ")} 테이블`;
+  return `${letters.join(",")} 테이블`;
 }
 
 function blindParen(timer: TableTimerState | undefined): string {
@@ -43,12 +43,17 @@ function blindParen(timer: TableTimerState | undefined): string {
   return `${timer.smallBlind}/${timer.bigBlind}`;
 }
 
+function isMttShare(session: GameSession, slots: number[]): boolean {
+  return session.isMtt === true || slots.length >= 2;
+}
+
 function gameBlock(session: GameSession, snapshot: AppSnapshot, timers: TableTimerState[]): string {
   const slots = tablesForGame(snapshot, session);
-  const mtt = slots.length >= 2;
+  const mtt = isMttShare(session, slots);
   const name = gameNameForShare(session.structureName || "게임");
-  const titleParts = [tableLabel(slots), `${name}${mtt ? " MTT" : ""} 게임`].filter(Boolean);
-  const title = `🤩 ${titleParts.join(" ")} 🤩`;
+  const gameTitle = mtt ? "MTT게임" : `${name} 게임`;
+  const tables = tableLabel(slots);
+  const title = tables ? `🤩 ${tables} ${gameTitle} 🤩` : `🤩 ${gameTitle} 🤩`;
   const timer = timers.find((t) => t.tableId === session.gameId);
   const level = Math.floor(timer?.blindLevel ?? 1);
   const levelLine = `🌜Lv.${level} (${blindParen(timer)})🌛`;

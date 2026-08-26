@@ -17,11 +17,13 @@ import { AssignPopup } from "./AssignPopup";
 import headerLogoUrl from "./mnf-logo.png";
 import { BlindSelectView } from "./BlindSelectView";
 import { FloorPlanView } from "./FloorPlanView";
+import { controlOutputSlotOf, floorHotkeys, isYeoksamFloor, monitorLabel, yeoksamOutputGameId } from "../../shared/floorPlan";
 import { GameControlView } from "./GameControlView";
 import { GameListView } from "./GameListView";
 import { MonitorPreviewView } from "./MonitorPreviewView";
 import { SetupScreen } from "./SetupScreen";
 import { playTimerVolumePreview, setTimerSoundVolume } from "../shared/timerAnnounce";
+import { KNOWN_VENUES, YEOKSAM_VENUE_ID, isKnownVenueId, venueName } from "@mnf/venue";
 
 type View =
   | { kind: "main" }
@@ -51,6 +53,11 @@ export function App() {
   const [qrLoading, setQrLoading] = useState(false);
   const [qrSrc, setQrSrc] = useState<string | null>(null);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const [venueMenuOpen, setVenueMenuOpen] = useState(false);
+  const [venuePinFor, setVenuePinFor] = useState<string | null>(null);
+  const [venuePin, setVenuePin] = useState("");
+  const [venuePinError, setVenuePinError] = useState<string | null>(null);
+  const [venuePinPending, setVenuePinPending] = useState(false);
   const [quitConfirm, setQuitConfirm] = useState(false);
   const [lanLeaveConfirm, setLanLeaveConfirm] = useState(false);
   const [lanViewState, setLanViewState] = useState<LanViewState | null>(null);
@@ -92,6 +99,10 @@ export function App() {
       setSoundVolume(nextVolume);
       setTimerSoundVolume(nextVolume);
       if (!cfg) setView({ kind: "setup" });
+      else {
+        const slot = controlOutputSlotOf(cfg);
+        if (slot) setView({ kind: "monitor-preview", slot });
+      }
     } finally {
       setLoading(false);
     }
@@ -204,6 +215,60 @@ export function App() {
     setSettingsOpen(false);
   }, []);
 
+  const closeSettings = useCallback(() => {
+    setSettingsOpen(false);
+    setThemeMenuOpen(false);
+    setVenueMenuOpen(false);
+    setVenuePinFor(null);
+    setVenuePin("");
+    setVenuePinError(null);
+    setVenuePinPending(false);
+  }, []);
+
+  const currentVenueId = isKnownVenueId(config?.venueId) ? config.venueId : YEOKSAM_VENUE_ID;
+
+  const handlePickVenue = useCallback((id: string) => {
+    if (id === currentVenueId) {
+      setVenueMenuOpen(false);
+      setVenuePinFor(null);
+      setVenuePin("");
+      setVenuePinError(null);
+      return;
+    }
+    setVenuePin("");
+    setVenuePinError(null);
+    setVenuePinFor(id);
+  }, [currentVenueId]);
+
+  const handleConfirmVenuePin = useCallback(async (pin: string) => {
+    if (!venuePinFor || pin.length !== 4 || venuePinPending) return;
+    setVenuePinPending(true);
+    setVenuePinError(null);
+    const target = venuePinFor;
+    const result = await window.controlApi.setVenue({ venueId: target, pin });
+    if (!result.ok) {
+      setVenuePinError(result.error);
+      setVenuePin("");
+      setVenuePinPending(false);
+      return;
+    }
+    if (lanViewState) {
+      await window.controlApi.stopLanView();
+      setLanViewState(null);
+    }
+    setConfig((prev) =>
+      prev
+        ? {
+            ...prev,
+            venueId: target,
+            controlOutputSlot: isYeoksamFloor(target) ? prev.controlOutputSlot : null,
+          }
+        : prev,
+    );
+    closeSettings();
+    setView({ kind: "main" });
+  }, [venuePinFor, venuePinPending, lanViewState, closeSettings]);
+
   const handleSoundVolume = useCallback((raw: number) => {
     const next = normalizeSoundVolume(raw);
     setSoundVolume(next);
@@ -241,11 +306,36 @@ export function App() {
       if (e.key === "Escape") {
         if (qrOpen) { setQrOpen(false); return; }
         if (themeMenuOpen) { setThemeMenuOpen(false); return; }
-        if (settingsOpen) { setSettingsOpen(false); return; }
+        if (venuePinFor) {
+          setVenuePinFor(null);
+          setVenuePin("");
+          setVenuePinError(null);
+          return;
+        }
+        if (venueMenuOpen) { setVenueMenuOpen(false); return; }
+        if (settingsOpen) { closeSettings(); return; }
         if (popup) { setPopup(null); return; }
         if (view.kind === "blind-select") return;
         if (view.kind === "lan-view") { setLanLeaveConfirm(true); return; }
         if (typing) return;
+        if (view.kind === "monitor-preview") {
+          const assigned = controlOutputSlotOf(config);
+          if (assigned === view.slot) {
+            setView({ kind: "setup" });
+            return;
+          }
+          setView({ kind: "main" });
+          return;
+        }
+        if (view.kind === "setup") {
+          const assigned = controlOutputSlotOf(config);
+          if (assigned) {
+            setView({ kind: "monitor-preview", slot: assigned });
+            return;
+          }
+          setView({ kind: "main" });
+          return;
+        }
         if (view.kind !== "main") { setView({ kind: "main" }); return; }
         setSettingsOpen(true);
         return;
@@ -259,6 +349,17 @@ export function App() {
         if (idx >= 0 && idx < UI_THEME_OPTIONS.length) {
           e.preventDefault();
           void handleSetTheme(UI_THEME_OPTIONS[idx]!.id);
+        }
+        return;
+      }
+
+      if (venuePinFor) return;
+
+      if (venueMenuOpen) {
+        const idx = parseInt(e.key, 10) - 1;
+        if (idx >= 0 && idx < KNOWN_VENUES.length) {
+          e.preventDefault();
+          handlePickVenue(KNOWN_VENUES[idx]!.id);
         }
         return;
       }
@@ -299,6 +400,11 @@ export function App() {
           setView({ kind: "monitor-preview", slot });
           return;
         }
+        const assigned = controlOutputSlotOf(config);
+        if (assigned) {
+          setView({ kind: "monitor-preview", slot: assigned });
+          return;
+        }
       }
       // 미리보기 화면에서도 M 키로 닫기
       if ((e.key === "m" || e.key === "M" || e.key === "ㅡ") && view.kind === "monitor-preview") {
@@ -308,13 +414,12 @@ export function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [view, popup, settingsOpen, themeMenuOpen, quitConfirm, lanLeaveConfirm, qrOpen, handleSetTheme]);
+  }, [view, popup, settingsOpen, themeMenuOpen, venueMenuOpen, venuePinFor, quitConfirm, lanLeaveConfirm, qrOpen, config, handleSetTheme, handlePickVenue, closeSettings]);
 
   // ── 플로어 단축키 (main 뷰 + 팝업 없을 때) ───────────────────
   useEffect(() => {
     // 영문 → 슬롯 매핑
-    const MONITOR_KEYS: Record<string, number> = { q:5, a:3, z:1, r:6, f:4, v:2 };
-    const TABLE_KEYS:   Record<string, number> = { w:5, s:3, x:1, e:6, d:4, c:2 };
+    const { monitor: MONITOR_KEYS, table: TABLE_KEYS } = floorHotkeys(config?.venueId);
     const NEW_GAME_KEYS = new Set(["n", "ㅜ"]);
 
     // 한글 → 영문 변환표 (두벌식)
@@ -343,7 +448,7 @@ export function App() {
         !!t?.closest?.('[contenteditable="true"]')
       ) return;
       if (view.kind !== "main") return;
-      if (popup || settingsOpen || quitConfirm || lanLeaveConfirm || qrOpen) return;
+      if (popup || settingsOpen || quitConfirm || lanLeaveConfirm || qrOpen || venueMenuOpen) return;
 
       // 한글이면 영문으로 변환
       const raw = e.key.length === 1 ? e.key.toLowerCase() : e.key;
@@ -385,7 +490,7 @@ export function App() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [view, popup, settingsOpen, quitConfirm, lanLeaveConfirm, qrOpen, snapshot]);
+  }, [view, popup, settingsOpen, quitConfirm, lanLeaveConfirm, qrOpen, venueMenuOpen, snapshot, config?.venueId]);
 
   // ── 게임 생성 ───────────────────────────────────────────────
 
@@ -511,6 +616,21 @@ export function App() {
       ? snapshot.sessions.find((s) => s.gameId === view.session.gameId) ?? view.session
       : null;
 
+  const previewGameId =
+    view.kind === "monitor-preview"
+      ? isYeoksamFloor(currentVenueId)
+        ? yeoksamOutputGameId(snapshot, view.slot)
+        : snapshot.monitorAssignments[view.slot] ?? null
+      : null;
+  const previewSession =
+    previewGameId != null
+      ? snapshot.sessions.find((s) => s.gameId === previewGameId) ?? null
+      : null;
+  const previewTimer =
+    previewGameId != null
+      ? timers.find((t) => t.tableId === previewGameId) ?? null
+      : null;
+
   return (
     <div className="shell compact">
       {view.kind !== "monitor-preview" && view.kind !== "lan-view" && (
@@ -525,6 +645,7 @@ export function App() {
             >
               <img src={headerLogoUrl} alt="MNF" className="header-logo" />
             </button>
+            <span className="header-title">{venueName(currentVenueId)}</span>
             <span className="header-heading">
               <span className="header-title">
                 {view.kind === "setup"
@@ -556,6 +677,7 @@ export function App() {
         <>
           <FloorPlanView
             snapshot={snapshot}
+            venueId={currentVenueId}
             onTableClick={(slot, pos) => setPopup({ kind: "table", slot, pos })}
             onMonitorClick={(slot, pos) => setPopup({ kind: "monitor", slot, pos })}
           />
@@ -613,16 +735,8 @@ export function App() {
       {!loading && view.kind === "monitor-preview" && (
         <MonitorPreviewView
           slot={view.slot}
-          session={
-            (snapshot.monitorAssignments[view.slot] ?? null) !== null
-              ? snapshot.sessions.find((s) => s.gameId === snapshot.monitorAssignments[view.slot]) ?? null
-              : null
-          }
-          timerState={
-            (snapshot.monitorAssignments[view.slot] ?? null) !== null
-              ? timers.find((t) => t.tableId === snapshot.monitorAssignments[view.slot]) ?? null
-              : null
-          }
+          session={previewSession}
+          timerState={previewTimer}
         />
       )}
 
@@ -632,8 +746,10 @@ export function App() {
           initialConfig={config}
           onSaved={(next) => {
             setConfig(next);
-            setView({ kind: "main" });
+            const slot = controlOutputSlotOf(next);
+            setView(slot ? { kind: "monitor-preview", slot } : { kind: "main" });
           }}
+          onOpenControl={() => setView({ kind: "main" })}
         />
       )}
 
@@ -650,7 +766,7 @@ export function App() {
 
       {popup?.kind === "monitor" && (
         <AssignPopup
-          title={`M${popup.slot} 게임 연결`}
+          title={`${monitorLabel(currentVenueId, popup.slot)} 게임 연결`}
           mousePos={popup.pos}
           currentGameId={snapshot.monitorAssignments[popup.slot] ?? null}
           sessions={snapshot.sessions}
@@ -732,24 +848,127 @@ export function App() {
           );
         }
 
+        if (venuePinFor) {
+          const pinVenueLabel = venueName(venuePinFor);
+          return (
+            <div
+              className="settings-overlay"
+              onPointerDown={(e) => {
+                if (e.target === e.currentTarget) {
+                  setVenuePinFor(null);
+                  setVenuePin("");
+                  setVenuePinError(null);
+                }
+              }}
+            >
+              <div className="settings-popup" onClick={(e) => e.stopPropagation()}>
+                <h3 className="settings-popup__title">지점 비밀번호</h3>
+                <p className="settings-venue-pin__hint">{pinVenueLabel} · 초기 1234</p>
+                <input
+                  className="settings-venue-pin__input"
+                  type="password"
+                  inputMode="numeric"
+                  autoFocus
+                  maxLength={4}
+                  placeholder="4자리"
+                  value={venuePin}
+                  disabled={venuePinPending}
+                  onChange={(e) => {
+                    const next = e.currentTarget.value.replace(/\D/g, "").slice(0, 4);
+                    setVenuePin(next);
+                    if (next.length === 4) void handleConfirmVenuePin(next);
+                  }}
+                />
+                {venuePinError ? <p className="settings-venue-pin__error">{venuePinError}</p> : null}
+                <button
+                  type="button"
+                  className="settings-popup__btn settings-popup__btn--cancel"
+                  onClick={() => {
+                    setVenuePinFor(null);
+                    setVenuePin("");
+                    setVenuePinError(null);
+                  }}
+                >
+                  뒤로
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        if (venueMenuOpen) {
+          return (
+            <div
+              className="settings-overlay"
+              onPointerDown={(e) => {
+                if (e.target === e.currentTarget) setVenueMenuOpen(false);
+              }}
+            >
+              <div className="settings-popup" onClick={(e) => e.stopPropagation()}>
+                <h3 className="settings-popup__title">지점선택</h3>
+                {KNOWN_VENUES.map((v, i) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    className={`settings-popup__btn${currentVenueId === v.id ? " settings-popup__btn--active" : ""}`}
+                    onClick={() => handlePickVenue(v.id)}
+                  >
+                    <span className="settings-popup__num">{i + 1}</span>
+                    {v.name}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="settings-popup__btn settings-popup__btn--cancel"
+                  onClick={() => setVenueMenuOpen(false)}
+                >
+                  뒤로
+                </button>
+              </div>
+            </div>
+          );
+        }
+
         const menuItems: { label: string; variant?: string; action: () => void; update?: boolean }[] = [
-          { label: "모니터 설정", action: () => { setSettingsOpen(false); setView({ kind: "setup" }); } },
+          { label: "모니터 설정", action: () => { closeSettings(); setView({ kind: "setup" }); } },
           { label: `테마 · ${themeLabel}`, action: () => { setThemeMenuOpen(true); } },
           { label: updaterLabel, action: () => { updaterAction(); }, update: true },
-          { label: "프로그램 종료", variant: "danger", action: () => { setSettingsOpen(false); setQuitConfirm(true); } },
+          { label: "프로그램 종료", variant: "danger", action: () => { closeSettings(); setQuitConfirm(true); } },
         ];
         return (
           <div
             className="settings-overlay"
             onPointerDown={(e) => {
-              if (e.target === e.currentTarget) {
-                setSettingsOpen(false);
-                setThemeMenuOpen(false);
-              }
+              if (e.target === e.currentTarget) closeSettings();
             }}
           >
             <div className="settings-popup" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
               <h3 className="settings-popup__title">설정</h3>
+              <button
+                type="button"
+                className="settings-venue"
+                onClick={() => setVenueMenuOpen(true)}
+              >
+                <span>지점선택</span>
+                <span className="settings-volume__value">{venueName(currentVenueId)}</span>
+              </button>
+              {menuItems.map((item, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  data-settings-update={item.update ? "" : undefined}
+                  className={`settings-popup__btn${item.variant ? ` settings-popup__btn--${item.variant}` : ""}${item.update ? " settings-popup__btn--update" : ""}`}
+                  onClick={item.action}
+                >
+                  <span className="settings-popup__num">{i + 1}</span>
+                  <span className="settings-popup__btn-copy">
+                    <span>{item.label}</span>
+                    {item.update && updaterStatus?.status === "error" && updaterStatus.message ? (
+                      <span className="settings-popup__hint">{updaterStatus.message}</span>
+                    ) : null}
+                  </span>
+                </button>
+              ))}
               <div className="settings-volume">
                 <div className="settings-volume__label">
                   <span>타이머 소리</span>
@@ -770,35 +989,8 @@ export function App() {
               </div>
               <button
                 type="button"
-                className="settings-popup__btn"
-                onClick={() => {
-                  setSettingsOpen(false);
-                  void openRemoteQr();
-                }}
-              >
-                리모컨 QR
-              </button>
-              {menuItems.map((item, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  data-settings-update={item.update ? "" : undefined}
-                  className={`settings-popup__btn${item.variant ? ` settings-popup__btn--${item.variant}` : ""}${item.update ? " settings-popup__btn--update" : ""}`}
-                  onClick={item.action}
-                >
-                  <span className="settings-popup__num">{i + 1}</span>
-                  <span className="settings-popup__btn-copy">
-                    <span>{item.label}</span>
-                    {item.update && updaterStatus?.status === "error" && updaterStatus.message ? (
-                      <span className="settings-popup__hint">{updaterStatus.message}</span>
-                    ) : null}
-                  </span>
-                </button>
-              ))}
-              <button
-                type="button"
                 className="settings-popup__btn settings-popup__btn--cancel"
-                onClick={() => { setSettingsOpen(false); setThemeMenuOpen(false); }}
+                onClick={() => closeSettings()}
               >
                 닫기
               </button>

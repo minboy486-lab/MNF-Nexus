@@ -20,16 +20,26 @@ import {
 import type { TimerHub } from "../timer/timerHub";
 import { clockInStaff, clockOutStaff, claimStaffByLoginId, loginStaff, rejoinStaffByLoginId, refreshStaffClock, type StaffAuthOk } from "../supabase/staffAuth";
 import { getSupabase } from "../supabase/client";
-import { getConfiguredVenueId } from "../supabase/venue";
+import { getConfiguredVenueId, getConfiguredYeoksamRole } from "../supabase/venue";
 import { hostname } from "node:os";
 import { getDisplayRemainingMs } from "@mnf/timer/engine";
 import { listLanIPv4 } from "./lan";
 import { loadRemoteAuth, saveRemoteAuth } from "./authStore";
 import type { LanHostGames } from "../../shared/lanView";
+import { rebaseLanSession, rebaseLanTimer } from "../../shared/lanView";
 import { LanCluster, normalizeRemoteIp } from "./lanCluster";
 import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
-import type { AppSnapshot } from "../../shared/types";
-import type { TableTimerState } from "@mnf/timer/types";
+import { isYeoksamFloor } from "../../shared/floorPlan";
+import {
+  MONITOR_SLOTS,
+  TABLE_SLOTS,
+  sanitizeNoticeHtml,
+  type AppSnapshot,
+  type GameSession,
+  type MonitorSlot,
+  type TableSlot,
+} from "../../shared/types";
+import type { BlindStructureOption, TableTimerState, TimerAction } from "@mnf/timer/types";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -47,6 +57,46 @@ const MIME: Record<string, string> = {
   ".webmanifest": "application/manifest+json",
   ".map": "application/json",
 };
+
+function isHubTimerAction(v: unknown): v is TimerAction {
+  return (
+    typeof v === "string" &&
+    ["start", "pause", "stop", "levelUp", "levelDown", "reset", "setDuration", "setRemainingMs", "adjustSec"].includes(v)
+  );
+}
+
+function isMonitorSlot(v: unknown): v is MonitorSlot {
+  return typeof v === "number" && Number.isInteger(v) && (MONITOR_SLOTS as readonly number[]).includes(v);
+}
+
+function isTableSlot(v: unknown): v is TableSlot {
+  return typeof v === "number" && Number.isInteger(v) && (TABLE_SLOTS as readonly number[]).includes(v);
+}
+
+function isBlindStructure(v: unknown): v is BlindStructureOption {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return typeof o.id === "string" && typeof o.name === "string" && Array.isArray(o.levels);
+}
+
+function sanitizeSessionPatch(
+  raw: Partial<Pick<GameSession, "players" | "entries" | "rebuys" | "addon" | "bonusChip" | "leftNotice">>,
+): Partial<Pick<GameSession, "players" | "entries" | "rebuys" | "addon" | "bonusChip" | "leftNotice">> {
+  const patch: Partial<Pick<GameSession, "players" | "entries" | "rebuys" | "addon" | "bonusChip" | "leftNotice">> = {};
+  if (typeof raw.players === "number") patch.players = raw.players;
+  if (typeof raw.entries === "number") patch.entries = raw.entries;
+  if (Array.isArray(raw.rebuys)) patch.rebuys = raw.rebuys.filter((n) => typeof n === "number");
+  if (typeof raw.addon === "number") patch.addon = raw.addon;
+  if (typeof raw.bonusChip === "number") patch.bonusChip = raw.bonusChip;
+  if (raw.leftNotice === null) {
+    patch.leftNotice = null;
+  } else if (raw.leftNotice && typeof raw.leftNotice.html === "string") {
+    const html = sanitizeNoticeHtml(raw.leftNotice.html);
+    const text = html.replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/\u200b/g, "").trim();
+    patch.leftNotice = text ? { html } : null;
+  }
+  return patch;
+}
 
 type RemoteSession = {
   token: string;
@@ -127,8 +177,13 @@ export class RemoteServer {
       adoptPin: (pin) => this.adoptPin(pin),
       hostname: () => hostname() || "pc",
       getVenueId: () => getConfiguredVenueId(),
+      getYeoksamRole: () => getConfiguredYeoksamRole(),
       getLocalSnapshot: () => this.localSnapshotPayload(),
-      onPeersChange: () => this.broadcastToOperators(),
+      getOwnedSnapshot: () => this.ownedSnapshotPayload(),
+      onPeersChange: () => {
+        this.broadcastToOperators();
+        this.syncYeoksamFollow();
+      },
     });
     this.rotatePunchToken();
 
@@ -157,6 +212,7 @@ export class RemoteServer {
     });
     this.infoCache = await this.buildInfo();
     this.cluster.start();
+    this.syncYeoksamFollow();
     console.log(`[remote] LAN http://0.0.0.0:${this.port} PIN ${this.pin}`);
   }
 
@@ -230,7 +286,35 @@ export class RemoteServer {
     console.log(`[remote] 매장 PIN 맞춤 ${this.pin}`);
   }
 
-  private localSnapshotPayload(): {
+  isYeoksamFollowerPc(): boolean {
+    if (!isYeoksamFloor(getConfiguredVenueId())) return false;
+    return this.cluster?.isShopFollower() ?? false;
+  }
+
+  isYeoksamOutputPc(): boolean {
+    return this.isYeoksamFollowerPc();
+  }
+
+  forwardToControl(msg: RemoteClientMsg): boolean {
+    return this.cluster?.forwardToYeoksamControl(msg) ?? false;
+  }
+
+  syncYeoksamFollow(): void {
+    const hub = this.hub;
+    if (!hub) return;
+    if (!isYeoksamFloor(getConfiguredVenueId()) || !this.isYeoksamFollowerPc()) {
+      hub.clearFollow();
+      return;
+    }
+    const peer = this.cluster?.yeoksamControlPeer();
+    if (!peer) return;
+    const localNow = Date.now();
+    const timers = peer.timers.map((t) => rebaseLanTimer(t, peer.serverNow, localNow));
+    const sessions = peer.snapshot.sessions.map((s) => rebaseLanSession(s, peer.serverNow, localNow));
+    hub.setFollow({ ...peer.snapshot, sessions }, timers);
+  }
+
+  private ownedSnapshotPayload(): {
     snapshot: AppSnapshot;
     timers: TableTimerState[];
     serverNow: number;
@@ -238,10 +322,27 @@ export class RemoteServer {
   } {
     const hub = this.hub;
     return {
+      snapshot: hub?.ownedSnapshot() ?? { sessions: [], monitorAssignments: {}, tableAssignments: {} },
+      timers: hub?.ownedTimers() ?? [],
+      serverNow: Date.now(),
+      hostname: hostname() || "pc",
+    };
+  }
+
+  private localSnapshotPayload(): {
+    snapshot: AppSnapshot;
+    timers: TableTimerState[];
+    serverNow: number;
+    hostname: string;
+    yeoksamRole?: ReturnType<typeof getConfiguredYeoksamRole>;
+  } {
+    const hub = this.hub;
+    return {
       snapshot: hub?.getSnapshot() ?? { sessions: [], monitorAssignments: {}, tableAssignments: {} },
       timers: hub?.getAllTimers() ?? [],
       serverNow: Date.now(),
       hostname: hostname() || "pc",
+      yeoksamRole: getConfiguredYeoksamRole(),
     };
   }
 
@@ -253,12 +354,14 @@ export class RemoteServer {
       timers: local.timers,
       serverNow: local.serverNow,
       hostname: local.hostname,
+      yeoksamRole: local.yeoksamRole,
     };
   }
 
   private federatedSnapshotMsg(): RemoteServerMsg {
     const local = this.localSnapshotMsg();
     if (local.type !== "snapshot") return local;
+    if (isYeoksamFloor(getConfiguredVenueId())) return local;
     const peers: RemotePeerSnapshot[] = this.cluster?.peers() ?? [];
     return { ...local, peers };
   }
@@ -534,6 +637,7 @@ export class RemoteServer {
         snapshot: msg.snapshot,
         timers: msg.timers,
         serverNow: typeof msg.serverNow === "number" ? msg.serverNow : Date.now(),
+        yeoksamRole: msg.yeoksamRole,
       });
       return;
     }
@@ -566,6 +670,73 @@ export class RemoteServer {
         return;
       }
       hub.deleteGame(msg.gameId);
+      return;
+    }
+
+    if (msg.type === "peer_timer") {
+      if (!Number.isInteger(msg.gameId) || msg.gameId < 1 || !isHubTimerAction(msg.action)) {
+        sendJson(ws, { type: "error", error: "허용되지 않은 명령입니다." });
+        return;
+      }
+      const result = hub.dispatch(msg.gameId, msg.action, {
+        minutes: typeof msg.minutes === "number" ? msg.minutes : undefined,
+        ms: typeof msg.ms === "number" ? msg.ms : undefined,
+        sec: typeof msg.sec === "number" ? msg.sec : undefined,
+      });
+      if (!result) sendJson(ws, { type: "error", error: "게임을 찾을 수 없습니다." });
+      return;
+    }
+
+    if (msg.type === "peer_assign_table") {
+      if (!isTableSlot(msg.tableSlot)) {
+        sendJson(ws, { type: "error", error: "유효하지 않은 테이블입니다." });
+        return;
+      }
+      if (msg.gameId !== null && (!Number.isInteger(msg.gameId) || msg.gameId < 1)) {
+        sendJson(ws, { type: "error", error: "유효하지 않은 게임입니다." });
+        return;
+      }
+      hub.assignTable(msg.tableSlot, msg.gameId);
+      return;
+    }
+
+    if (msg.type === "peer_assign_monitor") {
+      if (!isMonitorSlot(msg.monitorSlot)) {
+        sendJson(ws, { type: "error", error: "유효하지 않은 화면입니다." });
+        return;
+      }
+      if (msg.gameId !== null && (!Number.isInteger(msg.gameId) || msg.gameId < 1)) {
+        sendJson(ws, { type: "error", error: "유효하지 않은 게임입니다." });
+        return;
+      }
+      hub.assignMonitor(msg.monitorSlot, msg.gameId);
+      return;
+    }
+
+    if (msg.type === "peer_assign_all_monitors") {
+      if (!Number.isInteger(msg.gameId) || msg.gameId < 1) {
+        sendJson(ws, { type: "error", error: "유효하지 않은 게임입니다." });
+        return;
+      }
+      hub.assignAllMonitors(msg.gameId);
+      return;
+    }
+
+    if (msg.type === "peer_create_game") {
+      if (!isBlindStructure(msg.structure)) {
+        sendJson(ws, { type: "error", error: "블라인드 구조가 올바르지 않습니다." });
+        return;
+      }
+      hub.createGame(msg.structure);
+      return;
+    }
+
+    if (msg.type === "peer_session_patch") {
+      if (!Number.isInteger(msg.gameId) || msg.gameId < 1) {
+        sendJson(ws, { type: "error", error: "유효하지 않은 게임입니다." });
+        return;
+      }
+      hub.updateSessionCounters(msg.gameId, sanitizeSessionPatch(msg.patch));
     }
   }
 
@@ -599,6 +770,27 @@ export class RemoteServer {
         if (!forwarded) sendJson(ws, { type: "error", error: "다른 컴퓨터의 게임에 연결할 수 없습니다." });
         return;
       }
+    }
+
+    if (this.isYeoksamOutputPc() && (msg.type === "command" || msg.type === "counters" || msg.type === "deleteGame")) {
+      const forwarded =
+        msg.type === "command"
+          ? this.forwardToControl({
+              type: "peer_command",
+              gameId: msg.gameId,
+              action: msg.action,
+              sec: msg.sec,
+            })
+          : msg.type === "counters"
+            ? this.forwardToControl({
+                type: "peer_counters",
+                gameId: msg.gameId,
+                op: msg.op,
+                rebuyIndex: msg.rebuyIndex,
+              })
+            : this.forwardToControl({ type: "peer_deleteGame", gameId: msg.gameId });
+      if (!forwarded) sendJson(ws, { type: "error", error: "컨트롤 PC에 연결할 수 없습니다." });
+      return;
     }
 
     if (msg.type === "command") {
@@ -735,6 +927,7 @@ export class RemoteServer {
       hostname: hostname() || "pc",
       pin: this.pin,
       venueId: getConfiguredVenueId(),
+      yeoksamRole: getConfiguredYeoksamRole(),
     };
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
@@ -745,8 +938,8 @@ export class RemoteServer {
 
   private serveLanGames(res: ServerResponse): void {
     const hub = this.hub;
-    const snap = hub?.getSnapshot();
-    const timers = hub?.getAllTimers() ?? [];
+    const snap = hub?.ownedSnapshot();
+    const timers = hub?.ownedTimers() ?? [];
     const games = (snap?.sessions ?? []).map((session) => {
       const timer = timers.find((t) => t.tableId === session.gameId);
       return {

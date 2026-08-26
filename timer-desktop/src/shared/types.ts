@@ -47,6 +47,19 @@ export function normalizeSoundVolume(value: unknown): number {
   return Math.round(Math.min(100, Math.max(0, n)));
 }
 
+/** 역삼: 컨트롤 PC가 게임·배치를 관리하고, 출력 PC는 TV·모니터만 따라감. 미사에서는 무시. */
+export const YEOKSAM_ROLES = ["control", "output"] as const;
+export type YeoksamRole = (typeof YEOKSAM_ROLES)[number];
+export const DEFAULT_YEOKSAM_ROLE: YeoksamRole = "control";
+
+export function isYeoksamRole(value: unknown): value is YeoksamRole {
+  return value === "control" || value === "output";
+}
+
+export function normalizeYeoksamRole(value: unknown): YeoksamRole {
+  return isYeoksamRole(value) ? value : DEFAULT_YEOKSAM_ROLE;
+}
+
 // legacy compat
 export const MAX_GAMES = MAX_MONITORS;
 export const MAX_TABLE_DISPLAYS = MAX_MONITORS;
@@ -88,6 +101,10 @@ export interface AppConfig {
   soundVolume?: number;
   /** 이 PC가 속한 지점. 없으면 역삼 */
   venueId?: string;
+  /** 역삼: 관리자 창이 이 슬롯 송출을 대신 보여 줌. Esc로 설정. */
+  controlOutputSlot?: MonitorSlot | null;
+  /** 역삼 매장 역할. 없으면 컨트롤(기존 단일 PC와 동일) */
+  yeoksamRole?: YeoksamRole;
 }
 
 export interface DisplayInfo {
@@ -120,6 +137,11 @@ export interface GameSession {
   structureId: string;
   structureName: string;
   tableIds: TableSlot[];
+  /**
+   * 같은 게임이 테이블 2개 이상에 한 번이라도 붙으면 true.
+   * 이후 테이블을 빼도 MTT 문구를 유지한다.
+   */
+  isMtt?: boolean;
   // 블라인드 구조 옵션 (UI 표시용)
   isChampionship: boolean;
   entryChip: number;

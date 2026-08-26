@@ -72,6 +72,7 @@ export type LanClusterHello = {
   hostname: string;
   pin: string;
   venueId?: string;
+  yeoksamRole?: string;
 };
 
 async function fetchCluster(ip: string): Promise<LanClusterHello | null> {
@@ -82,13 +83,20 @@ async function fetchCluster(ip: string): Promise<LanClusterHello | null> {
       signal: ctrl.signal,
     });
     if (!r.ok) return null;
-    const data = (await r.json()) as { ok?: boolean; hostname?: string; pin?: string; venueId?: string };
+    const data = (await r.json()) as {
+      ok?: boolean;
+      hostname?: string;
+      pin?: string;
+      venueId?: string;
+      yeoksamRole?: string;
+    };
     if (!data?.ok || typeof data.pin !== "string" || !/^\d{4}$/.test(data.pin)) return null;
     return {
       host: ip,
       hostname: typeof data.hostname === "string" && data.hostname.trim() ? data.hostname.trim() : ip,
       pin: data.pin,
       venueId: typeof data.venueId === "string" ? data.venueId : undefined,
+      yeoksamRole: typeof data.yeoksamRole === "string" ? data.yeoksamRole : undefined,
     };
   } catch {
     return null;

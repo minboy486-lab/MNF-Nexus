@@ -9,6 +9,7 @@ import type { BlindStructureOption, TableTimerState, TimerAction } from "@mnf/ti
 import type { AppSnapshot, GameSession, MonitorSlot, TableSlot } from "../../shared/types";
 import { MONITOR_SLOTS } from "../../shared/types";
 import type { RemoteCounterOp } from "../../shared/remote";
+import { yeoksamOutputGameId } from "../../shared/floorPlan";
 
 export class TimerHub {
   /** gameId → 타이머 상태 */
@@ -25,6 +26,8 @@ export class TimerHub {
   private getControlWindow: () => BrowserWindow | null;
   private autoAdvanceInterval: ReturnType<typeof setInterval> | null = null;
   private remoteListeners = new Set<() => void>();
+  /** 역삼 출력 PC: 컨트롤 PC 스냅샷. 있으면 UI·송출은 이 값을 쓴다. */
+  private follow: { snapshot: AppSnapshot; timers: TableTimerState[] } | null = null;
 
   constructor(deps: {
     getDisplayWindowsForSlot: (slot: MonitorSlot) => BrowserWindow[];
@@ -109,6 +112,7 @@ export class TimerHub {
       structureId: structure.id,
       structureName: structure.name,
       tableIds: [],
+      isMtt: false,
       isChampionship: structure.isChampionship ?? false,
       entryChip: structure.entryChip ?? 0,
       rebuyChips: structure.rebuyChips ?? Array.from({ length: rebuyCount }, () => 0),
@@ -250,7 +254,19 @@ export class TimerHub {
         session.tableIds = [...session.tableIds, tableSlot];
       }
     }
+    this.markMttIfMultiTable(gameId);
     this.pushSnapshotToControl();
+  }
+
+  private markMttIfMultiTable(gameId: number | null): void {
+    if (gameId === null) return;
+    const session = this.sessions.get(gameId);
+    if (!session || session.isMtt) return;
+    let n = 0;
+    for (const gid of this.tableAssignments.values()) {
+      if (gid === gameId) n += 1;
+    }
+    if (n >= 2) session.isMtt = true;
   }
 
   assignMonitor(monitorSlot: MonitorSlot, gameId: number | null): void {
@@ -290,10 +306,24 @@ export class TimerHub {
   // ── 조회 ──────────────────────────────────────────────────
 
   getTimer(gameId: number): TableTimerState | null {
+    if (this.follow) {
+      return this.follow.timers.find((t) => t.tableId === gameId) ?? null;
+    }
     return this.timers.get(gameId) ?? null;
   }
 
   getSnapshot(): AppSnapshot {
+    if (this.follow) return this.follow.snapshot;
+    return this.ownedSnapshot();
+  }
+
+  getAllTimers(): TableTimerState[] {
+    if (this.follow) return this.follow.timers;
+    return this.ownedTimers();
+  }
+
+  /** 이 PC 허브만. 역삼 출력 follow는 빼서 LAN 게임 목록이 중복되지 않게 한다. */
+  ownedSnapshot(): AppSnapshot {
     const sessions = Array.from(this.sessions.values());
     const monitorAssignments: Record<number, number | null> = {};
     for (const slot of MONITOR_SLOTS) {
@@ -306,8 +336,20 @@ export class TimerHub {
     return { sessions, monitorAssignments, tableAssignments };
   }
 
-  getAllTimers(): TableTimerState[] {
+  ownedTimers(): TableTimerState[] {
     return Array.from(this.timers.values());
+  }
+
+  setFollow(snapshot: AppSnapshot, timers: TableTimerState[]): void {
+    this.follow = { snapshot, timers };
+    this.pushFollowedState();
+  }
+
+  clearFollow(): void {
+    if (!this.follow) return;
+    this.follow = null;
+    this.pushSnapshotToControl();
+    this.pushAllMonitors();
   }
 
   // ── Push 헬퍼 ─────────────────────────────────────────────
@@ -349,6 +391,10 @@ export class TimerHub {
   }
 
   pushSnapshotToControl(): void {
+    if (this.follow) {
+      this.pushFollowedState();
+      return;
+    }
     const win = this.getControlWindow();
     if (win && !win.isDestroyed()) {
       win.webContents.send("app:snapshot:push", this.getSnapshot());
@@ -358,10 +404,38 @@ export class TimerHub {
   }
 
   hydrateNewDisplay(slot: MonitorSlot): void {
+    if (this.follow) {
+      this.pushFollowedSlot(slot);
+      return;
+    }
     const gameId = this.monitorAssignments.get(slot) ?? null;
     const wins = this.getDisplayWindowsForSlot(slot);
     const state = gameId !== null ? (this.timers.get(gameId) ?? null) : null;
     const session = gameId !== null ? (this.sessions.get(gameId) ?? null) : null;
+    for (const win of wins) {
+      if (!win.isDestroyed()) {
+        win.webContents.send("timer:update", state ?? createInitialTimerState(0));
+        win.webContents.send("session:update", session);
+      }
+    }
+  }
+
+  private pushFollowedState(): void {
+    if (!this.follow) return;
+    const win = this.getControlWindow();
+    if (win && !win.isDestroyed()) {
+      win.webContents.send("app:snapshot:push", this.follow.snapshot);
+      win.webContents.send("timer:snapshot", this.follow.timers);
+    }
+    for (const slot of MONITOR_SLOTS) this.pushFollowedSlot(slot);
+  }
+
+  private pushFollowedSlot(slot: MonitorSlot): void {
+    if (!this.follow) return;
+    const gameId = yeoksamOutputGameId(this.follow.snapshot, slot);
+    const state = gameId !== null ? (this.follow.timers.find((t) => t.tableId === gameId) ?? null) : null;
+    const session = gameId !== null ? (this.follow.snapshot.sessions.find((s) => s.gameId === gameId) ?? null) : null;
+    const wins = this.getDisplayWindowsForSlot(slot);
     for (const win of wins) {
       if (!win.isDestroyed()) {
         win.webContents.send("timer:update", state ?? createInitialTimerState(0));

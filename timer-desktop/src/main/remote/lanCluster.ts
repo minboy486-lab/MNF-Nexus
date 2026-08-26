@@ -12,6 +12,8 @@ import type { TableTimerState } from "@mnf/timer/types";
 import { discoverLanCluster, type LanClusterHello } from "./lanDiscover";
 import { listLanIPv4 } from "./lan";
 import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
+import { isYeoksamFloor } from "../../shared/floorPlan";
+import type { YeoksamRole } from "../../shared/types";
 
 const TICK_MS = 8000;
 const EMPTY_SNAP: AppSnapshot = {
@@ -60,7 +62,15 @@ export class LanCluster {
       adoptPin: (pin: string) => void;
       hostname: () => string;
       getVenueId: () => string;
+      getYeoksamRole: () => YeoksamRole;
       getLocalSnapshot: () => {
+        snapshot: AppSnapshot;
+        timers: TableTimerState[];
+        serverNow: number;
+        hostname: string;
+        yeoksamRole?: YeoksamRole;
+      };
+      getOwnedSnapshot: () => {
         snapshot: AppSnapshot;
         timers: TableTimerState[];
         serverNow: number;
@@ -133,11 +143,16 @@ export class LanCluster {
     const ip = normalizeRemoteIp(host);
     if (!ip || this.ownHosts.has(ip)) return;
     const prev = this.cache.get(ip);
-    this.cache.set(ip, { ...snap, host: ip });
+    this.cache.set(ip, {
+      ...snap,
+      host: ip,
+      yeoksamRole: snap.yeoksamRole ?? prev?.yeoksamRole,
+    });
     if (
       !prev ||
       prev.serverNow !== snap.serverNow ||
       prev.hostname !== snap.hostname ||
+      prev.yeoksamRole !== snap.yeoksamRole ||
       prev.snapshot !== snap.snapshot ||
       prev.timers !== snap.timers
     ) {
@@ -159,14 +174,67 @@ export class LanCluster {
     return true;
   }
 
+  shopMaster(): { self: true } | { self: false; peer: RemotePeerSnapshot } {
+    const owned = this.opts.getOwnedSnapshot();
+    const selfHost = [...this.ownHosts][0] ?? "0.0.0.0";
+    const selfName = this.opts.hostname() || osHostname() || "pc";
+    const rows: Array<{
+      hostname: string;
+      host: string;
+      sessions: number;
+      self: boolean;
+      peer?: RemotePeerSnapshot;
+    }> = [
+      {
+        hostname: selfName,
+        host: selfHost,
+        sessions: owned.snapshot.sessions.length,
+        self: true,
+      },
+      ...[...this.cache.values()].map((p) => ({
+        hostname: p.hostname,
+        host: p.host,
+        sessions: p.snapshot.sessions.length,
+        self: false,
+        peer: p,
+      })),
+    ];
+    rows.sort((a, b) => {
+      if (b.sessions !== a.sessions) return b.sessions - a.sessions;
+      return clusterRank(a, b);
+    });
+    const winner = rows[0];
+    if (!winner || winner.self || !winner.peer) return { self: true };
+    return { self: false, peer: winner.peer };
+  }
+
+  isShopFollower(): boolean {
+    if (!isYeoksamFloor(this.opts.getVenueId())) return false;
+    return !this.shopMaster().self;
+  }
+
+  yeoksamControlPeer(): RemotePeerSnapshot | null {
+    const master = this.shopMaster();
+    if (master.self) return null;
+    return master.peer;
+  }
+
+  forwardToYeoksamControl(msg: RemoteClientMsg): boolean {
+    const peer = this.yeoksamControlPeer();
+    if (!peer) return false;
+    return this.forward(peer.host, msg);
+  }
+
   pushLocalSnapshot(): void {
-    const local = this.opts.getLocalSnapshot();
+    if (this.isShopFollower()) return;
+    const local = this.opts.getOwnedSnapshot();
     const msg: RemoteClientMsg = {
       type: "peer_snapshot",
       hostname: local.hostname,
       snapshot: local.snapshot,
       timers: local.timers,
       serverNow: local.serverNow,
+      yeoksamRole: this.opts.getYeoksamRole(),
     };
     const raw = JSON.stringify(msg);
     for (const ws of this.outbound.values()) {
@@ -231,17 +299,25 @@ export class LanCluster {
         return;
       }
       this.outbound.set(host, ws);
-      const hello: RemoteClientMsg = { type: "peer_hello", pin: this.opts.getPin(), venueId: this.opts.getVenueId() };
-      ws.send(JSON.stringify(hello));
-      const local = this.opts.getLocalSnapshot();
-      const snap: RemoteClientMsg = {
-        type: "peer_snapshot",
-        hostname: local.hostname,
-        snapshot: local.snapshot,
-        timers: local.timers,
-        serverNow: local.serverNow,
+      const hello: RemoteClientMsg = {
+        type: "peer_hello",
+        pin: this.opts.getPin(),
+        venueId: this.opts.getVenueId(),
+        yeoksamRole: this.opts.getYeoksamRole(),
       };
-      ws.send(JSON.stringify(snap));
+      ws.send(JSON.stringify(hello));
+      if (!this.isShopFollower()) {
+        const local = this.opts.getOwnedSnapshot();
+        const snap: RemoteClientMsg = {
+          type: "peer_snapshot",
+          hostname: local.hostname,
+          snapshot: local.snapshot,
+          timers: local.timers,
+          serverNow: local.serverNow,
+          yeoksamRole: this.opts.getYeoksamRole(),
+        };
+        ws.send(JSON.stringify(snap));
+      }
     });
     ws.on("message", (raw) => {
       let msg: RemoteServerMsg;
@@ -265,6 +341,7 @@ export class LanCluster {
         snapshot: msg.snapshot ?? EMPTY_SNAP,
         timers: msg.timers ?? [],
         serverNow: typeof msg.serverNow === "number" ? msg.serverNow : Date.now(),
+        yeoksamRole: msg.yeoksamRole,
       });
     });
     ws.on("close", () => {

@@ -7,13 +7,16 @@ import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 import { getAllDisplaysInfo } from "../screen/displayMapper";
 import { listBlindStructures } from "../supabase/blinds";
 import type { TimerHub } from "../timer/timerHub";
-import type { MonitorSlot, TableSlot } from "../../shared/types";
+import type { GameSession, MonitorSlot, TableSlot } from "../../shared/types";
 import { normalizeSoundVolume, normalizeUiTheme } from "../../shared/types";
 import type { BlindStructureOption, TimerAction } from "@mnf/timer/types";
 import type { WindowManager } from "../windows/windowManager";
 import type { RemoteServer } from "../remote/server";
 import { discoverLanGames } from "../remote/lanDiscover";
 import { LanViewClient } from "../remote/lanViewClient";
+import type { RemoteClientMsg } from "../../shared/remote";
+
+const CONTROL_UNREACHABLE = "컨트롤 PC에 연결할 수 없습니다. 같은 네트워크에서 컨트롤 PC를 켜 주세요.";
 
 function localBlindsPath() {
   const dir = app.getPath("userData");
@@ -52,6 +55,11 @@ function isBlindStructure(v: unknown): v is BlindStructureOption {
   return typeof o.id === "string" && typeof o.name === "string" && Array.isArray(o.levels);
 }
 
+function forwardOrFail(remote: RemoteServer, msg: RemoteClientMsg): { ok: true } | { ok: false; error: string } {
+  if (!remote.forwardToControl(msg)) return { ok: false, error: CONTROL_UNREACHABLE };
+  return { ok: true };
+}
+
 let volumeSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 function persistSoundVolume(wm: WindowManager): void {
@@ -87,6 +95,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const saved = saveConfig(parsed.config);
     if (!saved.ok) return saved;
     await wm.applyConfig(parsed.config);
+    remote.syncYeoksamFollow();
     return { ok: true as const };
   });
   ipcMain.handle("venue:set", async (_e, raw: unknown) => {
@@ -101,11 +110,16 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     if (!verified.ok) return { ok: false as const, error: verified.error };
     const currentCfg = wm.getConfig() ?? loadConfig();
     if (currentCfg) {
-      const next = { ...currentCfg, venueId };
+      const next = {
+        ...currentCfg,
+        venueId,
+        controlOutputSlot: venueId === YEOKSAM_VENUE_ID ? currentCfg.controlOutputSlot : null,
+      };
       const saved = saveConfig(next);
       if (!saved.ok) return saved;
       await wm.applyConfig(next);
     }
+    remote.syncYeoksamFollow();
     return { ok: true as const };
   });
   ipcMain.handle("theme:get", () => wm.getTheme());
@@ -180,14 +194,33 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
   ipcMain.handle("timer:getAll", () => hub.getAllTimers());
 
   // ── 게임 생성/삭제 ─────────────────────────────────────────
-  ipcMain.handle("game:create", (_e, structure: unknown) => {
+  ipcMain.handle("game:create", async (_e, structure: unknown) => {
     if (!isBlindStructure(structure)) return { ok: false as const, error: "블라인드 구조가 올바르지 않습니다." };
+    if (remote.isYeoksamFollowerPc()) {
+      const before = new Set(hub.getSnapshot().sessions.map((s) => s.gameId));
+      const sent = forwardOrFail(remote, { type: "peer_create_game", structure });
+      if (!sent.ok) return sent;
+      const started = Date.now();
+      while (Date.now() - started < 2000) {
+        const added = hub.getSnapshot().sessions.find((s) => !before.has(s.gameId));
+        if (added) return { ok: true as const, session: added };
+        await new Promise((r) => setTimeout(r, 80));
+      }
+      const fallback = hub.getSnapshot().sessions.at(-1);
+      if (fallback) return { ok: true as const, session: fallback };
+      return { ok: false as const, error: "게임을 만들었지만 아직 목록에 없습니다. 잠시 후 확인해 주세요." };
+    }
     const session = hub.createGame(structure);
     return { ok: true as const, session };
   });
 
   ipcMain.handle("game:delete", (_e, gameId: unknown) => {
     if (!isGameId(gameId)) return { ok: false as const, error: "유효하지 않은 게임 ID입니다." };
+    if (remote.isYeoksamFollowerPc()) {
+      const sent = forwardOrFail(remote, { type: "peer_deleteGame", gameId });
+      if (!sent.ok) return sent;
+      return { ok: true as const };
+    }
     hub.deleteGame(gameId);
     return { ok: true as const };
   });
@@ -198,6 +231,11 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     if (!isTableSlot(p?.tableSlot)) return { ok: false as const, error: "유효하지 않은 테이블 슬롯입니다." };
     const gameId = p.gameId === null ? null : p.gameId;
     if (gameId !== null && !isGameId(gameId)) return { ok: false as const, error: "유효하지 않은 게임 ID입니다." };
+    if (remote.isYeoksamFollowerPc()) {
+      const sent = forwardOrFail(remote, { type: "peer_assign_table", tableSlot: p.tableSlot, gameId: gameId as number | null });
+      if (!sent.ok) return sent;
+      return { ok: true as const };
+    }
     hub.assignTable(p.tableSlot, gameId as number | null);
     return { ok: true as const };
   });
@@ -207,11 +245,21 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     if (!isMonitorSlot(p?.monitorSlot)) return { ok: false as const, error: "유효하지 않은 모니터 슬롯입니다." };
     const gameId = p.gameId === null ? null : p.gameId;
     if (gameId !== null && !isGameId(gameId)) return { ok: false as const, error: "유효하지 않은 게임 ID입니다." };
+    if (remote.isYeoksamFollowerPc()) {
+      const sent = forwardOrFail(remote, { type: "peer_assign_monitor", monitorSlot: p.monitorSlot, gameId: gameId as number | null });
+      if (!sent.ok) return sent;
+      return { ok: true as const };
+    }
     hub.assignMonitor(p.monitorSlot, gameId as number | null);
     return { ok: true as const };
   });
   ipcMain.handle("monitor:assign-all", (_e, gameId: unknown) => {
     if (!isGameId(gameId)) return { ok: false as const, error: "유효하지 않은 게임 ID입니다." };
+    if (remote.isYeoksamFollowerPc()) {
+      const sent = forwardOrFail(remote, { type: "peer_assign_all_monitors", gameId });
+      if (!sent.ok) return sent;
+      return { ok: true as const };
+    }
     hub.assignAllMonitors(gameId);
     return { ok: true as const };
   });
@@ -292,14 +340,20 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
       }
     }
 
-    hub.updateSessionCounters(p.gameId as number, {
+    const patch: Partial<Pick<GameSession, "players" | "entries" | "rebuys" | "addon" | "bonusChip" | "leftNotice">> = {
       ...(typeof p.players === "number" ? { players: p.players } : {}),
       ...(typeof p.entries === "number" ? { entries: p.entries } : {}),
       ...(Array.isArray(p.rebuys) ? { rebuys: p.rebuys as number[] } : {}),
       ...(typeof p.addon === "number" ? { addon: p.addon } : {}),
       ...(typeof p.bonusChip === "number" ? { bonusChip: p.bonusChip } : {}),
       ...(leftNotice !== undefined ? { leftNotice } : {}),
-    });
+    };
+    if (remote.isYeoksamFollowerPc()) {
+      const sent = forwardOrFail(remote, { type: "peer_session_patch", gameId: p.gameId as number, patch });
+      if (!sent.ok) return sent;
+      return { ok: true as const };
+    }
+    hub.updateSessionCounters(p.gameId as number, patch);
     return { ok: true as const };
   });
 
@@ -308,6 +362,20 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const p = payload as Record<string, unknown>;
     if (!isGameId(p?.gameId)) return { ok: false as const, error: "유효하지 않은 게임 ID입니다." };
     if (!isTimerAction(p?.action)) return { ok: false as const, error: "유효하지 않은 타이머 명령입니다." };
+    if (remote.isYeoksamFollowerPc()) {
+      const sent = forwardOrFail(remote, {
+        type: "peer_timer",
+        gameId: p.gameId as number,
+        action: p.action as TimerAction,
+        minutes: typeof p.minutes === "number" ? p.minutes : undefined,
+        ms: typeof p.ms === "number" ? p.ms : undefined,
+        sec: typeof p.sec === "number" ? p.sec : undefined,
+      });
+      if (!sent.ok) return sent;
+      const state = hub.getTimer(p.gameId as number);
+      if (!state) return { ok: false as const, error: CONTROL_UNREACHABLE };
+      return { ok: true as const, state };
+    }
     const state = hub.dispatch(p.gameId as number, p.action as TimerAction, {
       minutes: typeof p.minutes === "number" ? p.minutes : undefined,
       ms: typeof p.ms === "number" ? p.ms : undefined,
