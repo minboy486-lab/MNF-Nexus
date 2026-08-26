@@ -85,6 +85,53 @@ where venue_id is null
 alter table public.game_presets
   add column if not exists venue_id uuid references public.venues (id) on delete cascade;
 
+-- 운영 DB가 007~014를 안 탄 경우를 여기서 맞춤 (없는 컬럼만 추가)
+alter table public.game_presets
+  add column if not exists game_kind text not null default 'daily',
+  add column if not exists rebuy_cost integer not null default 0,
+  add column if not exists addon_price integer not null default 0,
+  add column if not exists buy_in_chips bigint not null default 0,
+  add column if not exists rebuy1_chips bigint not null default 0,
+  add column if not exists rebuy2_chips bigint not null default 0,
+  add column if not exists addon_chips bigint not null default 0,
+  add column if not exists bonus_chips bigint not null default 0,
+  add column if not exists addon_enabled boolean not null default false,
+  add column if not exists rebuy_chips jsonb not null default '[{"order":1,"chips":0}]'::jsonb,
+  add column if not exists participation_points integer not null default 0,
+  add column if not exists prize_pool_percent integer not null default 100,
+  add column if not exists bonus_enabled boolean not null default false;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'game_presets_prize_pool_percent_check'
+  ) then
+    alter table public.game_presets
+      add constraint game_presets_prize_pool_percent_check
+      check (prize_pool_percent >= 0 and prize_pool_percent <= 100);
+  end if;
+end $$;
+
+update public.game_presets
+set rebuy_chips = case
+  when coalesce(rebuy2_chips, 0) > 0 then
+    jsonb_build_array(
+      jsonb_build_object('order', 1, 'chips', coalesce(rebuy1_chips, 0)),
+      jsonb_build_object('order', 2, 'chips', rebuy2_chips)
+    )
+  else
+    jsonb_build_array(
+      jsonb_build_object('order', 1, 'chips', coalesce(rebuy1_chips, 0))
+    )
+end
+where rebuy_chips = '[{"order":1,"chips":0}]'::jsonb
+  and (coalesce(rebuy1_chips, 0) > 0 or coalesce(rebuy2_chips, 0) > 0);
+
+update public.game_presets
+set bonus_enabled = true
+where coalesce(bonus_chips, 0) > 0 and bonus_enabled = false;
+
 update public.game_presets
 set venue_id = '00000000-0000-4000-8000-000000000001'
 where venue_id is null;
@@ -161,126 +208,144 @@ create unique index if not exists staff_venue_profile_uidx
   where profile_id is not null;
 
 -- ── 미사에 설정만 복사 (운영 데이터는 복사하지 않음) ──────────────
+-- 운영 스키마에 없는 컬럼은 건너뛴다. current_game_id 같은 운영 컬럼은 복사하지 않음.
 
-insert into public.physical_tables (venue_id, code, label, is_active, sort_order, layout_image_url)
-select
-  '00000000-0000-4000-8000-000000000002',
-  t.code,
-  t.label,
-  t.is_active,
-  t.sort_order,
-  t.layout_image_url
-from public.physical_tables t
-where t.venue_id = '00000000-0000-4000-8000-000000000001'
-  and not exists (
-    select 1 from public.physical_tables x
-    where x.venue_id = '00000000-0000-4000-8000-000000000002' and x.code = t.code
-  );
+create or replace function public._028_copy_venue_rows(
+  p_table text,
+  p_from uuid,
+  p_to uuid,
+  p_cols text[],
+  p_match text
+) returns void
+language plpgsql as $$
+declare
+  dest_list text := 'venue_id';
+  src_list text := quote_literal(p_to) || '::uuid';
+  col text;
+  sql text;
+begin
+  if to_regclass(format('public.%I', p_table)) is null then
+    return;
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = p_table and column_name = 'venue_id'
+  ) or not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = p_table and column_name = p_match
+  ) then
+    return;
+  end if;
 
-insert into public.expense_categories (venue_id, code, label)
-select
-  '00000000-0000-4000-8000-000000000002',
-  e.code,
-  e.label
-from public.expense_categories e
-where e.venue_id = '00000000-0000-4000-8000-000000000001'
-  and not exists (
-    select 1 from public.expense_categories x
-    where x.venue_id = '00000000-0000-4000-8000-000000000002' and x.code = e.code
-  );
+  for col in
+    select c.column_name
+    from unnest(p_cols) with ordinality as u(col, ord)
+    join information_schema.columns c
+      on c.table_schema = 'public'
+     and c.table_name = p_table
+     and c.column_name = u.col
+    order by u.ord
+  loop
+    dest_list := dest_list || ', ' || quote_ident(col);
+    src_list := src_list || ', s.' || quote_ident(col);
+  end loop;
 
-insert into public.prize_structures (
-  venue_id, name, game_kind, max_entries, default_payout_places, placements
-)
-select
-  '00000000-0000-4000-8000-000000000002',
-  p.name,
-  p.game_kind,
-  p.max_entries,
-  p.default_payout_places,
-  p.placements
-from public.prize_structures p
-where p.venue_id = '00000000-0000-4000-8000-000000000001'
-  and not exists (
-    select 1 from public.prize_structures x
-    where x.venue_id = '00000000-0000-4000-8000-000000000002' and x.name = p.name
+  sql := format(
+    'insert into public.%I (%s)
+     select %s
+     from public.%I s
+     where s.venue_id = %L
+       and not exists (
+         select 1 from public.%I t
+         where t.venue_id = %L and t.%I = s.%I
+       )',
+    p_table, dest_list, src_list, p_table, p_from, p_table, p_to, p_match, p_match
   );
+  execute sql;
+end;
+$$;
 
-insert into public.win_point_presets (venue_id, name, placements)
-select
-  '00000000-0000-4000-8000-000000000002',
-  w.name,
-  w.placements
-from public.win_point_presets w
-where w.venue_id = '00000000-0000-4000-8000-000000000001'
-  and not exists (
-    select 1 from public.win_point_presets x
-    where x.venue_id = '00000000-0000-4000-8000-000000000002' and x.name = w.name
+do $$
+begin
+  perform public._028_copy_venue_rows(
+    'physical_tables',
+    '00000000-0000-4000-8000-000000000001',
+    '00000000-0000-4000-8000-000000000002',
+    array['code', 'label', 'is_active', 'sort_order', 'layout_image_url'],
+    'code'
   );
+  perform public._028_copy_venue_rows(
+    'expense_categories',
+    '00000000-0000-4000-8000-000000000001',
+    '00000000-0000-4000-8000-000000000002',
+    array['code', 'label'],
+    'code'
+  );
+  perform public._028_copy_venue_rows(
+    'prize_structures',
+    '00000000-0000-4000-8000-000000000001',
+    '00000000-0000-4000-8000-000000000002',
+    array['name', 'game_kind', 'max_entries', 'default_payout_places', 'placements'],
+    'name'
+  );
+  perform public._028_copy_venue_rows(
+    'win_point_presets',
+    '00000000-0000-4000-8000-000000000001',
+    '00000000-0000-4000-8000-000000000002',
+    array['name', 'placements'],
+    'name'
+  );
+  perform public._028_copy_venue_rows(
+    'kakao_templates',
+    '00000000-0000-4000-8000-000000000001',
+    '00000000-0000-4000-8000-000000000002',
+    array['kind', 'body_template'],
+    'kind'
+  );
+  perform public._028_copy_venue_rows(
+    'game_presets',
+    '00000000-0000-4000-8000-000000000001',
+    '00000000-0000-4000-8000-000000000002',
+    array[
+      'name',
+      'buy_in',
+      'blind_structure',
+      'prize_rules',
+      'game_kind',
+      'rebuy_cost',
+      'addon_price',
+      'buy_in_chips',
+      'rebuy1_chips',
+      'rebuy2_chips',
+      'addon_chips',
+      'bonus_chips',
+      'addon_enabled',
+      'rebuy_chips',
+      'participation_points',
+      'prize_pool_percent',
+      'bonus_enabled'
+    ],
+    'name'
+  );
+end $$;
 
-insert into public.kakao_templates (venue_id, kind, body_template)
-select
-  '00000000-0000-4000-8000-000000000002',
-  k.kind,
-  k.body_template
-from public.kakao_templates k
-where k.venue_id = '00000000-0000-4000-8000-000000000001'
-  and not exists (
-    select 1 from public.kakao_templates x
-    where x.venue_id = '00000000-0000-4000-8000-000000000002' and x.kind = k.kind
-  );
-
-insert into public.game_presets (
-  venue_id,
-  name,
-  buy_in,
-  blind_structure,
-  prize_rules,
-  game_kind,
-  rebuy_cost,
-  addon_price,
-  buy_in_chips,
-  rebuy1_chips,
-  rebuy2_chips,
-  addon_chips,
-  bonus_chips,
-  addon_enabled,
-  rebuy_chips,
-  participation_points,
-  prize_pool_percent,
-  bonus_enabled
-)
-select
-  '00000000-0000-4000-8000-000000000002',
-  g.name,
-  g.buy_in,
-  g.blind_structure,
-  g.prize_rules,
-  g.game_kind,
-  g.rebuy_cost,
-  g.addon_price,
-  g.buy_in_chips,
-  g.rebuy1_chips,
-  g.rebuy2_chips,
-  g.addon_chips,
-  g.bonus_chips,
-  g.addon_enabled,
-  g.rebuy_chips,
-  g.participation_points,
-  g.prize_pool_percent,
-  g.bonus_enabled
-from public.game_presets g
-where g.venue_id = '00000000-0000-4000-8000-000000000001'
-  and not exists (
-    select 1 from public.game_presets x
-    where x.venue_id = '00000000-0000-4000-8000-000000000002' and x.name = g.name
-  );
+drop function public._028_copy_venue_rows(text, uuid, uuid, text[], text);
 
 do $$
 declare
   yeoksam uuid := '00000000-0000-4000-8000-000000000001';
   misa uuid := '00000000-0000-4000-8000-000000000002';
+  dest_list text := 'id, venue_id';
+  src_list text := 'm.new_id, ' || quote_literal(misa) || '::uuid';
+  level_dest text := 'structure_id';
+  level_src text := 'm.new_id';
+  col text;
 begin
+  if to_regclass('public.blind_structures') is null
+     or to_regclass('public.blind_levels') is null then
+    return;
+  end if;
+
   create temporary table if not exists _bs_map (
     old_id uuid primary key,
     new_id uuid not null
@@ -296,23 +361,48 @@ begin
     )
   on conflict do nothing;
 
-  insert into public.blind_structures (id, venue_id, template_name, default_buy_in)
-  select m.new_id, misa, b.template_name, b.default_buy_in
-  from public.blind_structures b
-  join _bs_map m on m.old_id = b.id;
+  for col in
+    select c.column_name
+    from unnest(array['template_name', 'default_buy_in']) with ordinality as u(col, ord)
+    join information_schema.columns c
+      on c.table_schema = 'public'
+     and c.table_name = 'blind_structures'
+     and c.column_name = u.col
+    order by u.ord
+  loop
+    dest_list := dest_list || ', ' || quote_ident(col);
+    src_list := src_list || ', b.' || quote_ident(col);
+  end loop;
 
-  insert into public.blind_levels (
-    structure_id, level_number, level_kind, small_blind, big_blind, ante, duration_minutes
-  )
-  select
-    m.new_id,
-    l.level_number,
-    l.level_kind,
-    l.small_blind,
-    l.big_blind,
-    l.ante,
-    l.duration_minutes
-  from public.blind_levels l
-  join _bs_map m on m.old_id = l.structure_id
-  on conflict (structure_id, level_number) do nothing;
+  execute format(
+    'insert into public.blind_structures (%s)
+     select %s
+     from public.blind_structures b
+     join _bs_map m on m.old_id = b.id',
+    dest_list, src_list
+  );
+
+  for col in
+    select c.column_name
+    from unnest(array[
+      'level_number', 'level_kind', 'small_blind', 'big_blind', 'ante', 'duration_minutes'
+    ]) with ordinality as u(col, ord)
+    join information_schema.columns c
+      on c.table_schema = 'public'
+     and c.table_name = 'blind_levels'
+     and c.column_name = u.col
+    order by u.ord
+  loop
+    level_dest := level_dest || ', ' || quote_ident(col);
+    level_src := level_src || ', l.' || quote_ident(col);
+  end loop;
+
+  execute format(
+    'insert into public.blind_levels (%s)
+     select %s
+     from public.blind_levels l
+     join _bs_map m on m.old_id = l.structure_id
+     on conflict (structure_id, level_number) do nothing',
+    level_dest, level_src
+  );
 end $$;
