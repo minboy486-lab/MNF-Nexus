@@ -92,6 +92,70 @@ where venue_id is null;
 create index if not exists game_presets_venue_idx
   on public.game_presets (venue_id);
 
+-- 같은 지점·같은 계정에 staff 행이 여러 개면 하나 남기고 출퇴근/가불을 옮김
+do $$
+declare
+  r record;
+  keep_id uuid;
+begin
+  for r in
+    select venue_id, profile_id
+    from public.staff
+    where profile_id is not null
+    group by venue_id, profile_id
+    having count(*) > 1
+  loop
+    select s.id into keep_id
+    from public.staff s
+    where s.venue_id = r.venue_id
+      and s.profile_id = r.profile_id
+    order by s.is_active desc, s.created_at desc
+    limit 1;
+
+    delete from public.payroll_lines p
+    using public.staff x
+    where p.staff_id = x.id
+      and x.venue_id = r.venue_id
+      and x.profile_id = r.profile_id
+      and x.id <> keep_id
+      and exists (
+        select 1
+        from public.payroll_lines k
+        where k.payroll_period_id = p.payroll_period_id
+          and k.staff_id = keep_id
+      );
+
+    update public.payroll_lines p
+    set staff_id = keep_id
+    from public.staff x
+    where p.staff_id = x.id
+      and x.venue_id = r.venue_id
+      and x.profile_id = r.profile_id
+      and x.id <> keep_id;
+
+    update public.staff_shifts s
+    set staff_id = keep_id
+    from public.staff x
+    where s.staff_id = x.id
+      and x.venue_id = r.venue_id
+      and x.profile_id = r.profile_id
+      and x.id <> keep_id;
+
+    update public.staff_advances a
+    set staff_id = keep_id
+    from public.staff x
+    where a.staff_id = x.id
+      and x.venue_id = r.venue_id
+      and x.profile_id = r.profile_id
+      and x.id <> keep_id;
+
+    delete from public.staff
+    where venue_id = r.venue_id
+      and profile_id = r.profile_id
+      and id <> keep_id;
+  end loop;
+end $$;
+
 create unique index if not exists staff_venue_profile_uidx
   on public.staff (venue_id, profile_id)
   where profile_id is not null;

@@ -5,8 +5,7 @@ import react from "@vitejs/plugin-react";
 
 const timerAlias = {
   "@mnf/timer": resolve(__dirname, "../lib/timer"),
-  "@mnf/venue": resolve(__dirname, "../lib/venue/constants.ts"),
-  "@mnf/venue/control-pin": resolve(__dirname, "../lib/venue/control-pin.ts"),
+  "@mnf/venue": resolve(__dirname, "../lib/venue"),
 };
 
 /** .env 파일을 직접 파싱해서 define 객체로 변환 */
