@@ -41,7 +41,6 @@ export function BlindSelectView({
   const [localLoading, setLocalLoading] = useState(false);
   const [lanGames, setLanGames] = useState<LanDiscoveredGame[]>([]);
   const [lanLoading, setLanLoading] = useState(false);
-  const [backConfirm, setBackConfirm] = useState(false);
 
   useEffect(() => {
     window.controlApi.listLocalBlinds().then((local) => {
@@ -76,24 +75,10 @@ export function BlindSelectView({
     }
   }
 
-  function requestBack() {
-    setBackConfirm(true);
-  }
-
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (backConfirm) {
-        if (e.key === "Escape" || e.key === "2" || e.key === "n" || e.key === "N") {
-          setBackConfirm(false);
-          return;
-        }
-        if (e.key === "1" || e.key === "y" || e.key === "Y") {
-          onBack();
-        }
-        return;
-      }
       if (e.key === "Escape") {
-        requestBack();
+        onBack();
         return;
       }
       const n = parseInt(e.key, 10);
@@ -114,11 +99,11 @@ export function BlindSelectView({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [displayed, pending, onSelect, onBack, backConfirm, showGames, localSessions, lanGames, onPickLocalGame, onPickLanGame]);
+  }, [displayed, pending, onSelect, onBack, showGames, localSessions, lanGames, onPickLocalGame, onPickLanGame]);
 
   return (
     <section className="sub-panel">
-      <button type="button" className="back-btn" onClick={requestBack}>
+      <button type="button" className="back-btn" onClick={onBack}>
         ← 뒤로
       </button>
 
@@ -303,31 +288,6 @@ export function BlindSelectView({
         </>
       )}
 
-      {backConfirm && (
-        <div className="settings-overlay">
-          <div className="settings-popup">
-            <h3 className="settings-popup__title">뒤로 돌아가시겠습니까?</h3>
-            <div className="settings-popup__row">
-              <button
-                type="button"
-                className="confirm-btn confirm-btn--yes"
-                onClick={onBack}
-              >
-                <span className="confirm-btn__key">1</span>
-                YES
-              </button>
-              <button
-                type="button"
-                className="confirm-btn confirm-btn--no"
-                onClick={() => setBackConfirm(false)}
-              >
-                <span className="confirm-btn__key">2</span>
-                NO
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }
