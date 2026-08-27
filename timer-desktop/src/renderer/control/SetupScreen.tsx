@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { AppConfig, DisplayInfo, MonitorSlot } from "../../shared/types";
 import { CONFIG_VERSION, MONITOR_SLOTS } from "../../shared/types";
 import { YEOKSAM_VENUE_ID, isKnownVenueId, venueName } from "@mnf/venue";
-import { YEOKSAM_SHOP_OUTPUTS, controlOutputSlotOf, isYeoksamFloor } from "../../shared/floorPlan";
+import { YEOKSAM_SHOP_OUTPUTS, controlOutputSlotOf, isYeoksamFloor, yeoksamRoleAfterSetup } from "../../shared/floorPlan";
 
 type Props = {
   displays: DisplayInfo[];
@@ -108,7 +108,9 @@ export function SetupScreen({ displays, initialConfig, onSaved, onOpenControl }:
       theme: initialConfig?.theme,
       soundVolume: initialConfig?.soundVolume,
       venueId,
-      yeoksamRole: yeoksam ? (controlAssigned ? "control" : "output") : initialConfig?.yeoksamRole,
+      yeoksamRole: yeoksam
+        ? yeoksamRoleAfterSetup(Boolean(controlAssigned), initialConfig?.yeoksamRole)
+        : initialConfig?.yeoksamRole,
       controlOutputSlot,
       mappings: yeoksam
         ? displays.flatMap((d) => {
@@ -152,7 +154,7 @@ export function SetupScreen({ displays, initialConfig, onSaved, onOpenControl }:
       <h2>모니터 설정 · {venueName(venueId)}</h2>
       <p className="muted">
         {yeoksam
-          ? "게임을 만들고 배치할 PC는 화면 하나를 Control(관리자)로 두세요. TV·모니터만 있는 PC는 Bm/Bt 등만 지정하면 관리자 PC를 따라갑니다."
+          ? "화면은 Bm/Bt/Ct/Dt 아무거나 지정하세요. 같은 슬롯은 어느 PC에 꽂아도 같은 게임이 나옵니다. Control(관리자)은 이 PC를 매장 허브로 둘 때 쓰면 되고, 허브 화면을 Ct로 바꿔도 허브는 유지됩니다."
           : "Control 모니터와 Display(M1~M6)를 지정하세요."}
       </p>
 

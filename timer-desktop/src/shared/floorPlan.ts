@@ -84,8 +84,8 @@ export function controlOutputSlotOf(config: { venueId?: string; controlOutputSlo
 }
 
 /**
- * 역삼: Control(관리자)로 둔 PC = 허브.
- * 호스트 화면이 Bm/Dt 같은 송출이면 출력 PC (controlOutputSlot).
+ * 역삼 허브 역할. 화면을 Bm/Ct/Dt로 두는 것(controlOutputSlot)과 무관하다.
+ * Control 화면을 Ct로 바꿔도 허브는 유지된다.
  */
 export function resolveYeoksamShopRole(config: {
   venueId?: string;
@@ -93,9 +93,15 @@ export function resolveYeoksamShopRole(config: {
   controlOutputSlot?: number | null;
 } | null): YeoksamRole {
   if (!config || !isYeoksamFloor(config.venueId)) return normalizeYeoksamRole(config?.yeoksamRole);
-  if (controlOutputSlotOf(config)) return "output";
   if (config.yeoksamRole === "output") return "output";
   return "control";
+}
+
+/** 모니터 설정 저장: Control 화면이 있으면 허브. 없으면 기존 허브는 유지, 처음 TV만 두면 출력. */
+export function yeoksamRoleAfterSetup(hasControlDisplay: boolean, previousRole?: unknown): YeoksamRole {
+  if (hasControlDisplay) return "control";
+  if (previousRole === "control") return "control";
+  return "output";
 }
 
 /** 이 PC 로컬 화면: Dm/Cm은 배치도에 버튼이 없어도 Dt/Ct(또는 D/C 테이블) 게임을 따른다. */

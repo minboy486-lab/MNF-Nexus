@@ -309,6 +309,13 @@ export class RemoteServer {
     }
     const peer = this.cluster?.yeoksamControlPeer();
     if (!peer) return;
+    const localOwned = hub.ownedSnapshot().sessions.length;
+    const peerOwned = peer.snapshot.sessions.length;
+    if (localOwned > 0 && localOwned > peerOwned) {
+      hub.clearFollow();
+      this.cluster?.pushLocalSnapshot();
+      return;
+    }
     const localNow = Date.now();
     const timers = peer.timers.map((t) => rebaseLanTimer(t, peer.serverNow, localNow));
     const sessions = peer.snapshot.sessions.map((s) => rebaseLanSession(s, peer.serverNow, localNow));
@@ -356,6 +363,19 @@ export class RemoteServer {
       serverNow: local.serverNow,
       hostname: local.hostname,
       yeoksamRole: local.yeoksamRole,
+    };
+  }
+
+  /** 피어 허브 선거용. follow 오버레이가 아닌 이 PC가 가진 게임만. */
+  private ownedSnapshotMsg(): RemoteServerMsg {
+    const local = this.ownedSnapshotPayload();
+    return {
+      type: "snapshot",
+      snapshot: local.snapshot,
+      timers: local.timers,
+      serverNow: local.serverNow,
+      hostname: local.hostname,
+      yeoksamRole: getConfiguredYeoksamRole(),
     };
   }
 
@@ -505,7 +525,7 @@ export class RemoteServer {
         msg.yeoksamRole,
         typeof msg.hostname === "string" ? msg.hostname : undefined,
       );
-      sendJson(ws, this.localSnapshotMsg());
+      sendJson(ws, this.ownedSnapshotMsg());
       return;
     }
     if (msg.type === "hello") {

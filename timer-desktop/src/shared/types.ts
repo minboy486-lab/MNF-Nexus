@@ -47,7 +47,7 @@ export function normalizeSoundVolume(value: unknown): number {
   return Math.round(Math.min(100, Math.max(0, n)));
 }
 
-/** 역삼: 컨트롤 PC가 게임·배치를 관리하고, 출력 PC는 TV·모니터만 따라감. 미사에서는 무시. */
+/** 역삼: 허브(control)가 게임·슬롯 할당을 들고, 출력 PC는 같은 슬롯을 따라감. 화면 매핑과 별개. */
 export const YEOKSAM_ROLES = ["control", "output"] as const;
 export type YeoksamRole = (typeof YEOKSAM_ROLES)[number];
 export const DEFAULT_YEOKSAM_ROLE: YeoksamRole = "control";

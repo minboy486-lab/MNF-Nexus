@@ -135,6 +135,8 @@ export class WindowManager {
     await this.syncWindows();
     this.broadcastTheme();
     this.broadcastSoundVolume();
+    this.timerHub?.pushAllMonitors();
+    this.timerHub?.pushSnapshotToControl();
   }
 
   getTheme(): UiThemeId {
@@ -248,11 +250,10 @@ export class WindowManager {
     for (const mapping of desired) {
       const existing = this.displayWindows.get(mapping.displayId);
       if (existing && !existing.win.isDestroyed()) {
-        if (existing.monitorSlot !== mapping.monitorSlot) {
-          existing.monitorSlot = mapping.monitorSlot;
-          this.timerHub?.hydrateNewDisplay(mapping.monitorSlot);
-        }
-        continue;
+        if (existing.monitorSlot === mapping.monitorSlot) continue;
+        if (!existing.win.isDestroyed()) existing.win.destroy();
+        const current = this.displayWindows.get(mapping.displayId);
+        if (current?.win === existing.win) this.displayWindows.delete(mapping.displayId);
       }
 
       const monitorMapping = this.config.mappings.find(
@@ -288,10 +289,12 @@ export class WindowManager {
     });
 
     win.on("closed", () => {
-      this.displayWindows.delete(displayId);
+      const current = this.displayWindows.get(displayId);
+      if (current?.win === win) this.displayWindows.delete(displayId);
       if (!this.isQuitting && !isDev()) {
         setTimeout(() => {
           if (!this.config || this.isQuitting) return;
+          if (displayId === this.config.controlDisplayId) return;
           const mapping = this.config.mappings.find((m) => m.displayId === displayId);
           if (!mapping || !mapping.monitorSlot) return;
           const info = resolveDisplayForMapping(mapping);

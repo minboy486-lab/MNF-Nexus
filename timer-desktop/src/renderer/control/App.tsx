@@ -746,6 +746,8 @@ export function App() {
           initialConfig={config}
           onSaved={(next) => {
             setConfig(next);
+            void window.controlApi.getSnapshot().then(setSnapshot);
+            void window.controlApi.getTimers().then(setTimers);
             const slot = controlOutputSlotOf(next);
             setView(slot ? { kind: "monitor-preview", slot } : { kind: "main" });
           }}

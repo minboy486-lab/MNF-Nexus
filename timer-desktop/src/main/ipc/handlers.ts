@@ -109,8 +109,8 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     if ("error" in parsed) return { ok: false as const, error: parsed.error };
     const saved = saveConfig(parsed.config);
     if (!saved.ok) return saved;
-    await wm.applyConfig(parsed.config);
     remote.syncYeoksamFollow();
+    await wm.applyConfig(parsed.config);
     return { ok: true as const };
   });
   ipcMain.handle("venue:set", async (_e, raw: unknown) => {
@@ -132,9 +132,11 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
       };
       const saved = saveConfig(next);
       if (!saved.ok) return saved;
+      remote.syncYeoksamFollow();
       await wm.applyConfig(next);
+    } else {
+      remote.syncYeoksamFollow();
     }
-    remote.syncYeoksamFollow();
     return { ok: true as const };
   });
   ipcMain.handle("theme:get", () => wm.getTheme());

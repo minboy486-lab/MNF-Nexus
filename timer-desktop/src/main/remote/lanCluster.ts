@@ -43,6 +43,18 @@ function clusterRank(a: { hostname: string; host: string }, b: { hostname: strin
   return a.host.localeCompare(b.host);
 }
 
+function snapshotSessionCount(snap?: AppSnapshot | null): number {
+  return snap?.sessions?.length ?? 0;
+}
+
+function hubRank(
+  a: { sessions: number; hostname: string; host: string },
+  b: { sessions: number; hostname: string; host: string },
+): number {
+  if (b.sessions !== a.sessions) return b.sessions - a.sessions;
+  return clusterRank(a, b);
+}
+
 export class LanCluster {
   private closed = true;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -204,14 +216,16 @@ export class LanCluster {
     const selfHost = [...this.ownHosts][0] ?? "0.0.0.0";
     const selfName = this.opts.hostname() || osHostname() || "pc";
     const selfRole = this.opts.getYeoksamRole();
+    const selfSessions = snapshotSessionCount(this.opts.getOwnedSnapshot().snapshot);
     const hubs: Array<{
       hostname: string;
       host: string;
       self: boolean;
+      sessions: number;
       peer?: RemotePeerSnapshot;
     }> = [];
     if (selfRole === "control") {
-      hubs.push({ hostname: selfName, host: selfHost, self: true });
+      hubs.push({ hostname: selfName, host: selfHost, self: true, sessions: selfSessions });
     }
     for (const p of this.cache.values()) {
       if (p.yeoksamRole !== "control") continue;
@@ -219,13 +233,20 @@ export class LanCluster {
         hostname: p.hostname,
         host: p.host,
         self: false,
+        sessions: snapshotSessionCount(p.snapshot),
         peer: p,
       });
     }
+    const bestPeerSessions = hubs.reduce((max, h) => (h.self ? max : Math.max(max, h.sessions)), 0);
+    // 출력으로 저장된 PC라도 이 PC에 게임이 더 많으면 허브를 유지한다 (관리자→Ct 전환).
+    if (selfRole !== "control" && selfSessions > 0 && selfSessions > bestPeerSessions) {
+      return { self: true };
+    }
     if (hubs.length === 0) return { self: true };
-    hubs.sort((a, b) => clusterRank(a, b));
+    hubs.sort((a, b) => hubRank(a, b));
     const winner = hubs[0];
     if (!winner || winner.self || !winner.peer) return { self: true };
+    if (selfSessions > winner.sessions) return { self: true };
     return { self: false, peer: winner.peer };
   }
 
