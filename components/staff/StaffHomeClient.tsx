@@ -39,7 +39,7 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
     if ("error" in r) alert(r.error);
     else {
       clearTimerPairing();
-      router.refresh();
+      window.location.replace("/staff");
     }
   }
 

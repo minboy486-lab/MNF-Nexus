@@ -639,7 +639,7 @@ export class RemoteServer {
       state.session.staff.checkedInAt = null;
       state.session.canControl = false;
       this.dropSession(state.session.token);
-      this.sendStaff(ws, state.session);
+      sendJson(ws, { type: "staff", staff: toStaffState(state.session), sessionToken: "" });
       state.session = null;
       return;
     }

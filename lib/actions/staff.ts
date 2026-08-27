@@ -480,6 +480,18 @@ async function requireMyStaffRow(): Promise<MyStaffCtx> {
   };
 }
 
+async function listStaffIdsForProfile(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  profileId: string,
+): Promise<string[]> {
+  const { data } = await supabase.from("staff").select("id").eq("profile_id", profileId);
+  return [...new Set((data ?? []).map((r) => r.id as string).filter(Boolean))];
+}
+
+function shiftWriter() {
+  return isSupabaseAdminConfigured() ? createAdminClient() : null;
+}
+
 export async function getMyStaffHome(): Promise<MyStaffHome | { error: string }> {
   const me = await requireMyStaffRow();
   if ("error" in me) return { error: me.error };
@@ -488,25 +500,28 @@ export async function getMyStaffHome(): Promise<MyStaffHome | { error: string }>
   const monthStart = new Date(`${toISODate(year, month, 1)}T00:00:00+09:00`);
   const nextMonth = month === 12 ? new Date(`${year + 1}-01-01T00:00:00+09:00`) : new Date(`${toISODate(year, month + 1, 1)}T00:00:00+09:00`);
 
-  const { data: openShift } = await me.supabase
+  const staffIds = await listStaffIdsForProfile(me.supabase, me.userId);
+  const ids = staffIds.length ? staffIds : [me.staffId];
+
+  const { data: openRows } = await me.supabase
     .from("staff_shifts")
     .select("id, checked_in_at")
-    .eq("staff_id", me.staffId)
+    .in("staff_id", ids)
     .is("checked_out_at", null)
-    .order("checked_in_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("checked_in_at", { ascending: true })
+    .limit(20);
 
   const { data: shifts } = await me.supabase
     .from("staff_shifts")
     .select("id, checked_in_at, checked_out_at")
-    .eq("staff_id", me.staffId)
+    .in("staff_id", ids)
     .gte("checked_in_at", monthStart.toISOString())
     .lt("checked_in_at", nextMonth.toISOString())
     .order("checked_in_at", { ascending: false });
 
   const now = Date.now();
   let monthHours = 0;
+  const openShift = openRows?.[0] ?? null;
   const working = !!openShift;
   const checkedInAt: string | null = openShift?.checked_in_at ?? null;
   const rows: MyShiftRow[] = [];
@@ -540,17 +555,21 @@ export async function punchMeIn(): Promise<{ success: true; already: boolean } |
   const me = await requireMyStaffRow();
   if ("error" in me) return { error: me.error };
 
-  const { data: open } = await me.supabase
+  const staffIds = await listStaffIdsForProfile(me.supabase, me.userId);
+  const ids = staffIds.length ? staffIds : [me.staffId];
+  const writer = shiftWriter() ?? me.supabase;
+
+  const { data: open } = await writer
     .from("staff_shifts")
     .select("id")
-    .eq("staff_id", me.staffId)
+    .in("staff_id", ids)
     .is("checked_out_at", null)
     .limit(1);
 
   if (open?.length) return { success: true, already: true };
 
   const session = await getOpenVenueSession();
-  const { error } = await me.supabase.from("staff_shifts").insert({
+  const { error } = await writer.from("staff_shifts").insert({
     staff_id: me.staffId,
     venue_session_id: session?.id ?? null,
   });
@@ -566,22 +585,20 @@ export async function punchMeOut(): Promise<{ success: true } | { error: string 
   const me = await requireMyStaffRow();
   if ("error" in me) return { error: me.error };
 
-  const { data: shift } = await me.supabase
+  const staffIds = await listStaffIdsForProfile(me.supabase, me.userId);
+  const ids = staffIds.length ? staffIds : [me.staffId];
+  const writer = shiftWriter() ?? me.supabase;
+  const now = new Date().toISOString();
+
+  const { data, error } = await writer
     .from("staff_shifts")
-    .select("id")
-    .eq("staff_id", me.staffId)
+    .update({ checked_out_at: now })
+    .in("staff_id", ids)
     .is("checked_out_at", null)
-    .order("checked_in_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!shift) return { error: "출근 기록이 없습니다." };
-
-  const { error } = await me.supabase
-    .from("staff_shifts")
-    .update({ checked_out_at: new Date().toISOString() })
-    .eq("id", shift.id);
+    .select("id");
   if (error) return { error: error.message };
+  if (!data?.length) return { error: "출근 기록이 없습니다. 다시 시도해 주세요." };
+
   revalidatePath("/staff", "layout");
   revalidatePath("/staff");
   revalidatePath("/staff/attendance");

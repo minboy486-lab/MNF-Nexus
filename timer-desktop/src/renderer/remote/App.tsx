@@ -171,11 +171,13 @@ export function App() {
   const [sel, setSel] = useState<GameSel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [confirmOut, setConfirmOut] = useState(false);
   const [shareFlash, setShareFlash] = useState<"shared" | "copied" | null>(null);
   const [shareSheetText, setShareSheetText] = useState<string | null>(null);
   const [, setTick] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const pinOkRef = useRef(false);
+  const checkoutRef = useRef(false);
   const clockOffsetRef = useRef(0);
   const offsetsRef = useRef<Record<string, number>>({ "": 0 });
 
@@ -241,6 +243,11 @@ export function App() {
           setTok("");
           stripTokFromUrl();
         }
+        if (checkoutRef.current && !msg.staff.canControl) {
+          checkoutRef.current = false;
+          const url = websiteUrl("/staff");
+          if (url) window.location.replace(url);
+        }
         return;
       }
       if (msg.type === "snapshot") {
@@ -257,6 +264,14 @@ export function App() {
         return;
       }
       if (msg.type === "error") {
+        if (msg.error.includes("직원 웹에서 출근") || msg.error.includes("출근한 뒤")) {
+          localStorage.removeItem(LS_SESSION);
+          const url = websiteUrl("/staff");
+          if (url) {
+            window.location.replace(url);
+            return;
+          }
+        }
         if (msg.error.includes("세션이 만료")) {
           localStorage.removeItem(LS_SESSION);
           const q = pairingFromSearch(location.search);
@@ -451,9 +466,14 @@ export function App() {
           </button>
         )}
         {ready && (
-          <button type="button" className="kakao-share-btn" onClick={() => void shareKakaoStatus()}>
-            {shareFlash === "shared" ? "공유됨" : shareFlash === "copied" ? "복사됨" : "카톡 공유"}
-          </button>
+          <div className="remote-header-actions">
+            <button type="button" className="checkout-btn" onClick={() => setConfirmOut(true)}>
+              퇴근
+            </button>
+            <button type="button" className="kakao-share-btn" onClick={() => void shareKakaoStatus()}>
+              {shareFlash === "shared" ? "공유됨" : shareFlash === "copied" ? "복사됨" : "카톡 공유"}
+            </button>
+          </div>
         )}
       </header>
 
@@ -598,6 +618,35 @@ export function App() {
             <button type="button" className="share-sheet__cancel" onClick={() => setShareSheetText(null)}>
               취소
             </button>
+          </div>
+        </div>
+      )}
+
+      {confirmOut && (
+        <div
+          className="checkout-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setConfirmOut(false)}
+        >
+          <div className="checkout-card" onClick={(e) => e.stopPropagation()}>
+            <p>퇴근하시겠습니까?</p>
+            <div className="checkout-actions">
+              <button
+                type="button"
+                className="checkout-yes"
+                onClick={() => {
+                  checkoutRef.current = true;
+                  setConfirmOut(false);
+                  send({ type: "checkout" });
+                }}
+              >
+                예
+              </button>
+              <button type="button" className="checkout-no" onClick={() => setConfirmOut(false)}>
+                아니오
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -75,7 +75,7 @@
 }
 .ds-game-name {
   display: inline-block;
-  font-size: clamp(2rem, 4cqw, 4rem);
+  font-size: calc(clamp(2rem, 4cqw, 4rem) * 1.1);
   font-weight: 700;
   letter-spacing: 0.18em;
   margin-left: 0.18em;
@@ -174,7 +174,7 @@
 }
 
 .ds-level {
-  font-size: clamp(2rem, 4.5cqw, 5rem);
+  font-size: calc(clamp(2rem, 4.5cqw, 5rem) * 1.1);
   font-weight: 800;
   letter-spacing: 0.24em;
   color: var(--level-pill-fg, var(--primary, #ffb6c9));
@@ -193,13 +193,13 @@
 [data-theme="mnf-original"] .ds-level,
 [data-theme="cherry-blossom"] .ds-level {
   opacity: 1;
-  font-size: clamp(1.35rem, 2.6cqw, 2.6rem);
+  font-size: calc(clamp(1.35rem, 2.6cqw, 2.6rem) * 1.1);
   letter-spacing: 0.2em;
   margin-bottom: 12px;
 }
 
 .ds-timer {
-  font-size: clamp(100px, 24cqw, 300px);
+  font-size: calc(clamp(100px, 24cqw, 300px) * 1.1);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
@@ -239,7 +239,7 @@ button.ds-timer:hover {
 }
 
 .ds-blinds {
-  --blinds-scale: 1;
+  --blinds-scale: 1.1;
   display: flex;
   justify-content: center;
   width: 100%;
@@ -288,7 +288,7 @@ button.ds-timer:hover {
 }
 .ds-blinds__sep { color: var(--muted-strong, rgba(196, 176, 196, 0.5)); margin: 0 6px; }
 .ds-blinds__val--break {
-  font-size: clamp(1.8rem, 4cqw, 4rem);
+  font-size: calc(clamp(1.8rem, 4cqw, 4rem) * var(--blinds-scale));
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--accent, #eab308);
@@ -306,7 +306,7 @@ button.ds-timer:hover {
   border-radius: 14px;
 }
 .ds-next__label {
-  font-size: clamp(0.9rem, 1.5cqw, 1.6rem);
+  font-size: calc(clamp(0.9rem, 1.5cqw, 1.6rem) * 1.1);
   font-weight: 700;
   letter-spacing: 0.16em;
   color: var(--muted-strong, rgba(196, 176, 196, 0.5));
@@ -314,7 +314,7 @@ button.ds-timer:hover {
   white-space: nowrap;
 }
 .ds-next__val {
-  font-size: clamp(1.4rem, 2.6cqw, 3rem);
+  font-size: calc(clamp(1.4rem, 2.6cqw, 3rem) * 1.1);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text-soft, rgba(232, 230, 239, 0.55));
@@ -347,7 +347,7 @@ button.ds-timer:hover {
   padding: 4px 0;
 }
 .ds-stat__label {
-  font-size: clamp(0.85rem, 1.35cqw, 1.35rem);
+  font-size: calc(clamp(0.85rem, 1.35cqw, 1.35rem) * 1.2);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -355,7 +355,7 @@ button.ds-timer:hover {
 }
 .ds-stat__val {
   /* 좌측 문구 기본(~48px)에 가깝게 */
-  font-size: clamp(1.6rem, 2.5cqw, 3rem);
+  font-size: calc(clamp(1.6rem, 2.5cqw, 3rem) * 1.2);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text, #e8e6ef);
@@ -366,7 +366,7 @@ button.ds-timer:hover {
   max-width: 100%;
 }
 .ds-stat__val--hi {
-  font-size: clamp(1.8rem, 2.8cqw, 3.3rem);
+  font-size: calc(clamp(1.8rem, 2.8cqw, 3.3rem) * 1.2);
   color: var(--primary, #ffb6c9);
 }
 .ds-stat__val--muted {
@@ -375,5 +375,5 @@ button.ds-timer:hover {
 .ds-stat__val--mono {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
-  font-size: clamp(1.5rem, 2.4cqw, 2.85rem);
+  font-size: calc(clamp(1.5rem, 2.4cqw, 2.85rem) * 1.2);
 }

@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { punchMeOut, type MyShiftRow } from "@/lib/actions/staff";
 import { StaffCheckoutConfirm } from "@/components/staff/StaffCheckoutConfirm";
@@ -26,7 +25,6 @@ export function StaffAttendanceClient({
   monthHours,
   shifts,
 }: Props) {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [confirmOut, setConfirmOut] = useState(false);
 
@@ -39,7 +37,7 @@ export function StaffAttendanceClient({
     if ("error" in r) alert(r.error);
     else {
       clearTimerPairing();
-      router.refresh();
+      window.location.replace("/staff");
     }
   }
 

@@ -199,17 +199,28 @@ export async function refreshStaffClock(staff: StaffAuthOk): Promise<StaffAuthOk
 }
 
 async function getOpenShift(staffId: string) {
+  const ids = await staffIdsForProfile(staffId);
   const sb = getSupabase();
-  if (!sb) return null;
-  const { data } = await sb
+  if (!sb || ids.length === 0) return null;
+  const { data, error } = await sb
     .from("staff_shifts")
     .select("id, checked_in_at")
-    .eq("staff_id", staffId)
+    .in("staff_id", ids)
     .is("checked_out_at", null)
-    .order("checked_in_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return data;
+    .order("checked_in_at", { ascending: true })
+    .limit(20);
+  if (error) return null;
+  return data?.[0] ?? null;
+}
+
+async function staffIdsForProfile(staffId: string): Promise<string[]> {
+  const sb = getSupabase();
+  if (!sb) return [staffId];
+  const { data: row } = await sb.from("staff").select("id, profile_id").eq("id", staffId).maybeSingle();
+  if (!row?.profile_id) return [staffId];
+  const { data: rows } = await sb.from("staff").select("id").eq("profile_id", row.profile_id);
+  const ids = [...new Set((rows ?? []).map((r) => r.id).filter(Boolean))];
+  return ids.length ? ids : [staffId];
 }
 
 async function openVenueSessionId(): Promise<string | null> {
@@ -253,10 +264,15 @@ export async function clockOutStaff(
 ): Promise<{ action: "out" } | { error: string }> {
   const sb = getSupabase();
   if (!sb) return { error: "서버에 Supabase가 설정되지 않았습니다." };
-  const open = await getOpenShift(staffId);
-  if (!open) return { action: "out" };
+  const ids = await staffIdsForProfile(staffId);
   const now = new Date().toISOString();
-  const { error } = await sb.from("staff_shifts").update({ checked_out_at: now }).eq("id", open.id);
+  const { data, error } = await sb
+    .from("staff_shifts")
+    .update({ checked_out_at: now })
+    .in("staff_id", ids)
+    .is("checked_out_at", null)
+    .select("id");
   if (error) return { error: error.message };
+  if (!data?.length) return { action: "out" };
   return { action: "out" };
 }
