@@ -271,6 +271,11 @@ export class TimerHub {
 
   assignMonitor(monitorSlot: MonitorSlot, gameId: number | null): void {
     this.monitorAssignments.set(monitorSlot, gameId);
+    if (this.follow) {
+      this.pushFollowedSlot(monitorSlot);
+      this.pushSnapshotToControl();
+      return;
+    }
     const wins = this.getDisplayWindowsForSlot(monitorSlot);
     const state = gameId !== null ? (this.timers.get(gameId) ?? null) : null;
     const session = gameId !== null ? (this.sessions.get(gameId) ?? null) : null;
@@ -376,6 +381,10 @@ export class TimerHub {
   }
 
   pushAllMonitors(): void {
+    if (this.follow) {
+      this.pushFollowedState();
+      return;
+    }
     for (const slot of MONITOR_SLOTS) {
       const gameId = this.monitorAssignments.get(slot) ?? null;
       const wins = this.getDisplayWindowsForSlot(slot);

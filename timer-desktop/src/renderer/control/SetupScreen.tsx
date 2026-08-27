@@ -108,7 +108,7 @@ export function SetupScreen({ displays, initialConfig, onSaved, onOpenControl }:
       theme: initialConfig?.theme,
       soundVolume: initialConfig?.soundVolume,
       venueId,
-      yeoksamRole: initialConfig?.yeoksamRole,
+      yeoksamRole: yeoksam ? (controlAssigned ? "control" : "output") : initialConfig?.yeoksamRole,
       controlOutputSlot,
       mappings: yeoksam
         ? displays.flatMap((d) => {
@@ -152,7 +152,7 @@ export function SetupScreen({ displays, initialConfig, onSaved, onOpenControl }:
       <h2>모니터 설정 · {venueName(venueId)}</h2>
       <p className="muted">
         {yeoksam
-          ? "이 PC 화면을 Dt·Bm 등으로 지정하세요. 지정하면 블라인드가 나오고, Esc로 이 설정, M으로 매장 컨트롤을 엽니다."
+          ? "게임을 만들고 배치할 PC는 화면 하나를 Control(관리자)로 두세요. TV·모니터만 있는 PC는 Bm/Bt 등만 지정하면 관리자 PC를 따라갑니다."
           : "Control 모니터와 Display(M1~M6)를 지정하세요."}
       </p>
 

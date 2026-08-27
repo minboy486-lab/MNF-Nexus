@@ -144,8 +144,11 @@ export class LanCluster {
     if (!ip || this.ownHosts.has(ip)) return;
     const prev = this.cache.get(ip);
     this.cache.set(ip, {
-      ...snap,
       host: ip,
+      hostname: snap.hostname || prev?.hostname || ip,
+      snapshot: snap.snapshot ?? prev?.snapshot ?? EMPTY_SNAP,
+      timers: snap.timers ?? prev?.timers ?? [],
+      serverNow: typeof snap.serverNow === "number" ? snap.serverNow : (prev?.serverNow ?? Date.now()),
       yeoksamRole: snap.yeoksamRole ?? prev?.yeoksamRole,
     });
     if (
@@ -158,6 +161,29 @@ export class LanCluster {
     ) {
       this.opts.onPeersChange();
     }
+  }
+
+  notePeerRole(host: string, role?: YeoksamRole, hostname?: string): void {
+    const ip = normalizeRemoteIp(host);
+    if (!ip || this.ownHosts.has(ip)) return;
+    const prev = this.cache.get(ip);
+    if (!prev) {
+      this.cache.set(ip, {
+        host: ip,
+        hostname: hostname?.trim() || ip,
+        snapshot: EMPTY_SNAP,
+        timers: [],
+        serverNow: Date.now(),
+        yeoksamRole: role,
+      });
+      this.opts.onPeersChange();
+      return;
+    }
+    const nextRole = role ?? prev.yeoksamRole;
+    const nextName = hostname?.trim() || prev.hostname;
+    if (nextRole === prev.yeoksamRole && nextName === prev.hostname) return;
+    this.cache.set(ip, { ...prev, yeoksamRole: nextRole, hostname: nextName });
+    this.opts.onPeersChange();
   }
 
   forgetHost(host: string): void {
@@ -175,35 +201,30 @@ export class LanCluster {
   }
 
   shopMaster(): { self: true } | { self: false; peer: RemotePeerSnapshot } {
-    const owned = this.opts.getOwnedSnapshot();
     const selfHost = [...this.ownHosts][0] ?? "0.0.0.0";
     const selfName = this.opts.hostname() || osHostname() || "pc";
-    const rows: Array<{
+    const selfRole = this.opts.getYeoksamRole();
+    const hubs: Array<{
       hostname: string;
       host: string;
-      sessions: number;
       self: boolean;
       peer?: RemotePeerSnapshot;
-    }> = [
-      {
-        hostname: selfName,
-        host: selfHost,
-        sessions: owned.snapshot.sessions.length,
-        self: true,
-      },
-      ...[...this.cache.values()].map((p) => ({
+    }> = [];
+    if (selfRole === "control") {
+      hubs.push({ hostname: selfName, host: selfHost, self: true });
+    }
+    for (const p of this.cache.values()) {
+      if (p.yeoksamRole !== "control") continue;
+      hubs.push({
         hostname: p.hostname,
         host: p.host,
-        sessions: p.snapshot.sessions.length,
         self: false,
         peer: p,
-      })),
-    ];
-    rows.sort((a, b) => {
-      if (b.sessions !== a.sessions) return b.sessions - a.sessions;
-      return clusterRank(a, b);
-    });
-    const winner = rows[0];
+      });
+    }
+    if (hubs.length === 0) return { self: true };
+    hubs.sort((a, b) => clusterRank(a, b));
+    const winner = hubs[0];
     if (!winner || winner.self || !winner.peer) return { self: true };
     return { self: false, peer: winner.peer };
   }
@@ -304,6 +325,7 @@ export class LanCluster {
         pin: this.opts.getPin(),
         venueId: this.opts.getVenueId(),
         yeoksamRole: this.opts.getYeoksamRole(),
+        hostname: this.opts.hostname() || osHostname() || "pc",
       };
       ws.send(JSON.stringify(hello));
       if (!this.isShopFollower()) {

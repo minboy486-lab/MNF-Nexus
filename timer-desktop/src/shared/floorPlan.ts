@@ -1,11 +1,19 @@
 import { MISA_VENUE_ID, YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
-import type { AppSnapshot, MonitorSlot } from "./types";
+import { normalizeYeoksamRole, tableLetter, type AppSnapshot, type MonitorSlot, type YeoksamRole } from "./types";
 
+/** 미사 A~E. 테이블 xcsdw, 모니터 zvafq */
 export const DEFAULT_MONITOR_KEYS: Record<string, number> = {
-  q: 5, a: 3, z: 1, r: 6, f: 4, v: 2,
+  z: 1, v: 2, a: 3, f: 4, q: 5,
 };
 export const DEFAULT_TABLE_KEYS: Record<string, number> = {
-  w: 5, s: 3, x: 1, e: 6, d: 4, c: 2,
+  x: 1, c: 2, s: 3, d: 4, w: 5,
+};
+
+export const MISA_TABLE_HOTKEY: Record<number, string> = {
+  1: "X", 2: "C", 3: "S", 4: "D", 5: "W",
+};
+export const MISA_MONITOR_HOTKEY: Record<number, string> = {
+  1: "Z", 2: "V", 3: "A", 4: "F", 5: "Q",
 };
 
 /** D=a, B=s, C=d */
@@ -65,7 +73,7 @@ export function floorHotkeys(venueId: string | null | undefined): {
 
 export function monitorLabel(venueId: string | null | undefined, slot: number): string {
   if (isYeoksamFloor(venueId)) return YEOKSAM_MONITOR_LABELS[slot] ?? `M${slot}`;
-  return `M${slot}`;
+  return tableLetter(slot);
 }
 
 export function controlOutputSlotOf(config: { venueId?: string; controlOutputSlot?: number | null } | null): number | null {
@@ -73,6 +81,21 @@ export function controlOutputSlotOf(config: { venueId?: string; controlOutputSlo
   const slot = config.controlOutputSlot;
   if (typeof slot === "number" && Number.isInteger(slot) && slot >= 1 && slot <= 6) return slot;
   return null;
+}
+
+/**
+ * 역삼: Control(관리자)로 둔 PC = 허브.
+ * 호스트 화면이 Bm/Dt 같은 송출이면 출력 PC (controlOutputSlot).
+ */
+export function resolveYeoksamShopRole(config: {
+  venueId?: string;
+  yeoksamRole?: unknown;
+  controlOutputSlot?: number | null;
+} | null): YeoksamRole {
+  if (!config || !isYeoksamFloor(config.venueId)) return normalizeYeoksamRole(config?.yeoksamRole);
+  if (controlOutputSlotOf(config)) return "output";
+  if (config.yeoksamRole === "output") return "output";
+  return "control";
 }
 
 /** 이 PC 로컬 화면: Dm/Cm은 배치도에 버튼이 없어도 Dt/Ct(또는 D/C 테이블) 게임을 따른다. */

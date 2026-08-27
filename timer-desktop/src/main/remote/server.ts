@@ -304,6 +304,7 @@ export class RemoteServer {
     if (!hub) return;
     if (!isYeoksamFloor(getConfiguredVenueId()) || !this.isYeoksamFollowerPc()) {
       hub.clearFollow();
+      this.cluster?.pushLocalSnapshot();
       return;
     }
     const peer = this.cluster?.yeoksamControlPeer();
@@ -499,6 +500,11 @@ export class RemoteServer {
       state.pinOk = true;
       state.peer = true;
       this.cluster?.noteInbound(state.remoteHost, ws);
+      this.cluster?.notePeerRole(
+        state.remoteHost,
+        msg.yeoksamRole,
+        typeof msg.hostname === "string" ? msg.hostname : undefined,
+      );
       sendJson(ws, this.localSnapshotMsg());
       return;
     }
@@ -641,6 +647,8 @@ export class RemoteServer {
       });
       return;
     }
+
+    if (this.isYeoksamFollowerPc()) return;
 
     if (msg.type === "peer_command") {
       if (!Number.isInteger(msg.gameId) || msg.gameId < 1 || !isRemoteTimerAction(msg.action)) {

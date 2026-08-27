@@ -2,7 +2,8 @@ import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 import { controlPinMatches, isControlPin } from "@mnf/venue/control-pin";
 import { getSupabase } from "./client";
 import { loadConfig } from "../config/configStore";
-import { normalizeYeoksamRole, type YeoksamRole } from "../../shared/types";
+import { type YeoksamRole } from "../../shared/types";
+import { resolveYeoksamShopRole } from "../../shared/floorPlan";
 
 export function getConfiguredVenueId(): string {
   const id = loadConfig()?.venueId;
@@ -10,7 +11,7 @@ export function getConfiguredVenueId(): string {
 }
 
 export function getConfiguredYeoksamRole(): YeoksamRole {
-  return normalizeYeoksamRole(loadConfig()?.yeoksamRole);
+  return resolveYeoksamShopRole(loadConfig());
 }
 
 export async function verifyVenueControlPin(

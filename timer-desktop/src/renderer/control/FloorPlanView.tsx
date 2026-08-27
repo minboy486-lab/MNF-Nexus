@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type { AppSnapshot, GameSession } from "../../shared/types";
 import { tableLetter } from "../../shared/types";
 import {
+  MISA_MONITOR_HOTKEY,
+  MISA_TABLE_HOTKEY,
   YEOKSAM_MONITOR_HOTKEY,
   YEOKSAM_TABLE_HOTKEY,
   isYeoksamFloor,
@@ -24,9 +26,6 @@ function sessionForMonitor(snap: AppSnapshot, slot: number): GameSession | undef
   const gid = snap.monitorAssignments[slot];
   return gid ? snap.sessions.find((s) => s.gameId === gid) : undefined;
 }
-
-const MONITOR_HOTKEY: Record<number, string> = { 5: "Q", 3: "A", 1: "Z", 6: "R", 4: "F", 2: "V" };
-const TABLE_HOTKEY: Record<number, string> = { 5: "W", 3: "S", 1: "X", 6: "E", 4: "D", 2: "C" };
 
 type SlotBtnProps = {
   label: string;
@@ -106,23 +105,23 @@ function YeoksamFloorPlan({ snapshot, venueId, onTableClick, onMonitorClick }: P
 }
 
 /**
- * 미사점(기본) 레이아웃:
+ * 미사점 레이아웃:
  *
- * [M5][T5]  gap  [T6][M6]
- * [M3][T3]  gap  [T4][M4]
- *     [T1]  gap  [T2]
- *      [M1]      [M2]
+ * [E모니터][E]
+ *                [D][D모니터]   ← E·C 중간
+ * [C모니터][C]
+ *                [B][B모니터]   ← A·C 중간
+ *         [A]
+ *      [A모니터]
  */
-function DefaultFloorPlan({ snapshot, onTableClick, onMonitorClick }: Omit<Props, "venueId">) {
+function DefaultFloorPlan({ snapshot, venueId, onTableClick, onMonitorClick }: Props) {
   const rowRef = useRef<HTMLDivElement>(null);
   const [monitorSize, setMonitorSize] = useState(68);
 
   useEffect(() => {
     const measure = () => {
       if (!rowRef.current) return;
-      const mCell = rowRef.current.firstElementChild as HTMLElement | null;
-      if (!mCell) return;
-      const h = mCell.getBoundingClientRect().height;
+      const h = rowRef.current.getBoundingClientRect().height;
       if (h > 0) setMonitorSize(Math.round(h));
     };
     measure();
@@ -136,10 +135,10 @@ function DefaultFloorPlan({ snapshot, onTableClick, onMonitorClick }: Omit<Props
     return (
       <SlotBtn
         label={tableLetter(slot)}
-        hotkey={TABLE_HOTKEY[slot]}
+        hotkey={MISA_TABLE_HOTKEY[slot]}
         sub={s ? `G${s.gameId}` : undefined}
         active={!!s}
-        variant="table"
+        variant="table-oval"
         dataSlot={`table-${slot}`}
         onClick={(pos) => onTableClick(slot, pos)}
       />
@@ -150,8 +149,8 @@ function DefaultFloorPlan({ snapshot, onTableClick, onMonitorClick }: Omit<Props
     const s = sessionForMonitor(snapshot, slot);
     return (
       <SlotBtn
-        label={`M${slot}`}
-        hotkey={MONITOR_HOTKEY[slot]}
+        label={monitorLabel(venueId, slot)}
+        hotkey={MISA_MONITOR_HOTKEY[slot]}
         sub={s ? `G${s.gameId}` : undefined}
         active={!!s}
         variant="monitor"
@@ -165,8 +164,8 @@ function DefaultFloorPlan({ snapshot, onTableClick, onMonitorClick }: Omit<Props
     const s = sessionForMonitor(snapshot, slot);
     return (
       <SlotBtn
-        label={`M${slot}`}
-        hotkey={MONITOR_HOTKEY[slot]}
+        label={monitorLabel(venueId, slot)}
+        hotkey={MISA_MONITOR_HOTKEY[slot]}
         sub={s ? `G${s.gameId}` : undefined}
         active={!!s}
         variant="monitor-h"
@@ -178,40 +177,23 @@ function DefaultFloorPlan({ snapshot, onTableClick, onMonitorClick }: Omit<Props
 
   return (
     <div
-      className="floor-plan"
+      className="floor-plan floor-plan--misa"
       style={{ ["--monitor-size" as string]: `${monitorSize}px` }}
     >
-      <div className="floor-row" ref={rowRef}>
-        <div className="floor-cell floor-cell--monitor">{mBtn(5)}</div>
-        <div className="floor-cell floor-cell--table">{tBtn(5)}</div>
-        <div className="floor-cell floor-cell--gap" />
-        <div className="floor-cell floor-cell--table">{tBtn(6)}</div>
-        <div className="floor-cell floor-cell--monitor">{mBtn(6)}</div>
-      </div>
+      <div className="floor-cell floor-cell--monitor misa-e-m" ref={rowRef}>{mBtn(5)}</div>
+      <div className="floor-cell floor-cell--table misa-e-t">{tBtn(5)}</div>
 
-      <div className="floor-row">
-        <div className="floor-cell floor-cell--monitor">{mBtn(3)}</div>
-        <div className="floor-cell floor-cell--table">{tBtn(3)}</div>
-        <div className="floor-cell floor-cell--gap" />
-        <div className="floor-cell floor-cell--table">{tBtn(4)}</div>
-        <div className="floor-cell floor-cell--monitor">{mBtn(4)}</div>
-      </div>
+      <div className="floor-cell floor-cell--monitor misa-c-m">{mBtn(3)}</div>
+      <div className="floor-cell floor-cell--table misa-c-t">{tBtn(3)}</div>
 
-      <div className="floor-row">
-        <div className="floor-cell floor-cell--monitor" />
-        <div className="floor-cell floor-cell--table">{tBtn(1)}</div>
-        <div className="floor-cell floor-cell--gap" />
-        <div className="floor-cell floor-cell--table">{tBtn(2)}</div>
-        <div className="floor-cell floor-cell--monitor" />
-      </div>
+      <div className="floor-cell floor-cell--table misa-a-t">{tBtn(1)}</div>
+      <div className="floor-cell floor-cell--table floor-cell--center misa-a-m">{mHBtn(1)}</div>
 
-      <div className="floor-row floor-row--mh">
-        <div className="floor-cell floor-cell--monitor" />
-        <div className="floor-cell floor-cell--table floor-cell--center">{mHBtn(1)}</div>
-        <div className="floor-cell floor-cell--gap" />
-        <div className="floor-cell floor-cell--table floor-cell--center">{mHBtn(2)}</div>
-        <div className="floor-cell floor-cell--monitor" />
-      </div>
+      <div className="floor-cell floor-cell--table misa-d-t">{tBtn(4)}</div>
+      <div className="floor-cell floor-cell--monitor misa-d-m">{mBtn(4)}</div>
+
+      <div className="floor-cell floor-cell--table misa-b-t">{tBtn(2)}</div>
+      <div className="floor-cell floor-cell--monitor misa-b-m">{mBtn(2)}</div>
     </div>
   );
 }
@@ -220,11 +202,5 @@ export function FloorPlanView(props: Props) {
   if (isYeoksamFloor(props.venueId)) {
     return <YeoksamFloorPlan {...props} />;
   }
-  return (
-    <DefaultFloorPlan
-      snapshot={props.snapshot}
-      onTableClick={props.onTableClick}
-      onMonitorClick={props.onMonitorClick}
-    />
-  );
+  return <DefaultFloorPlan {...props} />;
 }
