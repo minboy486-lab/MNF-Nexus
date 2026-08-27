@@ -97,9 +97,7 @@ function isAndroid(): boolean {
 function androidSendIntent(text: string): string {
   return (
     "intent:#Intent;action=android.intent.action.SEND;type=text/plain;" +
-    "S.android.intent.extra.SUBJECT=" +
-    encodeURIComponent("MNF HOLDEM 진행현황") +
-    ";S.android.intent.extra.TEXT=" +
+    "S.android.intent.extra.TEXT=" +
     encodeURIComponent(text) +
     ";end"
   );
@@ -119,7 +117,7 @@ function canUseWebShare(text: string): boolean {
 export async function shareGameStatus(text: string): Promise<ShareStatusResult> {
   if (canUseWebShare(text)) {
     try {
-      await navigator.share({ title: "MNF HOLDEM 진행현황", text });
+      await navigator.share({ text });
       return "shared";
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return "cancelled";
