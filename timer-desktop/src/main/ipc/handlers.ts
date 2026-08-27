@@ -8,7 +8,22 @@ import { getAllDisplaysInfo } from "../screen/displayMapper";
 import { listBlindStructures } from "../supabase/blinds";
 import type { TimerHub } from "../timer/timerHub";
 import type { GameSession, MonitorSlot, TableSlot } from "../../shared/types";
-import { normalizeSoundVolume, normalizeUiTheme } from "../../shared/types";
+import { isThemeSurface, normalizeSoundVolume, normalizeUiTheme, withUiThemes } from "../../shared/types";
+import {
+  applyTimerThemeChoice,
+  deleteSavedTimerTheme,
+  normalizeTimerLook,
+  overlayFromTheme,
+  upsertSavedTimerTheme,
+  type TimerLook,
+} from "../../shared/timerLook";
+import {
+  applyControlThemeChoice,
+  deleteSavedControlTheme,
+  normalizeControlLook,
+  overlayFromControlTheme,
+  upsertSavedControlTheme,
+} from "../../shared/controlLook";
 import type { BlindStructureOption, TimerAction } from "@mnf/timer/types";
 import type { WindowManager } from "../windows/windowManager";
 import type { RemoteServer } from "../remote/server";
@@ -76,17 +91,41 @@ function isBlindStructure(v: unknown): v is BlindStructureOption {
 }
 
 let volumeSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let lookSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let controlLookSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 function persistSoundVolume(wm: WindowManager): void {
   const latest = wm.getConfig() ?? loadConfig();
   if (latest) saveConfig({ ...latest, soundVolume: wm.getSoundVolume() });
 }
 
-export function flushPendingSoundVolume(wm: WindowManager): void {
-  if (!volumeSaveTimer) return;
-  clearTimeout(volumeSaveTimer);
-  volumeSaveTimer = null;
-  persistSoundVolume(wm);
+function persistTimerLook(wm: WindowManager, remote?: RemoteServer): void {
+  const latest = wm.getConfig() ?? loadConfig();
+  if (latest) saveConfig({ ...latest, timerLook: wm.getTimerLook() });
+  remote?.broadcastShopTimerTheme();
+}
+
+function persistControlLook(wm: WindowManager): void {
+  const latest = wm.getConfig() ?? loadConfig();
+  if (latest) saveConfig({ ...latest, controlLook: wm.getControlLook() });
+}
+
+export function flushPendingSoundVolume(wm: WindowManager, remote?: RemoteServer): void {
+  if (volumeSaveTimer) {
+    clearTimeout(volumeSaveTimer);
+    volumeSaveTimer = null;
+    persistSoundVolume(wm);
+  }
+  if (lookSaveTimer) {
+    clearTimeout(lookSaveTimer);
+    lookSaveTimer = null;
+    persistTimerLook(wm, remote);
+  }
+  if (controlLookSaveTimer) {
+    clearTimeout(controlLookSaveTimer);
+    controlLookSaveTimer = null;
+    persistControlLook(wm);
+  }
 }
 
 let lanView: LanViewClient | null = null;
@@ -139,18 +178,168 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     }
     return { ok: true as const };
   });
-  ipcMain.handle("theme:get", () => wm.getTheme());
+  ipcMain.handle("theme:get", () => wm.getTimerTheme());
   ipcMain.handle("theme:set", async (_e, raw: unknown) => {
-    const theme = normalizeUiTheme(raw);
     const current = wm.getConfig() ?? loadConfig();
     if (!current) {
       return { ok: false as const, error: "설정이 없습니다. 모니터 설정을 먼저 완료하세요." };
     }
-    const next = { ...current, theme, soundVolume: wm.getSoundVolume() };
+    let surface: "control" | "timer" = "timer";
+    let themeRaw: unknown = raw;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      const p = raw as { surface?: unknown; theme?: unknown };
+      if (isThemeSurface(p.surface)) surface = p.surface;
+      themeRaw = p.theme;
+    }
+    const theme = normalizeUiTheme(themeRaw);
+    const base = { ...current, soundVolume: wm.getSoundVolume() };
+    const next = surface === "control"
+      ? withUiThemes(base, { controlTheme: theme })
+      : applyTimerThemeChoice(base, theme);
     const saved = saveConfig(next);
     if (!saved.ok) return saved;
     await wm.applyConfig(next);
-    return { ok: true as const, theme };
+    if (surface === "timer") remote.broadcastShopTimerTheme();
+    return { ok: true as const, surface, theme };
+  });
+  ipcMain.handle("timerTheme:select", async (_e, raw: unknown) => {
+    const current = wm.getConfig() ?? loadConfig();
+    if (!current) {
+      return { ok: false as const, error: "설정이 없습니다. 모니터 설정을 먼저 완료하세요." };
+    }
+    const id = typeof raw === "string" ? raw : typeof (raw as { id?: unknown })?.id === "string" ? (raw as { id: string }).id : "";
+    if (!id) return { ok: false as const, error: "테마를 선택하세요." };
+    const next = applyTimerThemeChoice({ ...current, soundVolume: wm.getSoundVolume() }, id);
+    const saved = saveConfig(next);
+    if (!saved.ok) return saved;
+    await wm.applyConfig(next);
+    remote.broadcastShopTimerTheme();
+    return {
+      ok: true as const,
+      timerTheme: next.timerTheme,
+      activeTimerThemeId: next.activeTimerThemeId,
+      look: next.timerLook ?? null,
+      savedTimerThemes: next.savedTimerThemes ?? [],
+    };
+  });
+  ipcMain.handle("timerTheme:save", async (_e, raw: unknown) => {
+    const current = wm.getConfig() ?? loadConfig();
+    if (!current) {
+      return { ok: false as const, error: "설정이 없습니다. 모니터 설정을 먼저 완료하세요." };
+    }
+    const p = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const lookRaw = p.look !== undefined ? p.look : wm.getTimerLook();
+    const look = (lookRaw ?? overlayFromTheme(wm.getTimerTheme())) as TimerLook;
+    const result = upsertSavedTimerTheme(
+      { ...current, soundVolume: wm.getSoundVolume() },
+      {
+        name: typeof p.name === "string" ? p.name : "",
+        look,
+        id: typeof p.id === "string" ? p.id : undefined,
+        baseTheme: wm.getTimerTheme(),
+      },
+    );
+    if (!result.ok) return result;
+    const written = saveConfig(result.config);
+    if (!written.ok) return written;
+    await wm.applyConfig(result.config);
+    remote.broadcastShopTimerTheme();
+    return {
+      ok: true as const,
+      saved: result.saved,
+      timerTheme: result.config.timerTheme,
+      activeTimerThemeId: result.config.activeTimerThemeId,
+      look: result.config.timerLook ?? null,
+      savedTimerThemes: result.config.savedTimerThemes ?? [],
+    };
+  });
+  ipcMain.handle("timerTheme:delete", async (_e, raw: unknown) => {
+    const current = wm.getConfig() ?? loadConfig();
+    if (!current) {
+      return { ok: false as const, error: "설정이 없습니다. 모니터 설정을 먼저 완료하세요." };
+    }
+    const id = typeof raw === "string" ? raw : typeof (raw as { id?: unknown })?.id === "string" ? (raw as { id: string }).id : "";
+    if (!id) return { ok: false as const, error: "삭제할 테마가 없습니다." };
+    const next = deleteSavedTimerTheme({ ...current, soundVolume: wm.getSoundVolume() }, id);
+    const saved = saveConfig(next);
+    if (!saved.ok) return saved;
+    await wm.applyConfig(next);
+    remote.broadcastShopTimerTheme();
+    return {
+      ok: true as const,
+      timerTheme: next.timerTheme,
+      activeTimerThemeId: next.activeTimerThemeId,
+      look: next.timerLook ?? null,
+      savedTimerThemes: next.savedTimerThemes ?? [],
+    };
+  });
+  ipcMain.handle("controlTheme:select", async (_e, raw: unknown) => {
+    const current = wm.getConfig() ?? loadConfig();
+    if (!current) {
+      return { ok: false as const, error: "설정이 없습니다. 모니터 설정을 먼저 완료하세요." };
+    }
+    const id = typeof raw === "string" ? raw : typeof (raw as { id?: unknown })?.id === "string" ? (raw as { id: string }).id : "";
+    if (!id) return { ok: false as const, error: "테마를 선택하세요." };
+    const next = applyControlThemeChoice({ ...current, soundVolume: wm.getSoundVolume() }, id);
+    const saved = saveConfig(next);
+    if (!saved.ok) return saved;
+    await wm.applyConfig(next);
+    return {
+      ok: true as const,
+      controlTheme: next.controlTheme,
+      activeControlThemeId: next.activeControlThemeId,
+      look: next.controlLook ?? null,
+      savedControlThemes: next.savedControlThemes ?? [],
+    };
+  });
+  ipcMain.handle("controlTheme:save", async (_e, raw: unknown) => {
+    const current = wm.getConfig() ?? loadConfig();
+    if (!current) {
+      return { ok: false as const, error: "설정이 없습니다. 모니터 설정을 먼저 완료하세요." };
+    }
+    const p = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const lookRaw = p.look !== undefined ? p.look : wm.getControlLook();
+    const look = normalizeControlLook(lookRaw, wm.getControlTheme()) ?? overlayFromControlTheme(wm.getControlTheme());
+    const result = upsertSavedControlTheme(
+      { ...current, soundVolume: wm.getSoundVolume() },
+      {
+        name: typeof p.name === "string" ? p.name : "",
+        look,
+        id: typeof p.id === "string" ? p.id : undefined,
+        baseTheme: wm.getControlTheme(),
+      },
+    );
+    if (!result.ok) return result;
+    const written = saveConfig(result.config);
+    if (!written.ok) return written;
+    await wm.applyConfig(result.config);
+    return {
+      ok: true as const,
+      saved: result.saved,
+      controlTheme: result.config.controlTheme,
+      activeControlThemeId: result.config.activeControlThemeId,
+      look: result.config.controlLook ?? null,
+      savedControlThemes: result.config.savedControlThemes ?? [],
+    };
+  });
+  ipcMain.handle("controlTheme:delete", async (_e, raw: unknown) => {
+    const current = wm.getConfig() ?? loadConfig();
+    if (!current) {
+      return { ok: false as const, error: "설정이 없습니다. 모니터 설정을 먼저 완료하세요." };
+    }
+    const id = typeof raw === "string" ? raw : typeof (raw as { id?: unknown })?.id === "string" ? (raw as { id: string }).id : "";
+    if (!id) return { ok: false as const, error: "삭제할 테마가 없습니다." };
+    const next = deleteSavedControlTheme({ ...current, soundVolume: wm.getSoundVolume() }, id);
+    const saved = saveConfig(next);
+    if (!saved.ok) return saved;
+    await wm.applyConfig(next);
+    return {
+      ok: true as const,
+      controlTheme: next.controlTheme,
+      activeControlThemeId: next.activeControlThemeId,
+      look: next.controlLook ?? null,
+      savedControlThemes: next.savedControlThemes ?? [],
+    };
   });
   ipcMain.handle("soundVolume:get", () => wm.getSoundVolume());
   ipcMain.handle("soundVolume:set", (_e, raw: unknown) => {
@@ -166,13 +355,43 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     }
     return { ok: true as const, volume };
   });
+  ipcMain.handle("timerLook:get", () => wm.getTimerLook());
+  ipcMain.handle("timerLook:set", (_e, raw: unknown) => {
+    const current = wm.getConfig() ?? loadConfig();
+    if (!current) {
+      return { ok: false as const, error: "설정이 없습니다. 모니터 설정을 먼저 완료하세요." };
+    }
+    const look = raw === null ? null : normalizeTimerLook(raw, wm.getTimerTheme());
+    wm.setTimerLook(look);
+    if (lookSaveTimer) clearTimeout(lookSaveTimer);
+    lookSaveTimer = setTimeout(() => {
+      lookSaveTimer = null;
+      persistTimerLook(wm, remote);
+    }, 400);
+    return { ok: true as const, look };
+  });
+  ipcMain.handle("controlLook:get", () => wm.getControlLook());
+  ipcMain.handle("controlLook:set", (_e, raw: unknown) => {
+    const current = wm.getConfig() ?? loadConfig();
+    if (!current) {
+      return { ok: false as const, error: "설정이 없습니다. 모니터 설정을 먼저 완료하세요." };
+    }
+    const look = raw === null ? null : normalizeControlLook(raw, wm.getControlTheme());
+    wm.setControlLook(look);
+    if (controlLookSaveTimer) clearTimeout(controlLookSaveTimer);
+    controlLookSaveTimer = setTimeout(() => {
+      controlLookSaveTimer = null;
+      persistControlLook(wm);
+    }, 400);
+    return { ok: true as const, look };
+  });
 
   ipcMain.handle("remote:info", () => remote.getInfo());
   ipcMain.handle("remote:refreshQr", () => remote.refreshPairing());
 
   // ── 앱 제어 ───────────────────────────────────────────────
   ipcMain.handle("app:quit", () => {
-    flushPendingSoundVolume(wm);
+    flushPendingSoundVolume(wm, remote);
     stopLanView();
     app.quit();
   });

@@ -185,13 +185,13 @@
   border-radius: 999px;
   line-height: 1.15;
 }
-[data-theme="black-pink"] .ds-level {
+[data-theme="black-pink"].ds .ds-level {
   padding: 0;
   border-radius: 0;
   background: transparent;
 }
-[data-theme="mnf-original"] .ds-level,
-[data-theme="cherry-blossom"] .ds-level {
+[data-theme="mnf-original"].ds .ds-level,
+[data-theme="cherry-blossom"].ds .ds-level {
   opacity: 1;
   font-size: calc(clamp(1.35rem, 2.6cqw, 2.6rem) * 1.1);
   letter-spacing: 0.2em;
@@ -224,8 +224,8 @@ button.ds-timer:hover {
   color: var(--primary, #ffb6c9);
   text-shadow: 0 0 140px var(--primary-glow, rgba(255, 182, 201, 0.3));
 }
-[data-theme="mnf-original"] .ds-timer--running,
-[data-theme="cherry-blossom"] .ds-timer--running {
+[data-theme="mnf-original"].ds .ds-timer--running,
+[data-theme="cherry-blossom"].ds .ds-timer--running {
   color: transparent;
   background-image: var(--timer-gradient);
   background-clip: text;
@@ -377,3 +377,80 @@ button.ds-timer:hover {
   letter-spacing: 0.04em;
   font-size: calc(clamp(1.5rem, 2.4cqw, 2.85rem) * 1.2);
 }
+
+/* 기존 3열 레이아웃 위에만 덮는 오버레이 (기본값은 CSS 그대로) */
+.ds-overlay {
+  position: relative;
+  z-index: 3;
+  max-width: 100%;
+}
+.ds-center > .ds-overlay {
+  width: max-content;
+  max-width: 100%;
+}
+.ds-center > .ds-overlay--blinds {
+  width: 100%;
+}
+.ds-title-bar > .ds-overlay {
+  display: inline-block;
+  max-width: 100%;
+}
+.ds-left > .ds-overlay,
+.ds-right > .ds-overlay {
+  width: 100%;
+  min-width: 0;
+}
+.ds-overlay--size .ds-game-name,
+.ds-overlay--size .ds-level,
+.ds-overlay--size .ds-timer {
+  font-size: inherit;
+}
+.ds-overlay--blinds.ds-overlay--size .ds-blinds__val,
+.ds-overlay--blinds.ds-overlay--size .ds-blinds__val--break {
+  font-size: 1em;
+}
+.ds-overlay--size .ds-next__val {
+  font-size: 1em;
+}
+.ds-overlay--size .ds-next__label {
+  font-size: var(--item-label-size, 0.55em);
+}
+.ds-overlay--color.ds-overlay--title .ds-game-name,
+.ds-overlay--color.ds-overlay--notice .ds-left__notice-html {
+  color: inherit;
+}
+.ds-overlay--color.ds-overlay--level .ds-level {
+  color: inherit;
+  background: inherit;
+}
+.ds-overlay--color.ds-overlay--blinds .ds-blinds__val,
+.ds-overlay--color.ds-overlay--blinds .ds-blinds__sep {
+  color: var(--item-color);
+}
+.ds-overlay--label.ds-overlay--blinds .ds-blinds__label {
+  color: var(--item-label);
+}
+.ds-overlay--color.ds-overlay--next .ds-next__val {
+  color: inherit;
+}
+.ds-overlay--label.ds-overlay--next .ds-next__label,
+.ds-overlay--label.ds-overlay--next .ds-next__ante {
+  color: var(--item-label, inherit);
+}
+.ds-item--editing {
+  cursor: grab;
+  outline: 1px dashed rgba(255, 255, 255, 0.35);
+  outline-offset: 6px;
+}
+.ds-item--selected {
+  outline: 2px solid var(--primary, #ffb6c9);
+  outline-offset: 6px;
+  z-index: 4;
+}
+.ds-item--hidden {
+  opacity: 0.32;
+}
+.ds-item--editing:active {
+  cursor: grabbing;
+}
+

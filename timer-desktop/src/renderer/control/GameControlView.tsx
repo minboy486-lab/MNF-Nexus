@@ -1,19 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { TableTimerState, TimerAction } from "@mnf/timer/types";
-import type { GameSession, LeftNotice } from "../../shared/types";
-import { formatTotalElapsedMs, getSessionTotalElapsedMs, noticeHtmlIsEmpty, sanitizeNoticeHtml } from "../../shared/types";
-import { formatNextBreakRemaining, formatRemainingMs, getDisplayRemainingMs } from "@mnf/timer/engine";
+import type { GameSession, LeftNotice, UiThemeId } from "../../shared/types";
+import { noticeHtmlIsEmpty, sanitizeNoticeHtml } from "../../shared/types";
+import { getDisplayRemainingMs } from "@mnf/timer/engine";
 import {
-  formatNextPauseVal,
-  formatPauseBanner,
-  formatTimerLevelHeadline,
   formatTimerLevelShort,
-  isBreakBlind,
-  resolveTimerPauseKind,
 } from "@mnf/timer/levels";
+import type { TimerLook } from "../../shared/timerLook";
 import logoDisplayUrl from "./mnf-logo-display.png";
 import { NoticeRichEditor, type NoticeRichEditorHandle } from "./NoticeRichEditor";
-import { DsBlinds } from "../shared/DsBlinds";
+import { BroadcastStage } from "../shared/BroadcastStage";
 import { useTimerAnnounce } from "../shared/timerAnnounce";
 
 const BROADCAST_W = 1920;
@@ -24,6 +20,8 @@ type Props = {
   state: TableTimerState | undefined;
   pending: boolean;
   error: string | null;
+  timerTheme: UiThemeId;
+  timerLook?: TimerLook | null;
   onBack: () => void;
   onCommand: (action: TimerAction, options?: { minutes?: number; ms?: number; sec?: number }) => void;
   onDeleteGame: () => void;
@@ -140,6 +138,8 @@ export function GameControlView({
   state,
   pending,
   error,
+  timerTheme,
+  timerLook = null,
   onBack,
   onCommand,
   onDeleteGame,
@@ -385,7 +385,6 @@ export function GameControlView({
 
   // 미리보기: 편집 중이면 초안, 아니면 저장된(낙관적) 문구
   const previewNoticeHtml = noticeOpen ? noticeDraft : appliedNotice;
-  const showPreviewNotice = !noticeHtmlIsEmpty(previewNoticeHtml);
 
   // 엔트리 +: 엔트리 +1, 플레이어 +1
   function addEntry() {
@@ -470,40 +469,24 @@ export function GameControlView({
 
   const remainingMs = state ? getDisplayRemainingMs(state) : 0;
   useTimerAnnounce(state, remainingMs);
-  const timerText = !state || state.status === "stopped" ? "—" : formatRemainingMs(remainingMs);
-
-  // 다음 레벨 (break 포함)
-  const currentLevel = state?.blindLevel ?? 1;
-  const gcSortedLevels = state?.levels ? [...state.levels].sort((a,b) => a.level - b.level) : [];
-  const gcCurIdx = gcSortedLevels.findIndex(l => l.level === currentLevel);
-  const nextLevel = gcCurIdx >= 0 ? (gcSortedLevels[gcCurIdx + 1] ?? null) : null;
-  const gcIsBreak = (state?.bigBlind ?? -1) === 0 && (state?.smallBlind ?? -1) === 0 && !!state?.blindStructureId;
-  const gcPauseKind = resolveTimerPauseKind(state);
-
-  // 총 경과 시간 (최초 시작부터, 일시정지 시 멈춤)
-  const totalTimeText = session.startedAt
-    ? formatTotalElapsedMs(getSessionTotalElapsedMs(session))
-    : "—";
-
-  const nextBreakText = formatNextBreakRemaining(state?.levels, currentLevel, remainingMs);
   const statusText =
     state?.status === "running" ? "진행" : state?.status === "paused" ? "일시정지" : "정지";
 
   return (
     <section className="sub-panel">
-      <button type="button" className="back-btn" onClick={onBack}>
-        ← 매장 화면
-      </button>
+        <button type="button" className="back-btn" onClick={onBack}>
+          ← 매장 화면
+        </button>
 
-      <div className="game-head">
-        <div className="game-head__info">
-          <h2>Game {session.gameId}</h2>
-          <p className="muted">{session.structureName}</p>
+        <div className="game-head">
+          <div className="game-head__info">
+            <h2>Game {session.gameId}</h2>
+            <p className="muted">{session.structureName}</p>
+          </div>
+          <span className={`status-pill status-${state?.status ?? "stopped"}`}>
+            {statusText}
+          </span>
         </div>
-        <span className={`status-pill status-${state?.status ?? "stopped"}`}>
-          {statusText}
-        </span>
-      </div>
 
       <div className="gc-body">
         {/* 왼쪽: 타이머 + 조작 */}
@@ -517,91 +500,23 @@ export function GameControlView({
               className="mini-display__viewport"
               style={{ width: BROADCAST_W * miniScale, height: BROADCAST_H * miniScale }}
             >
-              <div
-                className={`ds${state?.status === "running" ? " ds--running" : ""}${state?.status === "paused" ? " ds--paused" : ""}`}
+              <BroadcastStage
+                theme={timerTheme}
+                look={timerLook}
+                session={{ ...session, players, entries, rebuys, addon, bonusChip }}
+                state={state ?? null}
+                logoUrl={logoDisplayUrl}
+                players={players}
+                entries={entries}
+                noticeHtml={previewNoticeHtml}
+                onTimerClick={openTimerPopup}
                 style={{
                   width: BROADCAST_W,
                   height: BROADCAST_H,
                   transform: `scale(${miniScale})`,
                   transformOrigin: "top left",
                 }}
-              >
-                <div className="ds-stage">
-                  <div className="ds-glow ds-glow--a" />
-                  <div className="ds-glow ds-glow--b" />
-                  <img src={logoDisplayUrl} className="ds-bg-logo" alt="" aria-hidden="true" />
-
-                  <div className="ds-title-bar">
-                    <p className="ds-game-name">{session.structureName}</p>
-                  </div>
-
-                  <div className="ds-layout">
-                    <aside className="ds-left">
-                      {showPreviewNotice ? (
-                        <div
-                          className="ds-left__notice-html"
-                          dangerouslySetInnerHTML={{ __html: sanitizeNoticeHtml(previewNoticeHtml) }}
-                        />
-                      ) : null}
-                    </aside>
-
-                    <main className="ds-center">
-                      <p className="ds-level">{formatTimerLevelHeadline(state)}</p>
-                      <button
-                        type="button"
-                        className={`ds-timer${state?.status === "running" ? " ds-timer--running" : ""}${state?.status === "paused" ? " ds-timer--paused" : ""}`}
-                        onClick={(e) => openTimerPopup(e)}
-                        title="클릭하여 시간 직접 설정"
-                      >
-                        {timerText}
-                      </button>
-                      {gcIsBreak ? (
-                        <DsBlinds isBreak pauseLabel={formatPauseBanner(gcPauseKind)} small={0} big={0} ante={0} />
-                      ) : (
-                        <DsBlinds
-                          small={state?.smallBlind ?? 0}
-                          big={state?.bigBlind ?? 0}
-                          ante={state?.ante ?? 0}
-                        />
-                      )}
-                      {nextLevel && (
-                        <div className="ds-next">
-                          {isBreakBlind(nextLevel) ? (
-                            <>
-                              <span className="ds-next__label">NEXT</span>
-                              <span className="ds-next__val">{formatNextPauseVal(nextLevel)}</span>
-                            </>
-                          ) : (
-                            <>
-                              <span className="ds-next__label">NEXT LV.{nextLevel.level}</span>
-                              <span className="ds-next__val">
-                                {nextLevel.small.toLocaleString()} / {nextLevel.big.toLocaleString()}
-                                {nextLevel.ante > 0 && (
-                                  <span className="ds-next__ante"> · Ante {nextLevel.ante.toLocaleString()}</span>
-                                )}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </main>
-
-                    <aside className="ds-right">
-                      <MdStat label="TOTAL TIME" value={totalTimeText} />
-                      <div className="ds-right__div" />
-                      <MdStat label="PLAYER" value={`${players} / ${entries}`} hi />
-                      <div className="ds-right__div" />
-                      <MdStat label="ENTRY" value={String(entries)} />
-                      <MdStat label="REBUY" value={String(totalRebuy)} />
-                      <div className="ds-right__div" />
-                      <MdStat label="TOTAL CHIP" value={totalChip.toLocaleString()} />
-                      <MdStat label="AVG CHIP" value={avgChip.toLocaleString()} />
-                      <div className="ds-right__div" />
-                      <MdStat label="NEXT BREAK" value={nextBreakText} muted={nextBreakText === "—"} />
-                    </aside>
-                  </div>
-                </div>
-              </div>
+              />
             </div>
           </div>
 
@@ -707,7 +622,6 @@ export function GameControlView({
 
         {/* 오른쪽: 카운터 + 칩 */}
         <div className="gc-right">
-          {/* 칩 요약 */}
           <div className="chip-summary">
             <div className="chip-summary__item">
               <span className="chip-summary__label">TOTAL CHIP</span>
@@ -721,13 +635,11 @@ export function GameControlView({
 
           <div className="counter-divider" />
 
-          {/* 총 엔트리 배지 */}
           <div className="rebuy-total-badge">
             <span className="rebuy-total-badge__label">총 엔트리</span>
             <span className="rebuy-total-badge__val">{entries}</span>
           </div>
 
-          {/* 플레이어 (독립) */}
           <CounterRow
             label="플레이어"
             value={players}
@@ -738,7 +650,6 @@ export function GameControlView({
             keyMinus="1" keyPlus="2"
           />
 
-          {/* 엔트리 (엔트리+플레이어 동시) */}
           <CounterRow
             label="엔트리"
             value={entries}
@@ -749,15 +660,12 @@ export function GameControlView({
 
           <div className="counter-divider" />
 
-          {/* 총 리바인 배지 */}
           {session.rebuyCount > 0 && (
             <div className="rebuy-total-badge">
               <span className="rebuy-total-badge__label">총 리바인</span>
               <span className="rebuy-total-badge__val">{totalRebuy}</span>
             </div>
           )}
-
-          {/* 차수별 리바인 */}
           {(() => {
             const REBUY_KEYS = [["A","S"],["Z","X"],["R","T"]];
             return rebuys.map((v, i) => (
@@ -773,7 +681,6 @@ export function GameControlView({
             ));
           })()}
 
-          {/* 애드온 */}
           {session.hasAddon && (
             <>
               <div className="counter-divider" />
@@ -781,21 +688,11 @@ export function GameControlView({
             </>
           )}
 
-          {/* 보너스칩 */}
           {session.hasBonusChip && (
             <CounterRow label="보너스칩" value={bonusChip} onMinus={subBonus} onPlus={addBonus} keyMinus="V" keyPlus="B" />
           )}
         </div>
       </div>
     </section>
-  );
-}
-
-function MdStat({ label, value, hi, muted }: { label: string; value: string; hi?: boolean; muted?: boolean }) {
-  return (
-    <div className="ds-stat">
-      <span className="ds-stat__label">{label}</span>
-      <span className={`ds-stat__val${hi ? " ds-stat__val--hi" : ""}${muted ? " ds-stat__val--muted" : ""}`}>{value}</span>
-    </div>
   );
 }

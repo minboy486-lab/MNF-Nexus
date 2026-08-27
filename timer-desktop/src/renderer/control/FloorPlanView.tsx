@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AppSnapshot, GameSession } from "../../shared/types";
+import type { ControlLook, ControlWidgetId } from "../../shared/controlLook";
+import { ControlLookWrap, FloorSlotLook, type ControlLookEdit } from "./ControlLookWrap";
 import { tableLetter } from "../../shared/types";
 import {
   MISA_MONITOR_HOTKEY,
@@ -13,6 +15,8 @@ import {
 type Props = {
   snapshot: AppSnapshot;
   venueId: string | null | undefined;
+  controlLook?: ControlLook | null;
+  edit?: ControlLookEdit;
   onTableClick: (tableSlot: number, pos: { x: number; y: number }) => void;
   onMonitorClick: (monitorSlot: number, pos: { x: number; y: number }) => void;
 };
@@ -34,10 +38,18 @@ type SlotBtnProps = {
   active: boolean;
   variant: "table" | "table-oval" | "monitor" | "monitor-h" | "map-screen";
   dataSlot?: string;
+  fontPx?: number;
   onClick: (pos: { x: number; y: number }) => void;
 };
 
-function SlotBtn({ label, hotkey, sub, active, variant, dataSlot, onClick }: SlotBtnProps) {
+function slotFontPx(look: ControlLook | null | undefined, id: ControlWidgetId): number | undefined {
+  const w = look?.overlay === true ? look.widgets[id] : undefined;
+  return w?.sizeSet ? w.fontSize : undefined;
+}
+
+function SlotBtn({ label, hotkey, sub, active, variant, dataSlot, fontPx, onClick }: SlotBtnProps) {
+  const labelStyle = fontPx != null ? { fontSize: `${fontPx}px` } : undefined;
+  const hotkeyStyle = fontPx != null ? { fontSize: `${Math.max(8, Math.round(fontPx * 0.5))}px` } : undefined;
   return (
     <button
       type="button"
@@ -50,15 +62,15 @@ function SlotBtn({ label, hotkey, sub, active, variant, dataSlot, onClick }: Slo
       }}
     >
       <span className="slot-btn__face">
-        <span className="slot-btn__label">{label}</span>
+        <span className="slot-btn__label" style={labelStyle}>{label}</span>
         {sub && <span className="slot-btn__sub">{sub}</span>}
-        {hotkey && <span className="slot-btn__hotkey">{hotkey}</span>}
+        {hotkey && <span className="slot-btn__hotkey" style={hotkeyStyle}>{hotkey}</span>}
       </span>
     </button>
   );
 }
 
-function YeoksamFloorPlan({ snapshot, venueId, onTableClick, onMonitorClick }: Props) {
+function YeoksamFloorPlan({ snapshot, venueId, controlLook, edit, onTableClick, onMonitorClick }: Props) {
   function tBtn(slot: number) {
     const s = sessionForTable(snapshot, slot);
     return (
@@ -69,6 +81,7 @@ function YeoksamFloorPlan({ snapshot, venueId, onTableClick, onMonitorClick }: P
         active={!!s}
         variant="table-oval"
         dataSlot={`table-${slot}`}
+        fontPx={slotFontPx(controlLook, `table${slot}` as ControlWidgetId)}
         onClick={(pos) => onTableClick(slot, pos)}
       />
     );
@@ -84,21 +97,30 @@ function YeoksamFloorPlan({ snapshot, venueId, onTableClick, onMonitorClick }: P
         active={!!s}
         variant="map-screen"
         dataSlot={`monitor-${slot}`}
+        fontPx={slotFontPx(controlLook, `monitor${slot}` as ControlWidgetId)}
         onClick={(pos) => onMonitorClick(slot, pos)}
       />
+    );
+  }
+
+  function node(id: ControlWidgetId, className: string, child: ReactNode) {
+    return (
+      <FloorSlotLook id={id} look={controlLook ?? null} edit={edit} className={className}>
+        {child}
+      </FloorSlotLook>
     );
   }
 
   return (
     <div className="floor-plan floor-plan--yeoksam">
       <div className="yeoksam-map">
-        <div className="yeoksam-node yeoksam-node--screen yeoksam-node--dt">{screenBtn(4)}</div>
-        <div className="yeoksam-node yeoksam-node--table yeoksam-node--b">{tBtn(2)}</div>
-        <div className="yeoksam-node yeoksam-node--screen yeoksam-node--bt">{screenBtn(2)}</div>
-        <div className="yeoksam-node yeoksam-node--table yeoksam-node--d">{tBtn(4)}</div>
-        <div className="yeoksam-node yeoksam-node--screen yeoksam-node--ct">{screenBtn(3)}</div>
-        <div className="yeoksam-node yeoksam-node--table yeoksam-node--c">{tBtn(3)}</div>
-        <div className="yeoksam-node yeoksam-node--screen yeoksam-node--bm">{screenBtn(1)}</div>
+        {node("monitor4", "yeoksam-node yeoksam-node--screen yeoksam-node--dt", screenBtn(4))}
+        {node("table2", "yeoksam-node yeoksam-node--table yeoksam-node--b", tBtn(2))}
+        {node("monitor2", "yeoksam-node yeoksam-node--screen yeoksam-node--bt", screenBtn(2))}
+        {node("table4", "yeoksam-node yeoksam-node--table yeoksam-node--d", tBtn(4))}
+        {node("monitor3", "yeoksam-node yeoksam-node--screen yeoksam-node--ct", screenBtn(3))}
+        {node("table3", "yeoksam-node yeoksam-node--table yeoksam-node--c", tBtn(3))}
+        {node("monitor1", "yeoksam-node yeoksam-node--screen yeoksam-node--bm", screenBtn(1))}
       </div>
     </div>
   );
@@ -114,7 +136,7 @@ function YeoksamFloorPlan({ snapshot, venueId, onTableClick, onMonitorClick }: P
  *         [A]
  *      [A모니터]
  */
-function DefaultFloorPlan({ snapshot, venueId, onTableClick, onMonitorClick }: Props) {
+function DefaultFloorPlan({ snapshot, venueId, controlLook, edit, onTableClick, onMonitorClick }: Props) {
   const rowRef = useRef<HTMLDivElement>(null);
   const [monitorSize, setMonitorSize] = useState(68);
 
@@ -130,6 +152,14 @@ function DefaultFloorPlan({ snapshot, venueId, onTableClick, onMonitorClick }: P
     return () => ro.disconnect();
   }, []);
 
+  function slot(id: ControlWidgetId, child: ReactNode) {
+    return (
+      <FloorSlotLook id={id} look={controlLook ?? null} edit={edit} className="floor-slot-look--misa">
+        {child}
+      </FloorSlotLook>
+    );
+  }
+
   function tBtn(slot: number) {
     const s = sessionForTable(snapshot, slot);
     return (
@@ -140,6 +170,7 @@ function DefaultFloorPlan({ snapshot, venueId, onTableClick, onMonitorClick }: P
         active={!!s}
         variant="table-oval"
         dataSlot={`table-${slot}`}
+        fontPx={slotFontPx(controlLook, `table${slot}` as ControlWidgetId)}
         onClick={(pos) => onTableClick(slot, pos)}
       />
     );
@@ -155,6 +186,7 @@ function DefaultFloorPlan({ snapshot, venueId, onTableClick, onMonitorClick }: P
         active={!!s}
         variant="monitor"
         dataSlot={`monitor-${slot}`}
+        fontPx={slotFontPx(controlLook, `monitor${slot}` as ControlWidgetId)}
         onClick={(pos) => onMonitorClick(slot, pos)}
       />
     );
@@ -170,6 +202,7 @@ function DefaultFloorPlan({ snapshot, venueId, onTableClick, onMonitorClick }: P
         active={!!s}
         variant="monitor-h"
         dataSlot={`monitor-${slot}`}
+        fontPx={slotFontPx(controlLook, `monitor${slot}` as ControlWidgetId)}
         onClick={(pos) => onMonitorClick(slot, pos)}
       />
     );
@@ -180,27 +213,31 @@ function DefaultFloorPlan({ snapshot, venueId, onTableClick, onMonitorClick }: P
       className="floor-plan floor-plan--misa"
       style={{ ["--monitor-size" as string]: `${monitorSize}px` }}
     >
-      <div className="floor-cell floor-cell--monitor misa-e-m" ref={rowRef}>{mBtn(5)}</div>
-      <div className="floor-cell floor-cell--table misa-e-t">{tBtn(5)}</div>
+      <div className="floor-cell floor-cell--monitor misa-e-m" ref={rowRef}>{slot("monitor5", mBtn(5))}</div>
+      <div className="floor-cell floor-cell--table misa-e-t">{slot("table5", tBtn(5))}</div>
 
-      <div className="floor-cell floor-cell--monitor misa-c-m">{mBtn(3)}</div>
-      <div className="floor-cell floor-cell--table misa-c-t">{tBtn(3)}</div>
+      <div className="floor-cell floor-cell--monitor misa-c-m">{slot("monitor3", mBtn(3))}</div>
+      <div className="floor-cell floor-cell--table misa-c-t">{slot("table3", tBtn(3))}</div>
 
-      <div className="floor-cell floor-cell--table misa-a-t">{tBtn(1)}</div>
-      <div className="floor-cell floor-cell--table floor-cell--center misa-a-m">{mHBtn(1)}</div>
+      <div className="floor-cell floor-cell--table misa-a-t">{slot("table1", tBtn(1))}</div>
+      <div className="floor-cell floor-cell--table floor-cell--center misa-a-m">{slot("monitor1", mHBtn(1))}</div>
 
-      <div className="floor-cell floor-cell--table misa-d-t">{tBtn(4)}</div>
-      <div className="floor-cell floor-cell--monitor misa-d-m">{mBtn(4)}</div>
+      <div className="floor-cell floor-cell--table misa-d-t">{slot("table4", tBtn(4))}</div>
+      <div className="floor-cell floor-cell--monitor misa-d-m">{slot("monitor4", mBtn(4))}</div>
 
-      <div className="floor-cell floor-cell--table misa-b-t">{tBtn(2)}</div>
-      <div className="floor-cell floor-cell--monitor misa-b-m">{mBtn(2)}</div>
+      <div className="floor-cell floor-cell--table misa-b-t">{slot("table2", tBtn(2))}</div>
+      <div className="floor-cell floor-cell--monitor misa-b-m">{slot("monitor2", mBtn(2))}</div>
     </div>
   );
 }
 
 export function FloorPlanView(props: Props) {
-  if (isYeoksamFloor(props.venueId)) {
-    return <YeoksamFloorPlan {...props} />;
-  }
-  return <DefaultFloorPlan {...props} />;
+  const inner = isYeoksamFloor(props.venueId)
+    ? <YeoksamFloorPlan {...props} />
+    : <DefaultFloorPlan {...props} />;
+  return (
+    <ControlLookWrap id="floor" look={props.controlLook ?? null} edit={props.edit} className="ctrl-look-wrap--floor">
+      {inner}
+    </ControlLookWrap>
+  );
 }

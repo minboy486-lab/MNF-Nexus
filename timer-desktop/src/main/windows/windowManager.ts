@@ -1,6 +1,14 @@
 import { BrowserWindow, screen } from "electron";
 import type { AppConfig, GameSession, MonitorSlot, UiThemeId } from "../../shared/types";
-import { DEFAULT_SOUND_VOLUME, normalizeSoundVolume, normalizeUiTheme } from "../../shared/types";
+import {
+  DEFAULT_SOUND_VOLUME,
+  normalizeSoundVolume,
+  normalizeUiTheme,
+  resolveControlTheme,
+  resolveTimerTheme,
+} from "../../shared/types";
+import { normalizeTimerLook, normalizeSavedTimerThemes, resolveActiveTimerThemeId, shopTimerThemeEqual, shopTimerThemeFromConfig, withShopTimerTheme, type ShopTimerThemePayload, type TimerLook } from "../../shared/timerLook";
+import { normalizeControlLook, normalizeSavedControlThemes, resolveActiveControlThemeId, type ControlLook } from "../../shared/controlLook";
 import type { TableTimerState } from "@mnf/timer/types";
 import { configNeedsSetup, getDisplayMappings } from "../config/configStore";
 import {
@@ -103,6 +111,8 @@ export class WindowManager {
       this.displayWindows.delete(id);
     }
     this.broadcastTheme();
+    this.broadcastTimerLook();
+    this.broadcastControlLook();
     this.broadcastSoundVolume();
     this.timerHub?.pushAllMonitors();
   }
@@ -134,13 +144,109 @@ export class WindowManager {
     this.soundVolume = next.soundVolume ?? DEFAULT_SOUND_VOLUME;
     await this.syncWindows();
     this.broadcastTheme();
+    this.broadcastTimerLook();
+    this.broadcastControlLook();
     this.broadcastSoundVolume();
     this.timerHub?.pushAllMonitors();
     this.timerHub?.pushSnapshotToControl();
   }
 
   getTheme(): UiThemeId {
-    return normalizeUiTheme(this.config?.theme);
+    return this.getTimerTheme();
+  }
+
+  getControlTheme(): UiThemeId {
+    return resolveControlTheme(this.config);
+  }
+
+  getTimerTheme(): UiThemeId {
+    return resolveTimerTheme(this.config);
+  }
+
+  getTimerLook(): TimerLook | null {
+    return normalizeTimerLook(this.config?.timerLook, this.getTimerTheme());
+  }
+
+  getSavedTimerThemes() {
+    return normalizeSavedTimerThemes(this.config?.savedTimerThemes, this.getTimerTheme());
+  }
+
+  getActiveTimerThemeId(): string {
+    return resolveActiveTimerThemeId(this.config);
+  }
+
+  getControlLook(): ControlLook | null {
+    return normalizeControlLook(this.config?.controlLook, this.getControlTheme());
+  }
+
+  getSavedControlThemes() {
+    return normalizeSavedControlThemes(this.config?.savedControlThemes, this.getControlTheme());
+  }
+
+  getActiveControlThemeId(): string {
+    return resolveActiveControlThemeId(this.config);
+  }
+
+  themesPayload() {
+    return {
+      controlTheme: this.getControlTheme(),
+      timerTheme: this.getTimerTheme(),
+      activeTimerThemeId: this.getActiveTimerThemeId(),
+      savedTimerThemes: this.getSavedTimerThemes(),
+      activeControlThemeId: this.getActiveControlThemeId(),
+      savedControlThemes: this.getSavedControlThemes(),
+    };
+  }
+
+  getShopTimerTheme(): ShopTimerThemePayload | null {
+    if (!this.config) return null;
+    return shopTimerThemeFromConfig(this.config);
+  }
+
+  applyShopTimerTheme(pack: ShopTimerThemePayload): boolean {
+    if (!this.config) return false;
+    const next = withShopTimerTheme(this.config, pack);
+    if (shopTimerThemeEqual(shopTimerThemeFromConfig(this.config), shopTimerThemeFromConfig(next))) {
+      return false;
+    }
+    this.config = next;
+    this.broadcastTheme();
+    this.broadcastTimerLook();
+    return true;
+  }
+
+  setTimerLook(look: TimerLook | null): void {
+    if (!this.config) return;
+    this.config = { ...this.config, timerLook: look };
+    this.broadcastTimerLook();
+  }
+
+  setControlLook(look: ControlLook | null): void {
+    if (!this.config) return;
+    this.config = { ...this.config, controlLook: look };
+    this.broadcastControlLook();
+  }
+
+  broadcastControlLook(): void {
+    const look = this.getControlLook();
+    if (this.controlWindow && !this.controlWindow.isDestroyed()) {
+      this.controlWindow.webContents.send("controlLook:update", look);
+    }
+  }
+
+  broadcastTimerLookToDisplays(look: TimerLook | null): void {
+    const next = look ? normalizeTimerLook(look, this.getTimerTheme()) : null;
+    for (const win of this.getAllDisplayWindows()) {
+      win.webContents.send("timerLook:update", next);
+    }
+  }
+
+  broadcastTimerLook(): void {
+    const look = this.getTimerLook();
+    if (this.controlWindow && !this.controlWindow.isDestroyed()) {
+      this.controlWindow.webContents.send("timerLook:update", look);
+    }
+    this.broadcastTimerLookToDisplays(look);
   }
 
   getSoundVolume(): number {
@@ -157,13 +263,13 @@ export class WindowManager {
   }
 
   broadcastTheme(): void {
-    const theme = this.getTheme();
+    const timerTheme = this.getTimerTheme();
     if (this.controlWindow && !this.controlWindow.isDestroyed()) {
-      this.controlWindow.webContents.send("theme:update", theme);
+      this.controlWindow.webContents.send("themes:update", this.themesPayload());
     }
     for (const entry of this.displayWindows.values()) {
       if (!entry.win.isDestroyed()) {
-        entry.win.webContents.send("theme:update", theme);
+        entry.win.webContents.send("theme:update", timerTheme);
       }
     }
   }
@@ -215,7 +321,9 @@ export class WindowManager {
     this.controlWindow.webContents.on("did-finish-load", () => {
       this.timerHub?.pushSnapshotToControl();
       if (this.controlWindow && !this.controlWindow.isDestroyed()) {
-        this.controlWindow.webContents.send("theme:update", this.getTheme());
+        this.controlWindow.webContents.send("themes:update", this.themesPayload());
+        this.controlWindow.webContents.send("timerLook:update", this.getTimerLook());
+        this.controlWindow.webContents.send("controlLook:update", this.getControlLook());
         this.controlWindow.webContents.send("soundVolume:update", this.getSoundVolume());
       }
     });
@@ -283,7 +391,8 @@ export class WindowManager {
     win.webContents.on("did-finish-load", () => {
       this.timerHub?.hydrateNewDisplay(monitorSlot);
       if (!win.isDestroyed()) {
-        win.webContents.send("theme:update", this.getTheme());
+        win.webContents.send("theme:update", this.getTimerTheme());
+        win.webContents.send("timerLook:update", this.getTimerLook());
         win.webContents.send("soundVolume:update", this.getSoundVolume());
       }
     });

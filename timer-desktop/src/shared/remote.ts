@@ -1,4 +1,5 @@
 import type { AppSnapshot, GameSession, YeoksamRole } from "./types";
+import type { ShopTimerThemePayload } from "./timerLook";
 import type { TableTimerState, TimerAction, BlindStructureOption } from "@mnf/timer/types";
 
 export const REMOTE_PORT = 17890;
@@ -70,7 +71,9 @@ export type RemoteClientMsg =
       timers: TableTimerState[];
       serverNow: number;
       yeoksamRole?: YeoksamRole;
-    };
+      timerTheme?: ShopTimerThemePayload;
+    }
+  | ({ type: "peer_timer_theme" } & ShopTimerThemePayload);
 
 export type RemoteStaffState = {
   name: string;
@@ -87,6 +90,7 @@ export type RemotePeerSnapshot = {
   timers: TableTimerState[];
   serverNow: number;
   yeoksamRole?: YeoksamRole;
+  timerTheme?: ShopTimerThemePayload;
 };
 
 export type RemoteServerMsg =
@@ -101,6 +105,7 @@ export type RemoteServerMsg =
       hostname?: string;
       yeoksamRole?: YeoksamRole;
       peers?: RemotePeerSnapshot[];
+      timerTheme?: ShopTimerThemePayload;
     }
   | { type: "view_ok"; gameId: number; theme: string; soundVolume: number; serverNow: number }
   | { type: "error"; error: string };

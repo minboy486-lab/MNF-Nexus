@@ -1,7 +1,9 @@
 /* ── Theme tokens ─────────────────────────────────────────
+ * html[data-theme]                 = 컨트롤 화면 (및 송출 창 전체 배경)
+ * .ds[data-theme]                  = TV 타이머 블록 (미리보기 포함)
  * :root / data-theme="black-pink"  = 기본 다크 핑크
  * data-theme="mnf-original"        = 화이트 + 로고 보라~빨강
- * data-theme="cherry-blossom"      = 연한 벚꽃 + 소프트 라일락
+ * data-theme="cherry-blossom"      = 연한 벚꽃 + 진한 장미~코랄
  */
 
 :root,
@@ -142,7 +144,7 @@
   --card-shadow:       0 1px 2px rgba(60, 30, 100, 0.04), 0 8px 28px rgba(60, 30, 100, 0.06);
 }
 
-/* ── Cherry Blossom: 연한 벚꽃 + 세련된 소프트 라일락 ─────── */
+/* ── Cherry Blossom: 연한 벚꽃 + 진한 장미~코랄 ───────────── */
 [data-theme="cherry-blossom"] {
   color-scheme: light;
 
@@ -156,20 +158,20 @@
   --border:            rgba(180, 130, 170, 0.22);
   --border-bright:     rgba(180, 130, 170, 0.38);
 
-  /* 짙은 보라 대신 소프트 라일락 */
-  --primary:           #c9a4e8;
-  --primary-dim:       #d8bceb;
-  --primary-bg:        rgba(201, 164, 232, 0.14);
-  --primary-bg-hover:  rgba(201, 164, 232, 0.28);
-  --primary-border:    rgba(201, 164, 232, 0.55);
-  --primary-border-hi: rgba(186, 140, 220, 0.85);
-  --primary-glow:      rgba(201, 164, 232, 0.35);
+  /* TV 대비: 로고 보라가 아닌 벚꽃 장미~코랄 */
+  --primary:           #c44569;
+  --primary-dim:       #d66a88;
+  --primary-bg:        rgba(196, 69, 105, 0.10);
+  --primary-bg-hover:  rgba(196, 69, 105, 0.22);
+  --primary-border:    rgba(196, 69, 105, 0.48);
+  --primary-border-hi: rgba(196, 69, 105, 0.78);
+  --primary-glow:      rgba(196, 69, 105, 0.40);
 
-  --secondary:         #f2a8c4;
-  --secondary-bg:      rgba(242, 168, 196, 0.12);
-  --secondary-border:  rgba(242, 168, 196, 0.45);
+  --secondary:         #e07050;
+  --secondary-bg:      rgba(224, 112, 80, 0.12);
+  --secondary-border:  rgba(224, 112, 80, 0.42);
 
-  --purple:            #c9a4e8;
+  --purple:            #c97a9a;
   --blue:              #a8b8f0;
   --green:             #7bc9a0;
   --yellow:            #e8c878;
@@ -183,20 +185,20 @@
   --muted:             rgba(120, 95, 130, 0.58);
   --muted-strong:      rgba(120, 95, 130, 0.45);
 
-  --glow-a:            rgba(242, 168, 196, 0.28);
-  --glow-b:            rgba(201, 164, 232, 0.22);
-  --ds-glow-a:         rgba(242, 168, 196, 0.22);
-  --ds-glow-b:         rgba(201, 164, 232, 0.18);
+  --glow-a:            rgba(196, 69, 105, 0.22);
+  --glow-b:            rgba(224, 112, 80, 0.16);
+  --ds-glow-a:         rgba(196, 69, 105, 0.18);
+  --ds-glow-b:         rgba(224, 112, 80, 0.14);
 
   --logo-opacity:      0.11;
   --logo-filter:       none;
   --popup-bg:          #ffffff;
   --popup-shadow:      0 20px 48px rgba(120, 70, 100, 0.12), 0 0 0 1px rgba(180, 130, 170, 0.1);
   --overlay-scrim:     rgba(80, 50, 70, 0.22);
-  --title-shadow:      0 2px 16px rgba(201, 164, 232, 0.2);
-  --level-pill-bg:     #c4a0e0;
+  --title-shadow:      0 2px 16px rgba(196, 69, 105, 0.18);
+  --level-pill-bg:     #c44569;
   --level-pill-fg:     #ffffff;
-  --timer-gradient:    linear-gradient(180deg, #c9a4e8 5%, #e8b4d0 55%, #f2a8c4 100%);
+  --timer-gradient:    linear-gradient(180deg, #c44569 6%, #e07050 100%);
 
   --danger:            #b54458;
   --danger-bg:         rgba(181, 68, 88, 0.12);
@@ -204,10 +206,10 @@
   --warning:           #8a6210;
   --warning-bg:        rgba(196, 140, 40, 0.16);
   --warning-border:    rgba(168, 110, 24, 0.42);
-  --cta-bg:            #9b72c4;
+  --cta-bg:            #c44569;
   --cta-fg:            #ffffff;
-  --cta-border:        #9b72c4;
-  --btn-hover:         rgba(201, 164, 232, 0.22);
+  --cta-border:        #c44569;
+  --btn-hover:         rgba(196, 69, 105, 0.12);
   --placeholder:       rgba(74, 61, 88, 0.4);
   --notice-panel-bg:   #ffffff;
   --card-shadow:       0 1px 2px rgba(80, 40, 70, 0.04), 0 8px 28px rgba(80, 40, 70, 0.06);

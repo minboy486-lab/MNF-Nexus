@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { TableTimerState } from "@mnf/timer/types";
 import type { GameSession, UiThemeId } from "../shared/types";
+import type { TimerLook } from "../shared/timerLook";
 
 function readMonitorSlot(): number {
   const params = new URLSearchParams(window.location.search);
@@ -43,6 +44,12 @@ contextBridge.exposeInMainWorld("displayApi", {
     ipcRenderer.on("theme:update", h);
     return () => ipcRenderer.removeListener("theme:update", h);
   },
+  getTimerLook: () => ipcRenderer.invoke("timerLook:get") as Promise<TimerLook | null>,
+  onTimerLookUpdate: (cb: (look: TimerLook | null) => void) => {
+    const h = (_e: Electron.IpcRendererEvent, look: TimerLook | null) => cb(look);
+    ipcRenderer.on("timerLook:update", h);
+    return () => ipcRenderer.removeListener("timerLook:update", h);
+  },
   getSoundVolume: () => ipcRenderer.invoke("soundVolume:get") as Promise<number>,
   onSoundVolumeUpdate: (cb: (volume: number) => void) => {
     const h = (_e: Electron.IpcRendererEvent, volume: number) => cb(volume);
@@ -68,6 +75,8 @@ declare global {
       getDisplayLabel: () => string;
       getTheme: () => Promise<UiThemeId>;
       onThemeUpdate: (cb: (theme: UiThemeId) => void) => () => void;
+      getTimerLook: () => Promise<TimerLook | null>;
+      onTimerLookUpdate: (cb: (look: TimerLook | null) => void) => () => void;
       getSoundVolume: () => Promise<number>;
       onSoundVolumeUpdate: (cb: (volume: number) => void) => () => void;
       onTimerUpdate: (cb: (state: TableTimerState) => void) => () => void;

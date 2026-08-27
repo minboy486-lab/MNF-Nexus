@@ -7,13 +7,13 @@ import {
   type RemotePeerSnapshot,
   type RemoteServerMsg,
 } from "../../shared/remote";
-import type { AppSnapshot } from "../../shared/types";
+import type { AppSnapshot, YeoksamRole } from "../../shared/types";
+import type { ShopTimerThemePayload } from "../../shared/timerLook";
 import type { TableTimerState } from "@mnf/timer/types";
 import { discoverLanCluster, type LanClusterHello } from "./lanDiscover";
 import { listLanIPv4 } from "./lan";
 import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 import { isYeoksamFloor } from "../../shared/floorPlan";
-import type { YeoksamRole } from "../../shared/types";
 
 const TICK_MS = 8000;
 const EMPTY_SNAP: AppSnapshot = {
@@ -88,6 +88,7 @@ export class LanCluster {
         serverNow: number;
         hostname: string;
       };
+      getShopTimerTheme: () => ShopTimerThemePayload | null;
       onPeersChange: () => void;
     },
   ) {}
@@ -162,6 +163,7 @@ export class LanCluster {
       timers: snap.timers ?? prev?.timers ?? [],
       serverNow: typeof snap.serverNow === "number" ? snap.serverNow : (prev?.serverNow ?? Date.now()),
       yeoksamRole: snap.yeoksamRole ?? prev?.yeoksamRole,
+      timerTheme: snap.timerTheme ?? prev?.timerTheme,
     });
     if (
       !prev ||
@@ -169,7 +171,8 @@ export class LanCluster {
       prev.hostname !== snap.hostname ||
       prev.yeoksamRole !== snap.yeoksamRole ||
       prev.snapshot !== snap.snapshot ||
-      prev.timers !== snap.timers
+      prev.timers !== snap.timers ||
+      prev.timerTheme !== snap.timerTheme
     ) {
       this.opts.onPeersChange();
     }
@@ -267,9 +270,20 @@ export class LanCluster {
     return this.forward(peer.host, msg);
   }
 
+  broadcastToPeers(msg: RemoteClientMsg): void {
+    const raw = JSON.stringify(msg);
+    const seen = new Set<WebSocket>();
+    for (const ws of [...this.outbound.values(), ...this.inbound.values()]) {
+      if (seen.has(ws) || ws.readyState !== WebSocket.OPEN) continue;
+      seen.add(ws);
+      ws.send(raw);
+    }
+  }
+
   pushLocalSnapshot(): void {
     if (this.isShopFollower()) return;
     const local = this.opts.getOwnedSnapshot();
+    const timerTheme = this.opts.getShopTimerTheme() ?? undefined;
     const msg: RemoteClientMsg = {
       type: "peer_snapshot",
       hostname: local.hostname,
@@ -277,6 +291,7 @@ export class LanCluster {
       timers: local.timers,
       serverNow: local.serverNow,
       yeoksamRole: this.opts.getYeoksamRole(),
+      timerTheme,
     };
     const raw = JSON.stringify(msg);
     for (const ws of this.outbound.values()) {
@@ -358,6 +373,7 @@ export class LanCluster {
           timers: local.timers,
           serverNow: local.serverNow,
           yeoksamRole: this.opts.getYeoksamRole(),
+          timerTheme: this.opts.getShopTimerTheme() ?? undefined,
         };
         ws.send(JSON.stringify(snap));
       }
@@ -385,6 +401,7 @@ export class LanCluster {
         timers: msg.timers ?? [],
         serverNow: typeof msg.serverNow === "number" ? msg.serverNow : Date.now(),
         yeoksamRole: msg.yeoksamRole,
+        timerTheme: msg.timerTheme,
       });
     });
     ws.on("close", () => {

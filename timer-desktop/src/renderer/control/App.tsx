@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import type { BlindStructureOption, TableTimerState } from "@mnf/timer/types";
-import type { AppConfig, AppSnapshot, DisplayInfo, GameSession, UiThemeId } from "../../shared/types";
+import type { AppConfig, AppSnapshot, DisplayInfo, GameSession, ThemeSurface, UiThemeId } from "../../shared/types";
 import type { RemotePairingInfo } from "../../shared/remote";
 import type { LanDiscoveredGame, LanViewState } from "../../shared/lanView";
 import {
@@ -9,10 +9,34 @@ import {
   DEFAULT_UI_THEME,
   normalizeSoundVolume,
   normalizeUiTheme,
+  resolveControlTheme,
+  resolveTimerTheme,
   tableName,
   UI_THEME_OPTIONS,
+  UI_THEME_SWATCHES,
+  isUiThemeId,
+  withUiThemes,
 } from "../../shared/types";
 import { APP_VERSION, APP_VERSION_LABEL } from "../../shared/appVersion";
+import {
+  overlayFromTheme,
+  normalizeTimerLook,
+  normalizeSavedTimerThemes,
+  resolveActiveTimerThemeId,
+  savedThemeSwatch,
+  type SavedTimerTheme,
+  type TimerLook,
+} from "../../shared/timerLook";
+import {
+  overlayFromControlTheme,
+  normalizeControlLook,
+  normalizeSavedControlThemes,
+  resolveActiveControlThemeId,
+  savedControlThemeSwatch,
+  applyControlLookToDocument,
+  type SavedControlTheme,
+  type ControlLook,
+} from "../../shared/controlLook";
 import { AssignPopup } from "./AssignPopup";
 import headerLogoUrl from "./mnf-logo.png";
 import { BlindSelectView } from "./BlindSelectView";
@@ -22,6 +46,9 @@ import { GameControlView } from "./GameControlView";
 import { GameListView } from "./GameListView";
 import { MonitorPreviewView } from "./MonitorPreviewView";
 import { SetupScreen } from "./SetupScreen";
+import { TimerLookEditor } from "./TimerLookEditor";
+import { ControlLookEditor } from "./ControlLookEditor";
+import { ControlLookWrap } from "./ControlLookWrap";
 import { playTimerVolumePreview, setTimerSoundVolume } from "../shared/timerAnnounce";
 import { KNOWN_VENUES, YEOKSAM_VENUE_ID, isKnownVenueId, venueName } from "@mnf/venue";
 
@@ -31,7 +58,11 @@ type View =
   | { kind: "game-control"; session: GameSession }
   | { kind: "monitor-preview"; slot: number }
   | { kind: "setup" }
-  | { kind: "lan-view"; title: string };
+  | { kind: "lan-view"; title: string }
+  | { kind: "timer-look" }
+  | { kind: "control-look" };
+
+type ThemeMenu = "pick" | ThemeSurface | null;
 
 type Popup =
   | { kind: "table"; slot: number; pos: { x: number; y: number } }
@@ -52,7 +83,8 @@ export function App() {
   const [remoteInfo, setRemoteInfo] = useState<RemotePairingInfo | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrSrc, setQrSrc] = useState<string | null>(null);
-  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const [themeMenu, setThemeMenu] = useState<ThemeMenu>(null);
+  const [designMenu, setDesignMenu] = useState(false);
   const [venueMenuOpen, setVenueMenuOpen] = useState(false);
   const [venuePinFor, setVenuePinFor] = useState<string | null>(null);
   const [venuePin, setVenuePin] = useState("");
@@ -62,7 +94,14 @@ export function App() {
   const [lanLeaveConfirm, setLanLeaveConfirm] = useState(false);
   const [lanViewState, setLanViewState] = useState<LanViewState | null>(null);
   const [updaterStatus, setUpdaterStatus] = useState<{ status: string; version?: string; percent?: number; message?: string } | null>(null);
-  const [theme, setTheme] = useState<UiThemeId>(DEFAULT_UI_THEME);
+  const [controlTheme, setControlTheme] = useState<UiThemeId>(DEFAULT_UI_THEME);
+  const [timerTheme, setTimerTheme] = useState<UiThemeId>(DEFAULT_UI_THEME);
+  const [timerLook, setTimerLook] = useState<TimerLook | null>(null);
+  const [savedTimerThemes, setSavedTimerThemes] = useState<SavedTimerTheme[]>([]);
+  const [activeTimerThemeId, setActiveTimerThemeId] = useState<string>(DEFAULT_UI_THEME);
+  const [controlLook, setControlLook] = useState<ControlLook | null>(null);
+  const [savedControlThemes, setSavedControlThemes] = useState<SavedControlTheme[]>([]);
+  const [activeControlThemeId, setActiveControlThemeId] = useState<string>(DEFAULT_UI_THEME);
   const [soundVolume, setSoundVolume] = useState(DEFAULT_SOUND_VOLUME);
 
   const [displays, setDisplays] = useState<DisplayInfo[]>([]);
@@ -92,9 +131,17 @@ export function App() {
       setSnapshot(snap);
       setTimers(allTimers);
       if (remote) setRemoteInfo(remote);
-      const nextTheme = normalizeUiTheme(cfg?.theme);
-      setTheme(nextTheme);
-      applyDocumentTheme(nextTheme);
+      const nextControl = resolveControlTheme(cfg);
+      const nextTimer = resolveTimerTheme(cfg);
+      setControlTheme(nextControl);
+      setTimerTheme(nextTimer);
+      applyDocumentTheme(nextControl);
+      setTimerLook(normalizeTimerLook(cfg?.timerLook, nextTimer));
+      setSavedTimerThemes(normalizeSavedTimerThemes(cfg?.savedTimerThemes, nextTimer));
+      setActiveTimerThemeId(resolveActiveTimerThemeId(cfg));
+      setControlLook(normalizeControlLook(cfg?.controlLook, nextControl));
+      setSavedControlThemes(normalizeSavedControlThemes(cfg?.savedControlThemes, nextControl));
+      setActiveControlThemeId(resolveActiveControlThemeId(cfg));
       const nextVolume = normalizeSoundVolume(cfg?.soundVolume);
       setSoundVolume(nextVolume);
       setTimerSoundVolume(nextVolume);
@@ -124,15 +171,31 @@ export function App() {
       });
     });
     const unsubUpdater = window.controlApi.onUpdaterStatus(setUpdaterStatus);
-    const unsubTheme = window.controlApi.onThemeUpdate((t) => {
-      const next = normalizeUiTheme(t);
-      setTheme(next);
-      applyDocumentTheme(next);
+    const unsubThemes = window.controlApi.onThemesUpdate((t) => {
+      const nextControl = normalizeUiTheme(t.controlTheme);
+      const nextTimer = normalizeUiTheme(t.timerTheme);
+      setControlTheme(nextControl);
+      setTimerTheme(nextTimer);
+      applyDocumentTheme(nextControl);
+      if (t.savedTimerThemes) {
+        setSavedTimerThemes(normalizeSavedTimerThemes(t.savedTimerThemes, nextTimer));
+      }
+      if (t.activeTimerThemeId) setActiveTimerThemeId(t.activeTimerThemeId);
+      if (t.savedControlThemes) {
+        setSavedControlThemes(normalizeSavedControlThemes(t.savedControlThemes, nextControl));
+      }
+      if (t.activeControlThemeId) setActiveControlThemeId(t.activeControlThemeId);
     });
     const unsubVolume = window.controlApi.onSoundVolumeUpdate((v) => {
       const next = normalizeSoundVolume(v);
       setSoundVolume(next);
       setTimerSoundVolume(next);
+    });
+    const unsubLook = window.controlApi.onTimerLookUpdate((next) => {
+      setTimerLook(normalizeTimerLook(next));
+    });
+    const unsubControlLook = window.controlApi.onControlLookUpdate((next) => {
+      setControlLook(normalizeControlLook(next));
     });
     const unsubLan = window.controlApi.onLanViewState(setLanViewState);
 
@@ -142,11 +205,17 @@ export function App() {
       unsubTimers();
       unsubTimerPatch();
       unsubUpdater();
-      unsubTheme();
+      unsubThemes();
       unsubVolume();
+      unsubLook();
+      unsubControlLook();
       unsubLan();
     };
   }, [refresh]);
+
+  useEffect(() => {
+    applyControlLookToDocument(controlLook);
+  }, [controlLook]);
 
   useEffect(() => {
     const id = window.setInterval(() => setTick((t) => t + 1), 1000);
@@ -202,28 +271,184 @@ export function App() {
     };
   }, [qrOpen, remoteInfo?.urls, remoteInfo?.punchToken]);
 
-  const handleSetTheme = useCallback(async (next: UiThemeId) => {
-    applyDocumentTheme(next);
-    setTheme(next);
-    setConfig((prev) => (prev ? { ...prev, theme: next } : prev));
-    const result = await window.controlApi.setTheme(next);
+  const applyTimerThemeResult = useCallback(
+    (result: {
+      timerTheme?: UiThemeId;
+      activeTimerThemeId?: string;
+      look: TimerLook | null;
+      savedTimerThemes: SavedTimerTheme[];
+    }) => {
+      const nextTimer = result.timerTheme ? normalizeUiTheme(result.timerTheme) : timerTheme;
+      if (result.timerTheme) setTimerTheme(nextTimer);
+      setTimerLook(result.look);
+      setSavedTimerThemes(result.savedTimerThemes);
+      if (result.activeTimerThemeId) setActiveTimerThemeId(result.activeTimerThemeId);
+      setConfig((prev) =>
+        prev
+          ? {
+              ...prev,
+              timerTheme: nextTimer,
+              activeTimerThemeId: result.activeTimerThemeId ?? prev.activeTimerThemeId,
+              timerLook: result.look,
+              savedTimerThemes: result.savedTimerThemes,
+            }
+          : prev,
+      );
+    },
+    [timerTheme],
+  );
+
+  const handleSetTheme = useCallback(async (surface: ThemeSurface, next: UiThemeId) => {
+    if (surface === "control") {
+      applyDocumentTheme(next);
+      setControlTheme(next);
+      setConfig((prev) => (prev ? withUiThemes(prev, { controlTheme: next }) : prev));
+      const result = await window.controlApi.setTheme(surface, next);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setThemeMenu(null);
+      setSettingsOpen(false);
+      return;
+    }
+    const result = await window.controlApi.selectTimerTheme(next);
     if (!result.ok) {
       setError(result.error);
       return;
     }
-    setThemeMenuOpen(false);
+    applyTimerThemeResult(result);
+    setThemeMenu(null);
     setSettingsOpen(false);
-  }, []);
+  }, [applyTimerThemeResult]);
+
+  const handleSelectTimerTheme = useCallback(async (id: string) => {
+    const result = await window.controlApi.selectTimerTheme(id);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    applyTimerThemeResult(result);
+    setThemeMenu(null);
+    setSettingsOpen(false);
+  }, [applyTimerThemeResult]);
+
+  const handleSaveTimerTheme = useCallback(async (name: string, look: TimerLook, updateId?: string) => {
+    const result = await window.controlApi.saveTimerTheme({
+      name,
+      look: { ...look, overlay: true },
+      id: updateId,
+    });
+    if (!result.ok) return result;
+    applyTimerThemeResult(result);
+    return { ok: true as const, id: result.saved.id };
+  }, [applyTimerThemeResult]);
+
+  const handleDeleteTimerTheme = useCallback(async (id: string) => {
+    const result = await window.controlApi.deleteTimerTheme(id);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    applyTimerThemeResult(result);
+  }, [applyTimerThemeResult]);
+
+  const applyControlThemeResult = useCallback(
+    (result: {
+      controlTheme?: UiThemeId;
+      activeControlThemeId?: string;
+      look: ControlLook | null;
+      savedControlThemes: SavedControlTheme[];
+    }) => {
+      const nextControl = result.controlTheme ? normalizeUiTheme(result.controlTheme) : controlTheme;
+      if (result.controlTheme) {
+        setControlTheme(nextControl);
+        applyDocumentTheme(nextControl);
+      }
+      setControlLook(result.look);
+      setSavedControlThemes(result.savedControlThemes);
+      if (result.activeControlThemeId) setActiveControlThemeId(result.activeControlThemeId);
+      setConfig((prev) =>
+        prev
+          ? {
+              ...prev,
+              controlTheme: nextControl,
+              activeControlThemeId: result.activeControlThemeId ?? prev.activeControlThemeId,
+              controlLook: result.look,
+              savedControlThemes: result.savedControlThemes,
+            }
+          : prev,
+      );
+    },
+    [controlTheme],
+  );
+
+  const handleSelectControlTheme = useCallback(async (id: string) => {
+    const result = await window.controlApi.selectControlTheme(id);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    applyControlThemeResult(result);
+    setThemeMenu(null);
+    setSettingsOpen(false);
+    setDesignMenu(false);
+  }, [applyControlThemeResult]);
+
+  const handleSaveControlTheme = useCallback(async (name: string, look: ControlLook, updateId?: string) => {
+    const result = await window.controlApi.saveControlTheme({
+      name,
+      look: { ...look, overlay: true },
+      id: updateId,
+    });
+    if (!result.ok) return result;
+    applyControlThemeResult(result);
+    return { ok: true as const, id: result.saved.id };
+  }, [applyControlThemeResult]);
+
+  const handleDeleteControlTheme = useCallback(async (id: string) => {
+    const result = await window.controlApi.deleteControlTheme(id);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    applyControlThemeResult(result);
+  }, [applyControlThemeResult]);
 
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);
-    setThemeMenuOpen(false);
+    setThemeMenu(null);
+    setDesignMenu(false);
     setVenueMenuOpen(false);
     setVenuePinFor(null);
     setVenuePin("");
     setVenuePinError(null);
     setVenuePinPending(false);
   }, []);
+
+  const handleSetTimerLook = useCallback((next: TimerLook) => {
+    const look = { ...next, overlay: true as const };
+    setTimerLook(look);
+    setConfig((prev) => (prev ? { ...prev, timerLook: look } : prev));
+    void window.controlApi.setTimerLook(look);
+  }, []);
+
+  const openTimerLookEditor = useCallback(() => {
+    closeSettings();
+    setView({ kind: "timer-look" });
+  }, [closeSettings]);
+
+  const handleSetControlLook = useCallback((next: ControlLook) => {
+    const look = { ...next, overlay: true as const };
+    setControlLook(look);
+    setConfig((prev) => (prev ? { ...prev, controlLook: look } : prev));
+    void window.controlApi.setControlLook(look);
+  }, []);
+
+  const openControlLookEditor = useCallback(() => {
+    closeSettings();
+    setView({ kind: "control-look" });
+  }, [closeSettings]);
 
   const currentVenueId = isKnownVenueId(config?.venueId) ? config.venueId : YEOKSAM_VENUE_ID;
 
@@ -305,7 +530,9 @@ export function App() {
 
       if (e.key === "Escape") {
         if (qrOpen) { setQrOpen(false); return; }
-        if (themeMenuOpen) { setThemeMenuOpen(false); return; }
+        if (themeMenu === "control" || themeMenu === "timer") { setThemeMenu("pick"); return; }
+        if (themeMenu === "pick") { setThemeMenu(null); return; }
+        if (designMenu) { setDesignMenu(false); return; }
         if (venuePinFor) {
           setVenuePinFor(null);
           setVenuePin("");
@@ -315,6 +542,8 @@ export function App() {
         if (venueMenuOpen) { setVenueMenuOpen(false); return; }
         if (settingsOpen) { closeSettings(); return; }
         if (popup) { setPopup(null); return; }
+        if (view.kind === "timer-look") return;
+        if (view.kind === "control-look") return;
         if (view.kind === "blind-select") return;
         if (view.kind === "lan-view") { setLanLeaveConfirm(true); return; }
         if (typing) return;
@@ -343,12 +572,36 @@ export function App() {
 
       if (typing) return;
 
+      if (view.kind === "timer-look" || view.kind === "control-look") return;
+
+      if (themeMenu === "pick") {
+        if (e.key === "1") { e.preventDefault(); setThemeMenu("control"); return; }
+        if (e.key === "2") { e.preventDefault(); setThemeMenu("timer"); return; }
+        return;
+      }
+
+      if (designMenu) {
+        if (e.key === "1") { e.preventDefault(); openControlLookEditor(); return; }
+        if (e.key === "2") { e.preventDefault(); openTimerLookEditor(); return; }
+        return;
+      }
+
       // 테마 메뉴 단축키
-      if (themeMenuOpen) {
+      if (themeMenu) {
+        if (themeMenu === "timer") {
+          const items = [...UI_THEME_OPTIONS.map((o) => o.id), ...savedTimerThemes.map((s) => s.id)];
+          const idx = parseInt(e.key, 10) - 1;
+          if (idx >= 0 && idx < items.length) {
+            e.preventDefault();
+            void handleSelectTimerTheme(items[idx]!);
+          }
+          return;
+        }
+        const items = [...UI_THEME_OPTIONS.map((o) => o.id), ...savedControlThemes.map((s) => s.id)];
         const idx = parseInt(e.key, 10) - 1;
-        if (idx >= 0 && idx < UI_THEME_OPTIONS.length) {
+        if (idx >= 0 && idx < items.length) {
           e.preventDefault();
-          void handleSetTheme(UI_THEME_OPTIONS[idx]!.id);
+          void handleSelectControlTheme(items[idx]!);
         }
         return;
       }
@@ -375,15 +628,20 @@ export function App() {
         }
         if (idx === 1) {
           e.preventDefault();
-          setThemeMenuOpen(true);
+          setThemeMenu("pick");
           return;
         }
         if (idx === 2) {
           e.preventDefault();
-          document.querySelector<HTMLButtonElement>("[data-settings-update]")?.click();
+          setDesignMenu(true);
           return;
         }
         if (idx === 3) {
+          e.preventDefault();
+          document.querySelector<HTMLButtonElement>("[data-settings-update]")?.click();
+          return;
+        }
+        if (idx === 4) {
           e.preventDefault();
           setSettingsOpen(false);
           setQuitConfirm(true);
@@ -414,7 +672,7 @@ export function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [view, popup, settingsOpen, themeMenuOpen, venueMenuOpen, venuePinFor, quitConfirm, lanLeaveConfirm, qrOpen, config, handleSetTheme, handlePickVenue, closeSettings]);
+  }, [view, popup, settingsOpen, themeMenu, designMenu, venueMenuOpen, venuePinFor, quitConfirm, lanLeaveConfirm, qrOpen, config, handleSetTheme, handleSelectTimerTheme, handleSelectControlTheme, handlePickVenue, closeSettings, openTimerLookEditor, openControlLookEditor, savedTimerThemes, savedControlThemes]);
 
   // ── 플로어 단축키 (main 뷰 + 팝업 없을 때) ───────────────────
   useEffect(() => {
@@ -633,7 +891,8 @@ export function App() {
 
   return (
     <div className="shell compact">
-      {view.kind !== "monitor-preview" && view.kind !== "lan-view" && (
+      {view.kind !== "monitor-preview" && view.kind !== "lan-view" && view.kind !== "timer-look" && view.kind !== "control-look" && (
+        <ControlLookWrap id="header" look={controlLook} className="ctrl-look-wrap--header">
         <header className="shell-header compact-header">
           <div className="header-brand">
             <button
@@ -669,6 +928,7 @@ export function App() {
             </div>
           )}
         </header>
+        </ControlLookWrap>
       )}
 
       {loading && <p className="muted pad">불러오는 중...</p>}
@@ -678,12 +938,14 @@ export function App() {
           <FloorPlanView
             snapshot={snapshot}
             venueId={currentVenueId}
+            controlLook={controlLook}
             onTableClick={(slot, pos) => setPopup({ kind: "table", slot, pos })}
             onMonitorClick={(slot, pos) => setPopup({ kind: "monitor", slot, pos })}
           />
           <GameListView
             snapshot={snapshot}
             timers={timers}
+            controlLook={controlLook}
             onSelectGame={(session) => setView({ kind: "game-control", session })}
             onNewGame={() => void openBlindSelect()}
           />
@@ -711,6 +973,8 @@ export function App() {
           state={timers.find((t) => t.tableId === currentSession.gameId)}
           pending={pending}
           error={error}
+          timerTheme={timerTheme}
+          timerLook={timerLook}
           onBack={() => setView({ kind: "main" })}
           onCommand={(action, options) => void handleCommand(currentSession.gameId, action, options)}
           onDeleteGame={() => void handleDeleteGame(currentSession.gameId)}
@@ -728,6 +992,8 @@ export function App() {
             slot={1}
             session={lanViewState?.session ?? null}
             timerState={lanViewState?.timer ?? null}
+            timerTheme={normalizeUiTheme(lanViewState?.theme ?? timerTheme)}
+            timerLook={timerLook}
           />
         </section>
       )}
@@ -737,6 +1003,41 @@ export function App() {
           slot={view.slot}
           session={previewSession}
           timerState={previewTimer}
+          timerTheme={timerTheme}
+          timerLook={timerLook}
+        />
+      )}
+
+      {!loading && view.kind === "timer-look" && (
+        <TimerLookEditor
+          theme={timerTheme}
+          look={timerLook?.overlay === true ? timerLook : overlayFromTheme(timerTheme)}
+          liveOriginal={timerLook?.overlay !== true}
+          savedName={savedTimerThemes.find((s) => s.id === activeTimerThemeId)?.name ?? null}
+          activeSavedId={activeTimerThemeId.startsWith("saved-") ? activeTimerThemeId : null}
+          savedThemes={savedTimerThemes}
+          onChange={handleSetTimerLook}
+          onClear={(id) => handleSelectTimerTheme(id ?? timerTheme)}
+          onSaveAsTheme={handleSaveTimerTheme}
+          onBack={() => setView({ kind: "main" })}
+        />
+      )}
+
+      {!loading && view.kind === "control-look" && (
+        <ControlLookEditor
+          theme={controlTheme}
+          look={controlLook?.overlay === true ? controlLook : overlayFromControlTheme(controlTheme)}
+          liveOriginal={controlLook?.overlay !== true}
+          savedName={savedControlThemes.find((s) => s.id === activeControlThemeId)?.name ?? null}
+          activeSavedId={activeControlThemeId.startsWith("csaved-") ? activeControlThemeId : null}
+          savedThemes={savedControlThemes}
+          onChange={handleSetControlLook}
+          onClear={(id) => handleSelectControlTheme(id ?? controlTheme)}
+          onSaveAsTheme={handleSaveControlTheme}
+          snapshot={snapshot}
+          timers={timers}
+          venueId={currentVenueId}
+          onBack={() => setView({ kind: "main" })}
         />
       )}
 
@@ -804,44 +1105,176 @@ export function App() {
           setUpdaterStatus({ status: "checking" });
           void window.controlApi.checkUpdate();
         };
-        const themeLabel =
-          UI_THEME_OPTIONS.find((o) => o.id === theme)?.label ?? "Black Pink";
+        const controlThemeLabel =
+          UI_THEME_OPTIONS.find((o) => o.id === controlTheme)?.label ?? "Black Pink";
+        const activeSaved = savedTimerThemes.find((s) => s.id === activeTimerThemeId);
+        const timerThemeLabel =
+          activeSaved?.name ??
+          UI_THEME_OPTIONS.find((o) => o.id === (isUiThemeId(activeTimerThemeId) ? activeTimerThemeId : timerTheme))
+            ?.label ??
+          "Black Pink";
 
-        if (themeMenuOpen) {
-          const swatches: Record<UiThemeId, string> = {
-            "black-pink": "#ffb6c9",
-            "mnf-original": "linear-gradient(135deg, #8b46f0, #e83d6e)",
-            "cherry-blossom": "linear-gradient(135deg, #c9a4e8, #f2a8c4)",
-          };
+        if (themeMenu === "pick") {
           return (
             <div
               className="settings-overlay"
               onPointerDown={(e) => {
-                if (e.target === e.currentTarget) setThemeMenuOpen(false);
+                if (e.target === e.currentTarget) setThemeMenu(null);
               }}
             >
               <div className="settings-popup" onClick={(e) => e.stopPropagation()}>
                 <h3 className="settings-popup__title">테마</h3>
+                <button
+                  type="button"
+                  className="settings-popup__btn"
+                  onClick={() => setThemeMenu("control")}
+                >
+                  <span className="settings-popup__num">1</span>
+                  컨트롤 테마 · {controlThemeLabel}
+                </button>
+                <button
+                  type="button"
+                  className="settings-popup__btn"
+                  onClick={() => setThemeMenu("timer")}
+                >
+                  <span className="settings-popup__num">2</span>
+                  타이머 테마 · {timerThemeLabel}
+                </button>
+                <button
+                  type="button"
+                  className="settings-popup__btn settings-popup__btn--cancel"
+                  onClick={() => setThemeMenu(null)}
+                >
+                  뒤로
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        if (themeMenu) {
+          const current = themeMenu === "control" ? activeControlThemeId : activeTimerThemeId;
+          const savedList = themeMenu === "control" ? savedControlThemes : savedTimerThemes;
+          return (
+            <div
+              className="settings-overlay"
+              onPointerDown={(e) => {
+                if (e.target === e.currentTarget) setThemeMenu("pick");
+              }}
+            >
+              <div className="settings-popup" onClick={(e) => e.stopPropagation()}>
+                <h3 className="settings-popup__title">
+                  {themeMenu === "control" ? "컨트롤 테마" : "타이머 테마"}
+                </h3>
                 {UI_THEME_OPTIONS.map((opt, i) => (
                   <button
                     key={opt.id}
                     type="button"
-                    className={`settings-popup__btn${theme === opt.id ? " settings-popup__btn--active" : ""}`}
-                    onClick={() => void handleSetTheme(opt.id)}
+                    className={`settings-popup__btn${current === opt.id ? " settings-popup__btn--active" : ""}`}
+                    onClick={() =>
+                      themeMenu === "timer"
+                        ? void handleSelectTimerTheme(opt.id)
+                        : void handleSelectControlTheme(opt.id)
+                    }
                   >
                     <span className="settings-popup__num">{i + 1}</span>
                     <span
                       className="settings-popup__swatch"
-                      style={{ background: swatches[opt.id] }}
+                      style={{ background: UI_THEME_SWATCHES[opt.id] }}
                       aria-hidden
                     />
                     {opt.label}
                   </button>
                 ))}
+                {savedList.length > 0 && (
+                  <>
+                    <h3 className="settings-popup__title">저장한 디자인</h3>
+                    {savedList.map((opt, i) => {
+                      const num = UI_THEME_OPTIONS.length + i + 1;
+                      const swatch =
+                        ("look" in opt
+                          ? themeMenu === "control"
+                            ? savedControlThemeSwatch(opt as SavedControlTheme)
+                            : savedThemeSwatch(opt as SavedTimerTheme)
+                          : "") || UI_THEME_SWATCHES[opt.baseTheme];
+                      return (
+                        <div key={opt.id} className="settings-popup__theme-row">
+                          <button
+                            type="button"
+                            className={`settings-popup__btn${current === opt.id ? " settings-popup__btn--active" : ""}`}
+                            onClick={() =>
+                              themeMenu === "timer"
+                                ? void handleSelectTimerTheme(opt.id)
+                                : void handleSelectControlTheme(opt.id)
+                            }
+                          >
+                            {num <= 9 ? <span className="settings-popup__num">{num}</span> : <span className="settings-popup__num">·</span>}
+                            <span
+                              className="settings-popup__swatch"
+                              style={{ background: swatch }}
+                              aria-hidden
+                            />
+                            {opt.name}
+                          </button>
+                          <button
+                            type="button"
+                            className="settings-popup__del"
+                            title="삭제"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (themeMenu === "timer") void handleDeleteTimerTheme(opt.id);
+                              else void handleDeleteControlTheme(opt.id);
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
                 <button
                   type="button"
                   className="settings-popup__btn settings-popup__btn--cancel"
-                  onClick={() => setThemeMenuOpen(false)}
+                  onClick={() => setThemeMenu("pick")}
+                >
+                  뒤로
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        if (designMenu) {
+          return (
+            <div
+              className="settings-overlay"
+              onPointerDown={(e) => {
+                if (e.target === e.currentTarget) setDesignMenu(false);
+              }}
+            >
+              <div className="settings-popup" onClick={(e) => e.stopPropagation()}>
+                <h3 className="settings-popup__title">테마 디자인</h3>
+                <button
+                  type="button"
+                  className="settings-popup__btn"
+                  onClick={() => openControlLookEditor()}
+                >
+                  <span className="settings-popup__num">1</span>
+                  매장화면 디자인
+                </button>
+                <button
+                  type="button"
+                  className="settings-popup__btn"
+                  onClick={() => openTimerLookEditor()}
+                >
+                  <span className="settings-popup__num">2</span>
+                  타이머 디자인
+                </button>
+                <button
+                  type="button"
+                  className="settings-popup__btn settings-popup__btn--cancel"
+                  onClick={() => setDesignMenu(false)}
                 >
                   뒤로
                 </button>
@@ -933,7 +1366,8 @@ export function App() {
 
         const menuItems: { label: string; variant?: string; action: () => void; update?: boolean }[] = [
           { label: "모니터 설정", action: () => { closeSettings(); setView({ kind: "setup" }); } },
-          { label: `테마 · ${themeLabel}`, action: () => { setThemeMenuOpen(true); } },
+          { label: "테마", action: () => { setThemeMenu("pick"); } },
+          { label: "테마 디자인", action: () => { setDesignMenu(true); } },
           { label: updaterLabel, action: () => { updaterAction(); }, update: true },
           { label: "프로그램 종료", variant: "danger", action: () => { closeSettings(); setQuitConfirm(true); } },
         ];

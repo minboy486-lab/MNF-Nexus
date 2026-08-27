@@ -16,15 +16,21 @@ export function tableName(slot: number): string {
   return `${tableLetter(slot)} 테이블`;
 }
 
-/** 송출·컨트롤러 UI 테마 */
+/** 컨트롤 화면 / TV 타이머에 쓰는 테마 ID (목록은 공유) */
 export const UI_THEME_IDS = ["black-pink", "mnf-original", "cherry-blossom"] as const;
 export type UiThemeId = (typeof UI_THEME_IDS)[number];
+export type ThemeSurface = "control" | "timer";
 export const DEFAULT_UI_THEME: UiThemeId = "black-pink";
 export const UI_THEME_OPTIONS: ReadonlyArray<{ id: UiThemeId; label: string }> = [
   { id: "black-pink", label: "Black Pink" },
   { id: "mnf-original", label: "MNF Original" },
   { id: "cherry-blossom", label: "Cherry Blossom" },
 ];
+export const UI_THEME_SWATCHES: Record<UiThemeId, string> = {
+  "black-pink": "#ffb6c9",
+  "mnf-original": "linear-gradient(135deg, #8b46f0, #e83d6e)",
+  "cherry-blossom": "linear-gradient(135deg, #c44569, #e07050)",
+};
 
 export function isUiThemeId(value: unknown): value is UiThemeId {
   return typeof value === "string" && (UI_THEME_IDS as readonly string[]).includes(value);
@@ -32,6 +38,35 @@ export function isUiThemeId(value: unknown): value is UiThemeId {
 
 export function normalizeUiTheme(value: unknown): UiThemeId {
   return isUiThemeId(value) ? value : DEFAULT_UI_THEME;
+}
+
+export function isThemeSurface(value: unknown): value is ThemeSurface {
+  return value === "control" || value === "timer";
+}
+
+/** 관리자 창 테마. 없으면 구버전 `theme` */
+export function resolveControlTheme(
+  config: Pick<AppConfig, "controlTheme" | "theme"> | null | undefined,
+): UiThemeId {
+  if (config?.controlTheme != null) return normalizeUiTheme(config.controlTheme);
+  return normalizeUiTheme(config?.theme);
+}
+
+/** TV/송출 테마. 없으면 구버전 `theme` */
+export function resolveTimerTheme(
+  config: Pick<AppConfig, "timerTheme" | "theme"> | null | undefined,
+): UiThemeId {
+  if (config?.timerTheme != null) return normalizeUiTheme(config.timerTheme);
+  return normalizeUiTheme(config?.theme);
+}
+
+export function withUiThemes(
+  config: AppConfig,
+  patch: { controlTheme?: UiThemeId; timerTheme?: UiThemeId },
+): AppConfig {
+  const controlTheme = patch.controlTheme ?? resolveControlTheme(config);
+  const timerTheme = patch.timerTheme ?? resolveTimerTheme(config);
+  return { ...config, controlTheme, timerTheme, theme: timerTheme };
 }
 
 export function applyDocumentTheme(theme: UiThemeId): void {
@@ -95,8 +130,24 @@ export interface AppConfig {
   version: typeof CONFIG_VERSION;
   controlDisplayId: number;
   mappings: MonitorMapping[];
-  /** UI 테마. 없으면 Black Pink */
+  /** @deprecated 구버전 단일 테마. 없으면 timerTheme과 동일 */
   theme?: UiThemeId;
+  /** 관리자(컨트롤) 화면 테마. 없으면 `theme` */
+  controlTheme?: UiThemeId;
+  /** TV/송출 타이머 테마. 없으면 `theme` */
+  timerTheme?: UiThemeId;
+  /** 타이머 자유 디자인. 없으면 테마 기본 레이아웃 */
+  timerLook?: import("./timerLook").TimerLook | null;
+  /** 타이머 테마로 저장한 디자인 */
+  savedTimerThemes?: import("./timerLook").SavedTimerTheme[];
+  /** 지금 고른 타이머 테마. 기본 테마 id 또는 saved-* */
+  activeTimerThemeId?: string;
+  /** 컨트롤 화면 자유 디자인. 없으면 테마 기본 레이아웃 */
+  controlLook?: import("./controlLook").ControlLook | null;
+  /** 컨트롤 테마로 저장한 디자인 */
+  savedControlThemes?: import("./controlLook").SavedControlTheme[];
+  /** 지금 고른 컨트롤 테마. 기본 테마 id 또는 csaved-* */
+  activeControlThemeId?: string;
   /** 타이머 효과음 볼륨 0–100. 없으면 100 */
   soundVolume?: number;
   /** 이 PC가 속한 지점. 없으면 역삼 */
@@ -225,6 +276,8 @@ export function createEmptyConfig(controlDisplayId: number): AppConfig {
     controlDisplayId,
     mappings: [],
     theme: DEFAULT_UI_THEME,
+    controlTheme: DEFAULT_UI_THEME,
+    timerTheme: DEFAULT_UI_THEME,
     soundVolume: DEFAULT_SOUND_VOLUME,
   };
 }

@@ -30,6 +30,7 @@ import { rebaseLanSession, rebaseLanTimer } from "../../shared/lanView";
 import { LanCluster, normalizeRemoteIp } from "./lanCluster";
 import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 import { isYeoksamFloor } from "../../shared/floorPlan";
+import { normalizeShopTimerTheme, type ShopTimerThemePayload } from "../../shared/timerLook";
 import {
   MONITOR_SLOTS,
   TABLE_SLOTS,
@@ -157,10 +158,22 @@ export class RemoteServer {
   private getThemeId: () => string = () => "black-pink";
   private getVolume: () => number = () => 100;
   private cluster: LanCluster | null = null;
+  private applyingShopTheme = false;
+  private shopTheme: {
+    get: () => ShopTimerThemePayload | null;
+    apply: (pack: ShopTimerThemePayload) => boolean;
+  } | null = null;
 
   setAppearance(getTheme: () => string, getVolume: () => number): void {
     this.getThemeId = getTheme;
     this.getVolume = getVolume;
+  }
+
+  setShopThemeSync(sync: {
+    get: () => ShopTimerThemePayload | null;
+    apply: (pack: ShopTimerThemePayload) => boolean;
+  }): void {
+    this.shopTheme = sync;
   }
 
   async start(hub: TimerHub): Promise<void> {
@@ -180,6 +193,7 @@ export class RemoteServer {
       getYeoksamRole: () => getConfiguredYeoksamRole(),
       getLocalSnapshot: () => this.localSnapshotPayload(),
       getOwnedSnapshot: () => this.ownedSnapshotPayload(),
+      getShopTimerTheme: () => this.shopTheme?.get() ?? null,
       onPeersChange: () => {
         this.broadcastToOperators();
         this.syncYeoksamFollow();
@@ -320,6 +334,32 @@ export class RemoteServer {
     const timers = peer.timers.map((t) => rebaseLanTimer(t, peer.serverNow, localNow));
     const sessions = peer.snapshot.sessions.map((s) => rebaseLanSession(s, peer.serverNow, localNow));
     hub.setFollow({ ...peer.snapshot, sessions }, timers);
+    this.applyIncomingShopTheme(peer.timerTheme);
+  }
+
+  private applyIncomingShopTheme(raw: unknown): boolean {
+    const pack = normalizeShopTimerTheme(raw);
+    if (!pack || !this.shopTheme) return false;
+    this.applyingShopTheme = true;
+    try {
+      return this.shopTheme.apply(pack);
+    } finally {
+      this.applyingShopTheme = false;
+    }
+  }
+
+  broadcastShopTimerTheme(): void {
+    if (this.applyingShopTheme) return;
+    if (!isYeoksamFloor(getConfiguredVenueId())) return;
+    const pack = this.shopTheme?.get();
+    if (!pack) return;
+    const msg: RemoteClientMsg = { type: "peer_timer_theme", ...pack };
+    if (this.isYeoksamFollowerPc()) {
+      this.forwardToControl(msg);
+      return;
+    }
+    this.cluster?.broadcastToPeers(msg);
+    this.cluster?.pushLocalSnapshot();
   }
 
   private ownedSnapshotPayload(): {
@@ -363,6 +403,7 @@ export class RemoteServer {
       serverNow: local.serverNow,
       hostname: local.hostname,
       yeoksamRole: local.yeoksamRole,
+      timerTheme: this.shopTheme?.get() ?? undefined,
     };
   }
 
@@ -376,6 +417,7 @@ export class RemoteServer {
       serverNow: local.serverNow,
       hostname: local.hostname,
       yeoksamRole: getConfiguredYeoksamRole(),
+      timerTheme: this.shopTheme?.get() ?? undefined,
     };
   }
 
@@ -664,7 +706,19 @@ export class RemoteServer {
         timers: msg.timers,
         serverNow: typeof msg.serverNow === "number" ? msg.serverNow : Date.now(),
         yeoksamRole: msg.yeoksamRole,
+        timerTheme: msg.timerTheme,
       });
+      return;
+    }
+
+    if (msg.type === "peer_timer_theme") {
+      const pack = normalizeShopTimerTheme(msg);
+      if (!pack) return;
+      const changed = this.applyIncomingShopTheme(pack);
+      if (changed && !this.isYeoksamFollowerPc()) {
+        this.cluster?.broadcastToPeers({ type: "peer_timer_theme", ...pack });
+        this.cluster?.pushLocalSnapshot();
+      }
       return;
     }
 

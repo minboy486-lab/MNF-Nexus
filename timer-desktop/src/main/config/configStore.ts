@@ -6,14 +6,17 @@ import {
   CONFIG_VERSION,
   MONITOR_SLOTS,
   MAX_MONITORS,
-  normalizeUiTheme,
   normalizeSoundVolume,
   normalizeYeoksamRole,
+  resolveControlTheme,
+  resolveTimerTheme,
+  withUiThemes,
   type AppConfig,
   type MonitorMapping,
   type MonitorSlot,
-  type UiThemeId,
 } from "../../shared/types";
+import { normalizeTimerLook, normalizeSavedTimerThemes, resolveActiveTimerThemeId } from "../../shared/timerLook";
+import { normalizeControlLook, normalizeSavedControlThemes, resolveActiveControlThemeId } from "../../shared/controlLook";
 
 export function getConfigPath(): string {
   return `${app.getPath("userData")}/config.json`;
@@ -86,16 +89,40 @@ export function loadConfig(): AppConfig | null {
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8")) as AppConfig;
     if (validateConfig(parsed)) return null;
+    const themed = withUiThemes(
+      {
+        ...parsed,
+        soundVolume: normalizeSoundVolume(parsed.soundVolume),
+        venueId: isKnownVenueId(parsed.venueId) ? parsed.venueId : YEOKSAM_VENUE_ID,
+        yeoksamRole: normalizeYeoksamRole(parsed.yeoksamRole),
+        controlOutputSlot:
+          typeof parsed.controlOutputSlot === "number" && isMonitorSlot(parsed.controlOutputSlot)
+            ? parsed.controlOutputSlot
+            : null,
+      },
+      {
+        controlTheme: resolveControlTheme(parsed),
+        timerTheme: resolveTimerTheme(parsed),
+      },
+    );
     return {
-      ...parsed,
-      theme: normalizeUiTheme(parsed.theme),
-      soundVolume: normalizeSoundVolume(parsed.soundVolume),
-      venueId: isKnownVenueId(parsed.venueId) ? parsed.venueId : YEOKSAM_VENUE_ID,
-      yeoksamRole: normalizeYeoksamRole(parsed.yeoksamRole),
-      controlOutputSlot:
-        typeof parsed.controlOutputSlot === "number" && isMonitorSlot(parsed.controlOutputSlot)
-          ? parsed.controlOutputSlot
-          : null,
+      ...themed,
+      timerLook: normalizeTimerLook(parsed.timerLook, resolveTimerTheme(themed)),
+      savedTimerThemes: normalizeSavedTimerThemes(parsed.savedTimerThemes, resolveTimerTheme(themed)),
+      activeTimerThemeId: resolveActiveTimerThemeId({
+        ...themed,
+        savedTimerThemes: parsed.savedTimerThemes,
+        activeTimerThemeId: parsed.activeTimerThemeId,
+        timerLook: parsed.timerLook,
+      }),
+      controlLook: normalizeControlLook(parsed.controlLook, resolveControlTheme(themed)),
+      savedControlThemes: normalizeSavedControlThemes(parsed.savedControlThemes, resolveControlTheme(themed)),
+      activeControlThemeId: resolveActiveControlThemeId({
+        ...themed,
+        savedControlThemes: parsed.savedControlThemes,
+        activeControlThemeId: parsed.activeControlThemeId,
+        controlLook: parsed.controlLook,
+      }),
     };
   } catch {
     return null;
@@ -127,7 +154,6 @@ export function parseConfigInput(raw: unknown): { config: AppConfig } | { error:
     mappings.push(mapping);
   }
 
-  const theme: UiThemeId = normalizeUiTheme(input.theme);
   const existing = loadConfig();
   const soundVolume =
     input.soundVolume === undefined
@@ -150,20 +176,63 @@ export function parseConfigInput(raw: unknown): { config: AppConfig } | { error:
           ? existing.controlOutputSlot
           : null;
 
-  const config: AppConfig = {
-    version: CONFIG_VERSION,
-    controlDisplayId,
-    mappings,
-    theme,
-    soundVolume,
-    venueId,
-    yeoksamRole: normalizeYeoksamRole(
-      input.yeoksamRole !== undefined ? input.yeoksamRole : existing?.yeoksamRole,
-    ),
-    controlOutputSlot,
-  };
+  const themeSource = {
+    theme: input.theme !== undefined ? input.theme : existing?.theme,
+    controlTheme: input.controlTheme !== undefined ? input.controlTheme : existing?.controlTheme,
+    timerTheme: input.timerTheme !== undefined ? input.timerTheme : existing?.timerTheme,
+  } as Pick<AppConfig, "theme" | "controlTheme" | "timerTheme">;
+
+  const config: AppConfig = withUiThemes(
+    {
+      version: CONFIG_VERSION,
+      controlDisplayId,
+      mappings,
+      soundVolume,
+      venueId,
+      yeoksamRole: normalizeYeoksamRole(
+        input.yeoksamRole !== undefined ? input.yeoksamRole : existing?.yeoksamRole,
+      ),
+      controlOutputSlot,
+    },
+    {
+      controlTheme: resolveControlTheme(themeSource),
+      timerTheme: resolveTimerTheme(themeSource),
+    },
+  );
   const err = validateConfig(config);
   if (err) return { error: err };
+  config.timerLook = normalizeTimerLook(
+    input.timerLook !== undefined ? input.timerLook : existing?.timerLook,
+    resolveTimerTheme(config),
+  );
+  config.savedTimerThemes = normalizeSavedTimerThemes(
+    input.savedTimerThemes !== undefined ? input.savedTimerThemes : existing?.savedTimerThemes,
+    resolveTimerTheme(config),
+  );
+  config.activeTimerThemeId = resolveActiveTimerThemeId({
+    ...config,
+    activeTimerThemeId:
+      typeof input.activeTimerThemeId === "string"
+        ? input.activeTimerThemeId
+        : existing?.activeTimerThemeId,
+    timerLook: config.timerLook,
+  });
+  config.controlLook = normalizeControlLook(
+    input.controlLook !== undefined ? input.controlLook : existing?.controlLook,
+    resolveControlTheme(config),
+  );
+  config.savedControlThemes = normalizeSavedControlThemes(
+    input.savedControlThemes !== undefined ? input.savedControlThemes : existing?.savedControlThemes,
+    resolveControlTheme(config),
+  );
+  config.activeControlThemeId = resolveActiveControlThemeId({
+    ...config,
+    activeControlThemeId:
+      typeof input.activeControlThemeId === "string"
+        ? input.activeControlThemeId
+        : existing?.activeControlThemeId,
+    controlLook: config.controlLook,
+  });
   return { config };
 }
 

@@ -21,13 +21,14 @@ import { join, resolve } from "node:path";
 })();
 
 import { app, BrowserWindow, screen } from "electron";
-import { loadConfig } from "./config/configStore";
+import { loadConfig, saveConfig } from "./config/configStore";
 import { enrichMappingsWithCurrentDisplays } from "./screen/displayMapper";
 import { flushPendingSoundVolume, registerIpcHandlers, stopLanView } from "./ipc/handlers";
 import { TimerHub } from "./timer/timerHub";
 import { WindowManager } from "./windows/windowManager";
 import { setupAutoUpdater } from "./updater";
 import { RemoteServer } from "./remote/server";
+import { shopTimerThemeEqual, shopTimerThemeFromConfig, withShopTimerTheme } from "../shared/timerLook";
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
@@ -59,6 +60,18 @@ app.whenReady().then(async () => {
     () => windowManager.getTheme(),
     () => windowManager.getSoundVolume(),
   );
+  remoteServer.setShopThemeSync({
+    get: () => windowManager.getShopTimerTheme(),
+    apply: (pack) => {
+      const current = windowManager.getConfig() ?? loadConfig();
+      if (!current) return false;
+      const next = withShopTimerTheme(current, pack);
+      if (shopTimerThemeEqual(shopTimerThemeFromConfig(current), shopTimerThemeFromConfig(next))) return false;
+      saveConfig(next);
+      windowManager.applyShopTimerTheme(pack);
+      return true;
+    },
+  });
   registerIpcHandlers(windowManager, timerHub, remoteServer);
   setupAutoUpdater();
   registerScreenEvents();
@@ -74,6 +87,7 @@ app.whenReady().then(async () => {
   } else {
     await windowManager.syncWindows();
   }
+  remoteServer.broadcastShopTimerTheme();
 
   app.on("activate", async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -83,7 +97,7 @@ app.whenReady().then(async () => {
 });
 
 app.on("before-quit", () => {
-  flushPendingSoundVolume(windowManager);
+  flushPendingSoundVolume(windowManager, remoteServer);
   stopLanView();
   windowManager.setQuitting(true);
   remoteServer.stop();

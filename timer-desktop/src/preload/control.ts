@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer, shell } from "electron";
 import type { BlindStructureOption, TableTimerState, TimerAction } from "@mnf/timer/types";
-import type { AppConfig, AppSnapshot, DisplayInfo, GameSession, UiThemeId } from "../shared/types";
+import type { AppConfig, AppSnapshot, DisplayInfo, GameSession, ThemeSurface, UiThemeId } from "../shared/types";
+import type { TimerLook, SavedTimerTheme } from "../shared/timerLook";
+import type { ControlLook, SavedControlTheme } from "../shared/controlLook";
 import type { LanDiscoveredGame, LanViewState } from "../shared/lanView";
 
 export type ControlApi = {
@@ -11,11 +13,105 @@ export type ControlApi = {
   setVenue: (opts: { venueId: string; pin: string }) => Promise<{ ok: true } | { ok: false; error: string }>;
   onSetupRequired: (cb: () => void) => () => void;
   getTheme: () => Promise<UiThemeId>;
-  setTheme: (theme: UiThemeId) => Promise<{ ok: true; theme: UiThemeId } | { ok: false; error: string }>;
-  onThemeUpdate: (cb: (theme: UiThemeId) => void) => () => void;
+  setTheme: (
+    surface: ThemeSurface,
+    theme: UiThemeId,
+  ) => Promise<{ ok: true; surface: ThemeSurface; theme: UiThemeId } | { ok: false; error: string }>;
+  onThemesUpdate: (cb: (themes: {
+    controlTheme: UiThemeId;
+    timerTheme: UiThemeId;
+    activeTimerThemeId?: string;
+    savedTimerThemes?: SavedTimerTheme[];
+    activeControlThemeId?: string;
+    savedControlThemes?: SavedControlTheme[];
+  }) => void) => () => void;
+  selectTimerTheme: (
+    id: string,
+  ) => Promise<
+    | {
+        ok: true;
+        timerTheme?: UiThemeId;
+        activeTimerThemeId?: string;
+        look: TimerLook | null;
+        savedTimerThemes: SavedTimerTheme[];
+      }
+    | { ok: false; error: string }
+  >;
+  saveTimerTheme: (opts: {
+    name: string;
+    look: TimerLook;
+    id?: string;
+  }) => Promise<
+    | {
+        ok: true;
+        saved: SavedTimerTheme;
+        timerTheme?: UiThemeId;
+        activeTimerThemeId?: string;
+        look: TimerLook | null;
+        savedTimerThemes: SavedTimerTheme[];
+      }
+    | { ok: false; error: string }
+  >;
+  deleteTimerTheme: (
+    id: string,
+  ) => Promise<
+    | {
+        ok: true;
+        timerTheme?: UiThemeId;
+        activeTimerThemeId?: string;
+        look: TimerLook | null;
+        savedTimerThemes: SavedTimerTheme[];
+      }
+    | { ok: false; error: string }
+  >;
+  selectControlTheme: (
+    id: string,
+  ) => Promise<
+    | {
+        ok: true;
+        controlTheme?: UiThemeId;
+        activeControlThemeId?: string;
+        look: ControlLook | null;
+        savedControlThemes: SavedControlTheme[];
+      }
+    | { ok: false; error: string }
+  >;
+  saveControlTheme: (opts: {
+    name: string;
+    look: ControlLook;
+    id?: string;
+  }) => Promise<
+    | {
+        ok: true;
+        saved: SavedControlTheme;
+        controlTheme?: UiThemeId;
+        activeControlThemeId?: string;
+        look: ControlLook | null;
+        savedControlThemes: SavedControlTheme[];
+      }
+    | { ok: false; error: string }
+  >;
+  deleteControlTheme: (
+    id: string,
+  ) => Promise<
+    | {
+        ok: true;
+        controlTheme?: UiThemeId;
+        activeControlThemeId?: string;
+        look: ControlLook | null;
+        savedControlThemes: SavedControlTheme[];
+      }
+    | { ok: false; error: string }
+  >;
   getSoundVolume: () => Promise<number>;
   setSoundVolume: (volume: number) => Promise<{ ok: true; volume: number }>;
   onSoundVolumeUpdate: (cb: (volume: number) => void) => () => void;
+  getTimerLook: () => Promise<TimerLook | null>;
+  setTimerLook: (look: TimerLook | null) => Promise<{ ok: true; look: TimerLook | null } | { ok: false; error: string }>;
+  onTimerLookUpdate: (cb: (look: TimerLook | null) => void) => () => void;
+  getControlLook: () => Promise<ControlLook | null>;
+  setControlLook: (look: ControlLook | null) => Promise<{ ok: true; look: ControlLook | null } | { ok: false; error: string }>;
+  onControlLookUpdate: (cb: (look: ControlLook | null) => void) => () => void;
   getRemoteInfo: () => Promise<import("../shared/remote").RemotePairingInfo>;
   refreshRemoteQr: () => Promise<import("../shared/remote").RemotePairingInfo>;
   // 블라인드
@@ -69,18 +165,48 @@ const api: ControlApi = {
     return () => ipcRenderer.removeListener("config:setup-required", h);
   },
   getTheme: () => ipcRenderer.invoke("theme:get"),
-  setTheme: (theme) => ipcRenderer.invoke("theme:set", theme),
-  onThemeUpdate: (cb) => {
-    const h = (_e: Electron.IpcRendererEvent, theme: UiThemeId) => cb(theme);
-    ipcRenderer.on("theme:update", h);
-    return () => ipcRenderer.removeListener("theme:update", h);
+  setTheme: (surface, theme) => ipcRenderer.invoke("theme:set", { surface, theme }),
+  onThemesUpdate: (cb) => {
+    const h = (
+      _e: Electron.IpcRendererEvent,
+      themes: {
+        controlTheme: UiThemeId;
+        timerTheme: UiThemeId;
+        activeTimerThemeId?: string;
+        savedTimerThemes?: SavedTimerTheme[];
+        activeControlThemeId?: string;
+        savedControlThemes?: SavedControlTheme[];
+      },
+    ) => cb(themes);
+    ipcRenderer.on("themes:update", h);
+    return () => ipcRenderer.removeListener("themes:update", h);
   },
+  selectTimerTheme: (id) => ipcRenderer.invoke("timerTheme:select", id),
+  saveTimerTheme: (opts) => ipcRenderer.invoke("timerTheme:save", opts),
+  deleteTimerTheme: (id) => ipcRenderer.invoke("timerTheme:delete", id),
+  selectControlTheme: (id) => ipcRenderer.invoke("controlTheme:select", id),
+  saveControlTheme: (opts) => ipcRenderer.invoke("controlTheme:save", opts),
+  deleteControlTheme: (id) => ipcRenderer.invoke("controlTheme:delete", id),
   getSoundVolume: () => ipcRenderer.invoke("soundVolume:get"),
   setSoundVolume: (volume) => ipcRenderer.invoke("soundVolume:set", volume),
   onSoundVolumeUpdate: (cb) => {
     const h = (_e: Electron.IpcRendererEvent, volume: number) => cb(volume);
     ipcRenderer.on("soundVolume:update", h);
     return () => ipcRenderer.removeListener("soundVolume:update", h);
+  },
+  getTimerLook: () => ipcRenderer.invoke("timerLook:get"),
+  setTimerLook: (look) => ipcRenderer.invoke("timerLook:set", look),
+  onTimerLookUpdate: (cb) => {
+    const h = (_e: Electron.IpcRendererEvent, look: TimerLook | null) => cb(look);
+    ipcRenderer.on("timerLook:update", h);
+    return () => ipcRenderer.removeListener("timerLook:update", h);
+  },
+  getControlLook: () => ipcRenderer.invoke("controlLook:get"),
+  setControlLook: (look) => ipcRenderer.invoke("controlLook:set", look),
+  onControlLookUpdate: (cb) => {
+    const h = (_e: Electron.IpcRendererEvent, look: ControlLook | null) => cb(look);
+    ipcRenderer.on("controlLook:update", h);
+    return () => ipcRenderer.removeListener("controlLook:update", h);
   },
   getRemoteInfo: () => ipcRenderer.invoke("remote:info"),
   refreshRemoteQr: () => ipcRenderer.invoke("remote:refreshQr"),

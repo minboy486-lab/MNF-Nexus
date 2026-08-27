@@ -1,11 +1,15 @@
 import type { AppSnapshot, GameSession } from "../../shared/types";
 import type { TableTimerState } from "@mnf/timer/types";
+import type { ControlLook } from "../../shared/controlLook";
+import { ControlLookWrap, type ControlLookEdit } from "./ControlLookWrap";
 import { formatRemainingMs, getDisplayRemainingMs } from "@mnf/timer/engine";
 import { formatTimerLevelShort } from "@mnf/timer/levels";
 
 type Props = {
   snapshot: AppSnapshot;
   timers: TableTimerState[];
+  controlLook?: ControlLook | null;
+  edit?: ControlLookEdit;
   onSelectGame: (session: GameSession) => void;
   onNewGame: () => void;
 };
@@ -16,10 +20,11 @@ function statusLabel(status: TableTimerState["status"] | undefined): string {
   return "일시정지";
 }
 
-export function GameListView({ snapshot, timers, onSelectGame, onNewGame }: Props) {
+export function GameListView({ snapshot, timers, controlLook = null, edit, onSelectGame, onNewGame }: Props) {
   const sessions = snapshot.sessions;
 
   return (
+    <ControlLookWrap id="games" look={controlLook ?? null} edit={edit} className="ctrl-look-wrap--games">
     <div className="game-list">
       <div className="game-list__header">
         <span className="game-list__title">게임 ({sessions.length})</span>
@@ -83,5 +88,6 @@ export function GameListView({ snapshot, timers, onSelectGame, onNewGame }: Prop
         })}
       </ul>
     </div>
+    </ControlLookWrap>
   );
 }
