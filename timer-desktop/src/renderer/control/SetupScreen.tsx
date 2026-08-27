@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { AppConfig, DisplayInfo, MonitorSlot } from "../../shared/types";
 import { CONFIG_VERSION, MONITOR_SLOTS } from "../../shared/types";
 import { YEOKSAM_VENUE_ID, isKnownVenueId, venueName } from "@mnf/venue";
-import { YEOKSAM_SHOP_OUTPUTS, controlOutputSlotOf, isYeoksamFloor, yeoksamRoleAfterSetup } from "../../shared/floorPlan";
+import { YEOKSAM_SHOP_OUTPUTS, controlOutputSlotOf, isYeoksamFloor, monitorLabel, yeoksamRoleAfterSetup } from "../../shared/floorPlan";
 
 type Props = {
   displays: DisplayInfo[];
@@ -163,7 +163,7 @@ export function SetupScreen({ displays, initialConfig, onSaved, onOpenControl }:
       <p className="muted">
         {yeoksam
           ? "화면은 Bm/Bt/Ct/Dt 아무거나 지정하세요. 같은 슬롯은 어느 PC에 꽂아도 같은 게임이 나옵니다. Control(관리자)은 이 PC를 매장 허브로 둘 때 쓰면 되고, 허브 화면을 Ct로 바꿔도 허브는 유지됩니다."
-          : "Control 모니터와 Display(M1~M6)를 지정하세요."}
+          : "Control 모니터와 Display(At~Et)를 지정하세요."}
       </p>
 
       <ul className="setup-list">
@@ -189,9 +189,9 @@ export function SetupScreen({ displays, initialConfig, onSaved, onOpenControl }:
                         {out.label}
                       </option>
                     ))
-                  : MONITOR_SLOTS.map((slot) => (
+                  : MONITOR_SLOTS.filter((slot) => slot <= 5).map((slot) => (
                       <option key={slot} value={`monitor-${slot}`}>
-                        M{slot} Display
+                        {monitorLabel(venueId, slot)}
                       </option>
                     ))}
               </select>

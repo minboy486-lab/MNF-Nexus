@@ -74,6 +74,7 @@ export function ControlLookEditor({
   const [previewTheme, setPreviewTheme] = useState<UiThemeId>(theme);
   const [workingSavedId, setWorkingSavedId] = useState<string | null>(activeSavedId);
   const [selected, setSelected] = useState<ControlWidgetId | null>("floor");
+  const [previewOn, setPreviewOn] = useState(false);
   const [themeName, setThemeName] = useState(savedName ?? "");
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [saveErr, setSaveErr] = useState<string | null>(null);
@@ -356,6 +357,14 @@ export function ControlLookEditor({
     setSaveMsg(`「${name}」을 불러왔습니다. 원래 디자인은 이 기준입니다.`);
   }
 
+  const edit = {
+    selected,
+    previewOn,
+    onSelect: setSelected,
+    onMove: (id: ControlWidgetId, ox: number, oy: number) =>
+      commitLook(patchControlWidget(look, id, { ox, oy }), `move-${id}`),
+  };
+
   return (
     <div className="look-editor">
       <header className="look-editor__bar">
@@ -412,11 +421,7 @@ export function ControlLookEditor({
             <ControlLookWrap
               id="header"
               look={look}
-              edit={{
-                selected,
-                onSelect: setSelected,
-                onMove: (id, ox, oy) => commitLook(patchControlWidget(look, id, { ox, oy }), `move-${id}`),
-              }}
+              edit={edit}
               className="ctrl-look-wrap--header"
             >
               <header className="shell-header compact-header">
@@ -441,11 +446,7 @@ export function ControlLookEditor({
               snapshot={snapshot}
               venueId={venueId}
               controlLook={look}
-              edit={{
-                selected,
-                onSelect: setSelected,
-                onMove: (id, ox, oy) => commitLook(patchControlWidget(look, id, { ox, oy }), `move-${id}`),
-              }}
+              edit={edit}
               onTableClick={() => {}}
               onMonitorClick={() => {}}
             />
@@ -453,11 +454,7 @@ export function ControlLookEditor({
               snapshot={snapshot}
               timers={timers}
               controlLook={look}
-              edit={{
-                selected,
-                onSelect: setSelected,
-                onMove: (id, ox, oy) => commitLook(patchControlWidget(look, id, { ox, oy }), `move-${id}`),
-              }}
+              edit={edit}
               onSelectGame={() => {}}
               onNewGame={() => {}}
             />
@@ -599,12 +596,34 @@ export function ControlLookEditor({
                 표시
               </label>
               <ColorField
-                label="색"
+                label={isFloorSlotWidget(selected) ? "대기" : "색"}
                 value={w.color}
                 onChange={(color) =>
                   commitLook(patchControlWidget(look, selected, { color, colorSet: true }), `color-${selected}`)
                 }
               />
+              {isFloorSlotWidget(selected) && (
+                <ColorField
+                  label="진행"
+                  value={w.colorOn ?? w.color}
+                  onChange={(colorOn) =>
+                    commitLook(
+                      patchControlWidget(look, selected, { colorOn, colorOnSet: true }),
+                      `colorOn-${selected}`,
+                    )
+                  }
+                />
+              )}
+              {isFloorSlotWidget(selected) && (
+                <label className="look-editor__check">
+                  <input
+                    type="checkbox"
+                    checked={previewOn}
+                    onChange={(e) => setPreviewOn(e.target.checked)}
+                  />
+                  켜진 색 미리보기
+                </label>
+              )}
               <NumField
                 label="글자 크기"
                 value={shownFontSize}

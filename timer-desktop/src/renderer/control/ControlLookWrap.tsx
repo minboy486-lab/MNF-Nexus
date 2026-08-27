@@ -8,6 +8,7 @@ export type ControlLookEdit = {
   selected: ControlWidgetId | null;
   onSelect: (id: ControlWidgetId | null) => void;
   onMove: (id: ControlWidgetId, ox: number, oy: number) => void;
+  previewOn?: boolean;
 };
 
 function clamp(n: number, min: number, max: number): number {
@@ -164,7 +165,17 @@ export function FloorSlotLook({ id, look, edit, className, children }: SlotProps
           ["--slot-label-size" as string]: `${w.fontSize}px`,
         }
       : {}),
-    ...(w?.colorSet ? { color: w.color } : {}),
+    ...(w?.colorSet
+      ? {
+          color: w.color,
+          ["--slot-idle" as string]: w.color,
+        }
+      : {}),
+    ...(w?.colorOnSet && w.colorOn
+      ? {
+          ["--slot-on" as string]: w.colorOn,
+        }
+      : {}),
   };
 
   const cls = [
@@ -172,6 +183,7 @@ export function FloorSlotLook({ id, look, edit, className, children }: SlotProps
     "floor-slot-look",
     w?.sizeSet ? "floor-slot-look--size" : "",
     w?.colorSet ? "floor-slot-look--color" : "",
+    w?.colorOnSet ? "floor-slot-look--on-color" : "",
     edit ? "ctrl-item--editing" : "",
     selected ? "ctrl-item--selected" : "",
     w && !w.visible ? "ctrl-item--hidden" : "",

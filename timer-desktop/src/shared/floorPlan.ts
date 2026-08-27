@@ -1,5 +1,5 @@
 import { MISA_VENUE_ID, YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
-import { normalizeYeoksamRole, tableLetter, type AppSnapshot, type MonitorSlot, type YeoksamRole } from "./types";
+import { normalizeYeoksamRole, type AppSnapshot, type MonitorSlot, type YeoksamRole } from "./types";
 
 /** 미사 A~E. 테이블 xcsdw, 모니터 zvafq */
 export const DEFAULT_MONITOR_KEYS: Record<string, number> = {
@@ -14,6 +14,14 @@ export const MISA_TABLE_HOTKEY: Record<number, string> = {
 };
 export const MISA_MONITOR_HOTKEY: Record<number, string> = {
   1: "Z", 2: "V", 3: "A", 4: "F", 5: "Q",
+};
+
+export const MISA_MONITOR_LABELS: Record<number, string> = {
+  1: "At",
+  2: "Bt",
+  3: "Ct",
+  4: "Dt",
+  5: "Et",
 };
 
 /** D=a, B=s, C=d */
@@ -73,7 +81,7 @@ export function floorHotkeys(venueId: string | null | undefined): {
 
 export function monitorLabel(venueId: string | null | undefined, slot: number): string {
   if (isYeoksamFloor(venueId)) return YEOKSAM_MONITOR_LABELS[slot] ?? `M${slot}`;
-  return tableLetter(slot);
+  return MISA_MONITOR_LABELS[slot] ?? `M${slot}`;
 }
 
 export function controlOutputSlotOf(config: { venueId?: string; controlOutputSlot?: number | null } | null): number | null {

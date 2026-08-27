@@ -7,7 +7,7 @@ import {
   type AppConfig,
   type UiThemeId,
 } from "./types";
-import { isYeoksamFloor, YEOKSAM_MONITOR_LABELS } from "./floorPlan";
+import { isYeoksamFloor, monitorLabel } from "./floorPlan";
 
 export const CONTROL_WIDGET_IDS = [
   "header",
@@ -104,8 +104,7 @@ export function storeSlotLabel(id: ControlWidgetId, venueId: string | null | und
   }
   if (id.startsWith("monitor")) {
     const slot = Number(id.slice(7));
-    if (isYeoksamFloor(venueId)) return YEOKSAM_MONITOR_LABELS[slot] ?? `M${slot}`;
-    return `모니터 ${tableLetter(slot)}`;
+    return monitorLabel(venueId, slot);
   }
   return CONTROL_WIDGET_LABELS[id];
 }
@@ -136,6 +135,8 @@ export interface ControlWidgetLook {
   visible: boolean;
   color: string;
   colorSet?: boolean;
+  colorOn?: string;
+  colorOnSet?: boolean;
   fontSize: number;
   sizeSet?: boolean;
   scale?: number;
@@ -166,19 +167,25 @@ function asColor(value: unknown, fallback: string): string {
   return isHexColor(value) ? value.trim() : fallback;
 }
 
-const THEME_PAINT: Record<UiThemeId, { bg: string; bg2: string | null; text: string }> = {
-  "black-pink": { bg: "#05070c", bg2: null, text: "#e8e6ef" },
-  "mnf-original": { bg: "#faf9fc", bg2: "#fff5f8", text: "#1c1230" },
-  "cherry-blossom": { bg: "#fff6f8", bg2: "#fff5ee", text: "#4a3d58" },
+const THEME_PAINT: Record<
+  UiThemeId,
+  { bg: string; bg2: string | null; text: string; accent: string; accent2: string }
+> = {
+  "black-pink": { bg: "#05070c", bg2: null, text: "#e8e6ef", accent: "#ffb6c9", accent2: "#d7baff" },
+  "mnf-original": { bg: "#faf9fc", bg2: "#fff5f8", text: "#1c1230", accent: "#8b46f0", accent2: "#e83d6e" },
+  "cherry-blossom": { bg: "#fff6f8", bg2: "#fff5ee", text: "#4a3d58", accent: "#c44569", accent2: "#e07050" },
 };
 
-function defaultWidget(theme: UiThemeId): ControlWidgetLook {
+function defaultWidget(theme: UiThemeId, id: ControlWidgetId): ControlWidgetLook {
+  const paint = THEME_PAINT[theme];
   return {
     ox: 0,
     oy: 0,
     visible: true,
-    color: THEME_PAINT[theme].text,
+    color: paint.text,
     colorSet: false,
+    colorOn: id.startsWith("monitor") ? paint.accent2 : paint.accent,
+    colorOnSet: false,
     fontSize: 16,
     sizeSet: false,
     scale: 1,
@@ -191,7 +198,7 @@ export function overlayFromControlTheme(theme: UiThemeId): ControlLook {
   const paint = THEME_PAINT[theme];
   const widgets = {} as Record<ControlWidgetId, ControlWidgetLook>;
   for (const id of CONTROL_WIDGET_IDS) {
-    widgets[id] = defaultWidget(theme);
+    widgets[id] = defaultWidget(theme, id);
   }
   return {
     overlay: true,
@@ -211,6 +218,8 @@ function parseWidget(raw: unknown, fallback: ControlWidgetLook): ControlWidgetLo
     visible: o.visible !== false,
     color: asColor(o.color, fallback.color),
     colorSet: o.colorSet === true,
+    colorOn: asColor(o.colorOn, fallback.colorOn ?? fallback.color),
+    colorOnSet: o.colorOnSet === true,
     fontSize:
       typeof o.fontSize === "number" && Number.isFinite(o.fontSize)
         ? clamp(Math.round(o.fontSize), 8, 80)

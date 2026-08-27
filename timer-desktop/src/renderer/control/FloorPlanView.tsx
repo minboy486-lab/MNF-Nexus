@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import type { AppSnapshot, GameSession } from "../../shared/types";
 import type { ControlLook, ControlWidgetId } from "../../shared/controlLook";
 import { ControlLookWrap, FloorSlotLook, type ControlLookEdit } from "./ControlLookWrap";
@@ -49,12 +49,12 @@ function slotFontPx(look: ControlLook | null | undefined, id: ControlWidgetId): 
 
 function SlotBtn({ label, hotkey, sub, active, variant, dataSlot, fontPx, onClick }: SlotBtnProps) {
   const labelStyle = fontPx != null ? { fontSize: `${fontPx}px` } : undefined;
-  const hotkeyStyle = fontPx != null ? { fontSize: `${Math.max(8, Math.round(fontPx * 0.5))}px` } : undefined;
+  const hotkeyStyle = fontPx != null ? { fontSize: `${Math.max(8, Math.round(fontPx * 0.45))}px` } : undefined;
   return (
     <button
       type="button"
       data-slot={dataSlot}
-      className={`slot-btn slot-btn--${variant} ${active ? "slot-btn--active" : ""}`}
+      className={`slot-btn slot-btn--${variant}${active ? " slot-btn--active" : ""}`}
       onClick={(e) => {
         (e.currentTarget as HTMLButtonElement).blur();
         const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
@@ -70,34 +70,46 @@ function SlotBtn({ label, hotkey, sub, active, variant, dataSlot, fontPx, onClic
   );
 }
 
+function slotActive(
+  edit: ControlLookEdit | undefined,
+  id: ControlWidgetId,
+  session: GameSession | undefined,
+): boolean {
+  return !!session || (edit?.previewOn === true && edit.selected === id);
+}
+
 function YeoksamFloorPlan({ snapshot, venueId, controlLook, edit, onTableClick, onMonitorClick }: Props) {
   function tBtn(slot: number) {
+    const id = `table${slot}` as ControlWidgetId;
     const s = sessionForTable(snapshot, slot);
+    const on = slotActive(edit, id, s);
     return (
       <SlotBtn
         label={tableLetter(slot)}
-        hotkey={YEOKSAM_TABLE_HOTKEY[slot]}
-        sub={s ? `G${s.gameId}` : undefined}
-        active={!!s}
+        hotkey={edit ? undefined : YEOKSAM_TABLE_HOTKEY[slot]}
+        sub={on ? `G${s?.gameId ?? 1}` : undefined}
+        active={on}
         variant="table-oval"
         dataSlot={`table-${slot}`}
-        fontPx={slotFontPx(controlLook, `table${slot}` as ControlWidgetId)}
+        fontPx={slotFontPx(controlLook, id)}
         onClick={(pos) => onTableClick(slot, pos)}
       />
     );
   }
 
   function screenBtn(slot: number) {
+    const id = `monitor${slot}` as ControlWidgetId;
     const s = sessionForMonitor(snapshot, slot);
+    const on = slotActive(edit, id, s);
     return (
       <SlotBtn
         label={monitorLabel(venueId, slot)}
-        hotkey={YEOKSAM_MONITOR_HOTKEY[slot]}
-        sub={s ? `G${s.gameId}` : undefined}
-        active={!!s}
+        hotkey={edit ? undefined : YEOKSAM_MONITOR_HOTKEY[slot]}
+        sub={on ? `G${s?.gameId ?? 1}` : undefined}
+        active={on}
         variant="map-screen"
         dataSlot={`monitor-${slot}`}
-        fontPx={slotFontPx(controlLook, `monitor${slot}` as ControlWidgetId)}
+        fontPx={slotFontPx(controlLook, id)}
         onClick={(pos) => onMonitorClick(slot, pos)}
       />
     );
@@ -129,29 +141,13 @@ function YeoksamFloorPlan({ snapshot, venueId, controlLook, edit, onTableClick, 
 /**
  * 미사점 레이아웃:
  *
- * [E모니터][E]
- *                [D][D모니터]   ← E·C 중간
- * [C모니터][C]
- *                [B][B모니터]   ← A·C 중간
- *         [A]
- *      [A모니터]
+ * [Et][E]
+ *            [D][Dt]
+ * [Ct][C]
+ *            [B][Bt]
+ * [At][A]
  */
 function DefaultFloorPlan({ snapshot, venueId, controlLook, edit, onTableClick, onMonitorClick }: Props) {
-  const rowRef = useRef<HTMLDivElement>(null);
-  const [monitorSize, setMonitorSize] = useState(68);
-
-  useEffect(() => {
-    const measure = () => {
-      if (!rowRef.current) return;
-      const h = rowRef.current.getBoundingClientRect().height;
-      if (h > 0) setMonitorSize(Math.round(h));
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    if (rowRef.current) ro.observe(rowRef.current);
-    return () => ro.disconnect();
-  }, []);
-
   function slot(id: ControlWidgetId, child: ReactNode) {
     return (
       <FloorSlotLook id={id} look={controlLook ?? null} edit={edit} className="floor-slot-look--misa">
@@ -161,66 +157,51 @@ function DefaultFloorPlan({ snapshot, venueId, controlLook, edit, onTableClick, 
   }
 
   function tBtn(slot: number) {
+    const id = `table${slot}` as ControlWidgetId;
     const s = sessionForTable(snapshot, slot);
+    const on = slotActive(edit, id, s);
     return (
       <SlotBtn
         label={tableLetter(slot)}
-        hotkey={MISA_TABLE_HOTKEY[slot]}
-        sub={s ? `G${s.gameId}` : undefined}
-        active={!!s}
+        hotkey={edit ? undefined : MISA_TABLE_HOTKEY[slot]}
+        sub={on ? `G${s?.gameId ?? 1}` : undefined}
+        active={on}
         variant="table-oval"
         dataSlot={`table-${slot}`}
-        fontPx={slotFontPx(controlLook, `table${slot}` as ControlWidgetId)}
+        fontPx={slotFontPx(controlLook, id)}
         onClick={(pos) => onTableClick(slot, pos)}
       />
     );
   }
 
   function mBtn(slot: number) {
+    const id = `monitor${slot}` as ControlWidgetId;
     const s = sessionForMonitor(snapshot, slot);
+    const on = slotActive(edit, id, s);
     return (
       <SlotBtn
         label={monitorLabel(venueId, slot)}
-        hotkey={MISA_MONITOR_HOTKEY[slot]}
-        sub={s ? `G${s.gameId}` : undefined}
-        active={!!s}
+        hotkey={edit ? undefined : MISA_MONITOR_HOTKEY[slot]}
+        sub={on ? `G${s?.gameId ?? 1}` : undefined}
+        active={on}
         variant="monitor"
         dataSlot={`monitor-${slot}`}
-        fontPx={slotFontPx(controlLook, `monitor${slot}` as ControlWidgetId)}
-        onClick={(pos) => onMonitorClick(slot, pos)}
-      />
-    );
-  }
-
-  function mHBtn(slot: number) {
-    const s = sessionForMonitor(snapshot, slot);
-    return (
-      <SlotBtn
-        label={monitorLabel(venueId, slot)}
-        hotkey={MISA_MONITOR_HOTKEY[slot]}
-        sub={s ? `G${s.gameId}` : undefined}
-        active={!!s}
-        variant="monitor-h"
-        dataSlot={`monitor-${slot}`}
-        fontPx={slotFontPx(controlLook, `monitor${slot}` as ControlWidgetId)}
+        fontPx={slotFontPx(controlLook, id)}
         onClick={(pos) => onMonitorClick(slot, pos)}
       />
     );
   }
 
   return (
-    <div
-      className="floor-plan floor-plan--misa"
-      style={{ ["--monitor-size" as string]: `${monitorSize}px` }}
-    >
-      <div className="floor-cell floor-cell--monitor misa-e-m" ref={rowRef}>{slot("monitor5", mBtn(5))}</div>
+    <div className="floor-plan floor-plan--misa">
+      <div className="floor-cell floor-cell--monitor misa-e-m">{slot("monitor5", mBtn(5))}</div>
       <div className="floor-cell floor-cell--table misa-e-t">{slot("table5", tBtn(5))}</div>
 
       <div className="floor-cell floor-cell--monitor misa-c-m">{slot("monitor3", mBtn(3))}</div>
       <div className="floor-cell floor-cell--table misa-c-t">{slot("table3", tBtn(3))}</div>
 
+      <div className="floor-cell floor-cell--monitor misa-a-m">{slot("monitor1", mBtn(1))}</div>
       <div className="floor-cell floor-cell--table misa-a-t">{slot("table1", tBtn(1))}</div>
-      <div className="floor-cell floor-cell--table floor-cell--center misa-a-m">{slot("monitor1", mHBtn(1))}</div>
 
       <div className="floor-cell floor-cell--table misa-d-t">{slot("table4", tBtn(4))}</div>
       <div className="floor-cell floor-cell--monitor misa-d-m">{slot("monitor4", mBtn(4))}</div>
