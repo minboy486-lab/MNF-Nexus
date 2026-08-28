@@ -90,8 +90,42 @@ export class LanCluster {
       };
       getShopTimerTheme: () => ShopTimerThemePayload | null;
       onPeersChange: () => void;
+      onPeerShopTheme: (raw: unknown) => void;
     },
   ) {}
+
+  ingestPeerLanMessage(host: string, msg: RemoteClientMsg | RemoteServerMsg): void {
+    if (msg.type === "peer_timer_theme") {
+      this.opts.onPeerShopTheme(msg);
+      return;
+    }
+    if (msg.type === "peer_snapshot" || msg.type === "snapshot") {
+      this.ingestPeerSnapshot(host, msg);
+    }
+  }
+
+  private ingestPeerSnapshot(
+    host: string,
+    msg: {
+      hostname?: string;
+      snapshot?: AppSnapshot;
+      timers?: TableTimerState[];
+      serverNow?: number;
+      yeoksamRole?: YeoksamRole;
+      timerTheme?: ShopTimerThemePayload;
+    },
+  ): void {
+    this.rememberPeer(host, {
+      host,
+      hostname: msg.hostname || host,
+      snapshot: msg.snapshot ?? EMPTY_SNAP,
+      timers: msg.timers ?? [],
+      serverNow: typeof msg.serverNow === "number" ? msg.serverNow : Date.now(),
+      yeoksamRole: msg.yeoksamRole,
+      timerTheme: msg.timerTheme,
+    });
+    if (msg.timerTheme) this.opts.onPeerShopTheme(msg.timerTheme);
+  }
 
   start(): void {
     this.stop();
@@ -379,9 +413,9 @@ export class LanCluster {
       }
     });
     ws.on("message", (raw) => {
-      let msg: RemoteServerMsg;
+      let msg: RemoteClientMsg | RemoteServerMsg;
       try {
-        msg = JSON.parse(String(raw)) as RemoteServerMsg;
+        msg = JSON.parse(String(raw)) as RemoteClientMsg | RemoteServerMsg;
       } catch {
         return;
       }
@@ -393,16 +427,7 @@ export class LanCluster {
         }
         return;
       }
-      if (msg.type !== "snapshot") return;
-      this.rememberPeer(host, {
-        host,
-        hostname: msg.hostname || host,
-        snapshot: msg.snapshot ?? EMPTY_SNAP,
-        timers: msg.timers ?? [],
-        serverNow: typeof msg.serverNow === "number" ? msg.serverNow : Date.now(),
-        yeoksamRole: msg.yeoksamRole,
-        timerTheme: msg.timerTheme,
-      });
+      this.ingestPeerLanMessage(host, msg);
     });
     ws.on("close", () => {
       this.connecting.delete(host);

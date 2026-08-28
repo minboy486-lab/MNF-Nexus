@@ -1,7 +1,15 @@
 import type { TableTimerState } from "@mnf/timer/types";
 import {
+  normalizeControlLook,
+  normalizeSavedControlThemes,
+  resolveActiveControlThemeId,
+  type ControlLook,
+  type SavedControlTheme,
+} from "./controlLook";
+import {
   isUiThemeId,
   normalizeUiTheme,
+  resolveControlTheme,
   resolveTimerTheme,
   withUiThemes,
   type AppConfig,
@@ -479,12 +487,19 @@ export interface ShopTimerThemePayload {
   activeTimerThemeId: string;
   timerLook: TimerLook | null;
   savedTimerThemes: SavedTimerTheme[];
+  controlTheme: UiThemeId;
+  activeControlThemeId: string;
+  controlLook: ControlLook | null;
+  savedControlThemes: SavedControlTheme[];
 }
 
 export function shopTimerThemeFromConfig(config: AppConfig): ShopTimerThemePayload {
   const timerTheme = resolveTimerTheme(config);
   const savedTimerThemes = normalizeSavedTimerThemes(config.savedTimerThemes, timerTheme);
   const timerLook = normalizeTimerLook(config.timerLook, timerTheme);
+  const controlTheme = resolveControlTheme(config);
+  const savedControlThemes = normalizeSavedControlThemes(config.savedControlThemes, controlTheme);
+  const controlLook = normalizeControlLook(config.controlLook, controlTheme);
   return {
     timerTheme,
     activeTimerThemeId: resolveActiveTimerThemeId({
@@ -495,18 +510,40 @@ export function shopTimerThemeFromConfig(config: AppConfig): ShopTimerThemePaylo
     }),
     timerLook,
     savedTimerThemes,
+    controlTheme,
+    activeControlThemeId: resolveActiveControlThemeId({
+      ...config,
+      controlTheme,
+      savedControlThemes,
+      controlLook,
+    }),
+    controlLook,
+    savedControlThemes,
   };
 }
 
 export function normalizeShopTimerTheme(raw: unknown): ShopTimerThemePayload | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
-  if (o.timerTheme == null && o.activeTimerThemeId == null && o.timerLook == null && o.savedTimerThemes == null) {
-    return null;
-  }
+  const hasTimer =
+    o.timerTheme != null ||
+    o.activeTimerThemeId != null ||
+    o.timerLook != null ||
+    o.savedTimerThemes != null;
+  const hasControl =
+    o.controlTheme != null ||
+    o.activeControlThemeId != null ||
+    o.controlLook != null ||
+    o.savedControlThemes != null;
+  if (!hasTimer && !hasControl) return null;
+
   const timerTheme = normalizeUiTheme(o.timerTheme);
   const savedTimerThemes = normalizeSavedTimerThemes(o.savedTimerThemes, timerTheme);
   const timerLook = normalizeTimerLook(o.timerLook, timerTheme);
+  const controlTheme = normalizeUiTheme(o.controlTheme ?? o.timerTheme);
+  const savedControlThemes = normalizeSavedControlThemes(o.savedControlThemes, controlTheme);
+  const controlLook = normalizeControlLook(o.controlLook, controlTheme);
+
   return {
     timerTheme,
     activeTimerThemeId: resolveActiveTimerThemeId({
@@ -517,6 +554,15 @@ export function normalizeShopTimerTheme(raw: unknown): ShopTimerThemePayload | n
     }),
     timerLook,
     savedTimerThemes,
+    controlTheme,
+    activeControlThemeId: resolveActiveControlThemeId({
+      controlTheme,
+      savedControlThemes,
+      controlLook,
+      activeControlThemeId: typeof o.activeControlThemeId === "string" ? o.activeControlThemeId : undefined,
+    }),
+    controlLook,
+    savedControlThemes,
   };
 }
 
@@ -526,10 +572,13 @@ export function shopTimerThemeEqual(a: ShopTimerThemePayload, b: ShopTimerThemeP
 
 export function withShopTimerTheme(config: AppConfig, pack: ShopTimerThemePayload): AppConfig {
   return {
-    ...withUiThemes(config, { timerTheme: pack.timerTheme }),
+    ...withUiThemes(config, { timerTheme: pack.timerTheme, controlTheme: pack.controlTheme }),
     timerLook: pack.timerLook,
     savedTimerThemes: pack.savedTimerThemes,
     activeTimerThemeId: pack.activeTimerThemeId,
+    controlLook: pack.controlLook,
+    savedControlThemes: pack.savedControlThemes,
+    activeControlThemeId: pack.activeControlThemeId,
   };
 }
 

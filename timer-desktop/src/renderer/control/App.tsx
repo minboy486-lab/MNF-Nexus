@@ -174,17 +174,28 @@ export function App() {
     const unsubThemes = window.controlApi.onThemesUpdate((t) => {
       const nextControl = normalizeUiTheme(t.controlTheme);
       const nextTimer = normalizeUiTheme(t.timerTheme);
+      const nextSavedTimerThemes = normalizeSavedTimerThemes(t.savedTimerThemes, nextTimer);
+      const nextSavedControlThemes = normalizeSavedControlThemes(t.savedControlThemes, nextControl);
       setControlTheme(nextControl);
       setTimerTheme(nextTimer);
       applyDocumentTheme(nextControl);
-      if (t.savedTimerThemes) {
-        setSavedTimerThemes(normalizeSavedTimerThemes(t.savedTimerThemes, nextTimer));
-      }
-      if (t.activeTimerThemeId) setActiveTimerThemeId(t.activeTimerThemeId);
-      if (t.savedControlThemes) {
-        setSavedControlThemes(normalizeSavedControlThemes(t.savedControlThemes, nextControl));
-      }
-      if (t.activeControlThemeId) setActiveControlThemeId(t.activeControlThemeId);
+      setSavedTimerThemes(nextSavedTimerThemes);
+      setSavedControlThemes(nextSavedControlThemes);
+      setActiveTimerThemeId((prev) => t.activeTimerThemeId ?? prev);
+      setActiveControlThemeId((prev) => t.activeControlThemeId ?? prev);
+      setConfig((prev) =>
+        prev
+          ? {
+              ...prev,
+              controlTheme: nextControl,
+              timerTheme: nextTimer,
+              savedTimerThemes: nextSavedTimerThemes,
+              activeTimerThemeId: t.activeTimerThemeId ?? prev.activeTimerThemeId,
+              savedControlThemes: nextSavedControlThemes,
+              activeControlThemeId: t.activeControlThemeId ?? prev.activeControlThemeId,
+            }
+          : prev,
+      );
     });
     const unsubVolume = window.controlApi.onSoundVolumeUpdate((v) => {
       const next = normalizeSoundVolume(v);

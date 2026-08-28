@@ -212,6 +212,7 @@ export class WindowManager {
     this.config = next;
     this.broadcastTheme();
     this.broadcastTimerLook();
+    this.broadcastControlLook();
     return true;
   }
 

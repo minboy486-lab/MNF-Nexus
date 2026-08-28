@@ -198,6 +198,9 @@ export class RemoteServer {
         this.broadcastToOperators();
         this.syncYeoksamFollow();
       },
+      onPeerShopTheme: (raw) => {
+        this.applyIncomingShopTheme(raw);
+      },
     });
     this.rotatePunchToken();
 
@@ -350,7 +353,6 @@ export class RemoteServer {
 
   broadcastShopTimerTheme(): void {
     if (this.applyingShopTheme) return;
-    if (!isYeoksamFloor(getConfiguredVenueId())) return;
     const pack = this.shopTheme?.get();
     if (!pack) return;
     const msg: RemoteClientMsg = { type: "peer_timer_theme", ...pack };
@@ -699,15 +701,7 @@ export class RemoteServer {
     if (!hub) return;
 
     if (msg.type === "peer_snapshot") {
-      this.cluster?.rememberPeer(state.remoteHost, {
-        host: state.remoteHost,
-        hostname: msg.hostname || state.remoteHost,
-        snapshot: msg.snapshot,
-        timers: msg.timers,
-        serverNow: typeof msg.serverNow === "number" ? msg.serverNow : Date.now(),
-        yeoksamRole: msg.yeoksamRole,
-        timerTheme: msg.timerTheme,
-      });
+      this.cluster?.ingestPeerLanMessage(state.remoteHost, msg);
       return;
     }
 

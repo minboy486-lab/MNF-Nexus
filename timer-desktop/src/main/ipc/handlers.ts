@@ -105,9 +105,10 @@ function persistTimerLook(wm: WindowManager, remote?: RemoteServer): void {
   remote?.broadcastShopTimerTheme();
 }
 
-function persistControlLook(wm: WindowManager): void {
+function persistControlLook(wm: WindowManager, remote?: RemoteServer): void {
   const latest = wm.getConfig() ?? loadConfig();
   if (latest) saveConfig({ ...latest, controlLook: wm.getControlLook() });
+  remote?.broadcastShopTimerTheme();
 }
 
 export function flushPendingSoundVolume(wm: WindowManager, remote?: RemoteServer): void {
@@ -124,7 +125,7 @@ export function flushPendingSoundVolume(wm: WindowManager, remote?: RemoteServer
   if (controlLookSaveTimer) {
     clearTimeout(controlLookSaveTimer);
     controlLookSaveTimer = null;
-    persistControlLook(wm);
+    persistControlLook(wm, remote);
   }
 }
 
@@ -199,7 +200,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const saved = saveConfig(next);
     if (!saved.ok) return saved;
     await wm.applyConfig(next);
-    if (surface === "timer") remote.broadcastShopTimerTheme();
+    if (surface === "timer" || surface === "control") remote.broadcastShopTimerTheme();
     return { ok: true as const, surface, theme };
   });
   ipcMain.handle("timerTheme:select", async (_e, raw: unknown) => {
@@ -284,6 +285,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const saved = saveConfig(next);
     if (!saved.ok) return saved;
     await wm.applyConfig(next);
+    remote.broadcastShopTimerTheme();
     return {
       ok: true as const,
       controlTheme: next.controlTheme,
@@ -313,6 +315,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const written = saveConfig(result.config);
     if (!written.ok) return written;
     await wm.applyConfig(result.config);
+    remote.broadcastShopTimerTheme();
     return {
       ok: true as const,
       saved: result.saved,
@@ -333,6 +336,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const saved = saveConfig(next);
     if (!saved.ok) return saved;
     await wm.applyConfig(next);
+    remote.broadcastShopTimerTheme();
     return {
       ok: true as const,
       controlTheme: next.controlTheme,
@@ -381,7 +385,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     if (controlLookSaveTimer) clearTimeout(controlLookSaveTimer);
     controlLookSaveTimer = setTimeout(() => {
       controlLookSaveTimer = null;
-      persistControlLook(wm);
+      persistControlLook(wm, remote);
     }, 400);
     return { ok: true as const, look };
   });
