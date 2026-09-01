@@ -34,7 +34,7 @@ export function GuestPasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="glass-panel rounded-2xl p-5 border border-white/10 space-y-4">
-      <h1 className="text-lg font-bold">비밀번호 변경</h1>
+      <h2 className="text-base font-bold">비밀번호 변경</h2>
 
       <label className="block text-sm">
         <span className="text-on-surface-variant">현재 비밀번호</span>
@@ -80,13 +80,15 @@ export function GuestPasswordForm() {
       {error && <p className="text-error text-sm">{error}</p>}
       {success && <p className="text-primary text-sm">{success}</p>}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="btn-primary w-full py-3 rounded-xl font-bold disabled:opacity-50"
-      >
-        {pending ? "변경 중…" : "비밀번호 변경"}
-      </button>
+      <div className="flex justify-end pt-1">
+        <button
+          type="submit"
+          disabled={pending}
+          className="btn-primary px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50"
+        >
+          {pending ? "변경 중…" : "변경"}
+        </button>
+      </div>
     </form>
   );
 }

@@ -30,7 +30,7 @@ export default async function GuestPointsPage() {
     <>
       <VisitSyncRefresh venueId={venueId} />
       <AdminTopBar title="포인트 관리" subtitle="손님 MP 추가·차감" />
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden p-4 md:p-6">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <GuestPointsClient
           members={members}
           visits={visits}

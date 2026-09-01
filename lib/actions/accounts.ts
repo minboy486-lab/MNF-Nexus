@@ -16,7 +16,6 @@ import type { UserRole } from "@/lib/types";
 import { PROFILE_ROLES } from "@/lib/auth/roles";
 import { syncStaffRowsForVenues } from "@/lib/staff/ensure-row";
 import {
-  KNOWN_VENUE_IDS,
   defaultVenuesForRole,
   isKnownVenueId,
 } from "@/lib/venue/constants";
@@ -58,7 +57,6 @@ function normalizeAccountVenues(
   role: UserRole,
   requested: string[] | undefined,
 ): { venueIds: string[] } | { error: string } {
-  if (role === "admin") return { venueIds: [...KNOWN_VENUE_IDS] };
   if (role === "guest") return { venueIds: [] };
   const venueIds = [...new Set((requested ?? []).filter(isKnownVenueId))];
   if (venueIds.length === 0) {

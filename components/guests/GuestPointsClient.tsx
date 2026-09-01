@@ -2,11 +2,11 @@
 
 import { useMemo, useState } from "react";
 import type { Member, MemberVisitWithMember } from "@/lib/types";
+import { MemberPointHistory } from "@/components/guests/MemberPointHistory";
 import { PointAdjustPanel } from "@/components/guests/PointAdjustPanel";
 import { NicknameAutocomplete } from "@/components/scores/NicknameAutocomplete";
 import type { MemberSuggestion } from "@/lib/scores/types";
-import { formatPaymentDue } from "@/lib/utils/payment-due";
-import { formatMp } from "@/lib/utils/mp";
+import { formatDisplayPointBalance, formatPaymentDue } from "@/lib/utils/payment-due";
 
 type Props = {
   members: Member[];
@@ -17,6 +17,7 @@ type Props = {
 export function GuestPointsClient({ members, visits, visitCounts }: Props) {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [historyKey, setHistoryKey] = useState(0);
 
   const memberSuggestions = useMemo(
     (): MemberSuggestion[] =>
@@ -50,7 +51,7 @@ export function GuestPointsClient({ members, visits, visitCounts }: Props) {
   }
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-4">
+    <div className="space-y-4 max-w-3xl">
       <section className="glass-panel rounded-xl p-3 border border-white/5 shrink-0">
         <header className="mb-2">
           <h2 className="font-bold text-base flex items-center gap-2">
@@ -67,7 +68,8 @@ export function GuestPointsClient({ members, visits, visitCounts }: Props) {
           <ul className="flex flex-wrap gap-2">
             {visitingMembers.map((m) => {
               const active = selectedId === m.id;
-              const paymentDue = formatPaymentDue(m.credit_balance);
+              const paymentDue = formatPaymentDue(m.credit_balance, m.point_balance);
+              const displayBalance = formatDisplayPointBalance(m.point_balance, m.credit_balance);
               return (
                 <li key={m.id}>
                   <button
@@ -81,7 +83,7 @@ export function GuestPointsClient({ members, visits, visitCounts }: Props) {
                   >
                     <span className="font-semibold">{m.nickname}</span>
                     <span className="text-primary text-[11px] font-bold tabular-nums mt-0.5">
-                      {formatMp(m.point_balance)}
+                      {displayBalance}
                     </span>
                     {paymentDue && (
                       <span className="text-error text-[10px] tabular-nums mt-0.5">{paymentDue}</span>
@@ -94,25 +96,46 @@ export function GuestPointsClient({ members, visits, visitCounts }: Props) {
         )}
       </section>
 
-      <section className="shrink-0">
-        <label className="block text-xs text-on-surface-variant mb-1.5">손님 검색</label>
-        <NicknameAutocomplete
-          id="guest-points-search"
-          members={memberSuggestions}
-          value={search}
-          onChange={setSearch}
-          onPick={(m) => setSelectedId(m.id)}
-          onEnter={() => {
-            const q = search.trim();
-            if (!q) return;
-            const exact = memberSuggestions.find((m) => m.nickname === q);
-            if (exact) setSelectedId(exact.id);
-          }}
-        />
+      <section className="glass-panel rounded-xl p-3 border border-white/10">
+        <label
+          htmlFor="guest-points-search"
+          className="block text-sm font-semibold text-on-surface mb-2"
+        >
+          손님 검색
+        </label>
+        <div className="relative">
+          <span
+            className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-lg text-on-surface-variant pointer-events-none"
+            aria-hidden
+          >
+            search
+          </span>
+          <NicknameAutocomplete
+            id="guest-points-search"
+            members={memberSuggestions}
+            value={search}
+            onChange={setSearch}
+            placeholder="닉네임 입력 (초성 검색 가능)"
+            inputClassName="pl-10 h-10 bg-white/[0.06] border-white/20 text-on-surface placeholder:text-on-surface-variant/60 focus:border-primary/50 focus:bg-white/[0.08]"
+            onPick={(m) => setSelectedId(m.id)}
+            onEnter={() => {
+              const q = search.trim();
+              if (!q) return;
+              const exact = memberSuggestions.find((m) => m.nickname === q);
+              if (exact) setSelectedId(exact.id);
+            }}
+          />
+        </div>
       </section>
 
-      <div className="flex-1 min-h-0">
-        <PointAdjustPanel member={selected} />
+      <div className="space-y-4">
+        <PointAdjustPanel
+          member={selected}
+          onAdjusted={() => setHistoryKey((k) => k + 1)}
+        />
+        {selected && (
+          <MemberPointHistory memberId={selected.id} refreshKey={historyKey} />
+        )}
       </div>
     </div>
   );

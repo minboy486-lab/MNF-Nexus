@@ -86,9 +86,9 @@ export function IntegratedSeatPicker({
                         ({v.members.display_name})
                       </span>
                     )}
-                    {v.members && formatPaymentDue(v.members.credit_balance) && (
+                    {v.members && formatPaymentDue(v.members.credit_balance, v.members.point_balance) && (
                       <span className="block text-error text-xs mt-0.5">
-                        결제할 금액 {formatPaymentDue(v.members.credit_balance)}
+                        결제할 금액 {formatPaymentDue(v.members.credit_balance, v.members.point_balance)}
                       </span>
                     )}
                   </button>

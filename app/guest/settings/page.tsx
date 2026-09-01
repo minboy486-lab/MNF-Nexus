@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { GuestPasswordForm } from "@/components/guest/GuestPasswordForm";
+import { GuestPushSettings } from "@/components/guest/GuestPushSettings";
 import { signOut } from "@/lib/actions/auth";
 
 export default function GuestSettingsPage() {
@@ -15,16 +16,18 @@ export default function GuestSettingsPage() {
         </Link>
         <div>
           <h1 className="text-xl font-bold">계정 설정</h1>
-          <p className="text-sm text-on-surface-variant">비밀번호 · 로그아웃</p>
+          <p className="text-sm text-on-surface-variant">비밀번호 · 알림 · 로그아웃</p>
         </div>
       </div>
 
+      <GuestPushSettings />
+
       <GuestPasswordForm />
 
-      <form action={signOut}>
+      <form action={signOut} className="flex justify-center">
         <button
           type="submit"
-          className="w-full py-3 rounded-xl text-sm font-semibold border border-white/15 text-on-surface-variant hover:text-error hover:border-error/30 hover:bg-error/5 transition-colors"
+          className="px-6 py-2.5 rounded-xl text-sm font-semibold border border-white/15 text-on-surface-variant hover:text-error hover:border-error/30 hover:bg-error/5 transition-colors"
         >
           로그아웃
         </button>

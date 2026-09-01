@@ -42,6 +42,7 @@ export default async function GuestScoresPage() {
   return (
     <GuestScoresClient
       memberNickname={member.nickname}
+      venueId={venueId}
       venueName={venue?.name ?? "매장"}
       monthLabel={formatMonthLabel(month.from)}
       ranking={ranking}

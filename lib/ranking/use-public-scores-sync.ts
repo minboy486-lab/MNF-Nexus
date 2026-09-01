@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
 
 export type PublicScoresSyncScope = "bingo" | "highhand" | "ranking";
 
@@ -14,11 +13,13 @@ const TABLES_BY_SCOPE: Record<PublicScoresSyncScope, string[]> = {
   ranking: ["manual_score_daily"],
 };
 
-/** 관리자 승점·빙고·하이핸드 변경을 공개 페이지에 실시간 반영 */
-export function usePublicScoresSync(scope: PublicScoresSyncScope) {
+/** 관리자 승점·빙고·하이핸드 변경을 공개 페이지에 실시간 반영 (지점별) */
+export function usePublicScoresSync(scope: PublicScoresSyncScope, venueId: string) {
   const router = useRouter();
   const scopeRef = useRef(scope);
+  const venueRef = useRef(venueId);
   scopeRef.current = scope;
+  venueRef.current = venueId;
 
   useEffect(() => {
     let debounceId: number | undefined;
@@ -26,6 +27,14 @@ export function usePublicScoresSync(scope: PublicScoresSyncScope) {
     function scheduleRefresh() {
       if (debounceId !== undefined) window.clearTimeout(debounceId);
       debounceId = window.setTimeout(() => router.refresh(), 250);
+    }
+
+    if (!venueRef.current) {
+      const pollId = window.setInterval(scheduleRefresh, 15_000);
+      return () => {
+        window.clearInterval(pollId);
+        if (debounceId !== undefined) window.clearTimeout(debounceId);
+      };
     }
 
     if (!isSupabaseConfigured()) {
@@ -38,7 +47,7 @@ export function usePublicScoresSync(scope: PublicScoresSyncScope) {
 
     const supabase = createClient();
     const tables = TABLES_BY_SCOPE[scopeRef.current];
-    const channel = supabase.channel(`public-scores-${scopeRef.current}`);
+    const channel = supabase.channel(`public-scores-${scopeRef.current}-${venueRef.current}`);
 
     for (const table of tables) {
       channel.on(
@@ -47,7 +56,7 @@ export function usePublicScoresSync(scope: PublicScoresSyncScope) {
           event: "*",
           schema: "public",
           table,
-          filter: `venue_id=eq.${DEFAULT_VENUE_ID}`,
+          filter: `venue_id=eq.${venueRef.current}`,
         },
         scheduleRefresh,
       );
@@ -55,7 +64,6 @@ export function usePublicScoresSync(scope: PublicScoresSyncScope) {
 
     channel.subscribe();
 
-    // Realtime(anon RLS·publication) 실패 시 폴링 백업
     const pollId = window.setInterval(scheduleRefresh, 15_000);
 
     return () => {
@@ -63,5 +71,5 @@ export function usePublicScoresSync(scope: PublicScoresSyncScope) {
       if (debounceId !== undefined) window.clearTimeout(debounceId);
       void supabase.removeChannel(channel);
     };
-  }, [router, scope]);
+  }, [router, scope, venueId]);
 }

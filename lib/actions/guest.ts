@@ -115,6 +115,7 @@ export async function requestPointTransfer(
 
   const { member } = await getMemberForUser();
   if (!member) return { error: "회원 연동이 필요합니다." };
+  if (!member.venue_id) return { error: "지점 정보가 없습니다. 매장 데스크에 문의하세요." };
   if (amount <= 0) return { error: "금액을 확인하세요." };
   if (member.point_balance < amount) return { error: "포인트가 부족합니다." };
 
@@ -123,12 +124,17 @@ export async function requestPointTransfer(
   const venueId = member.venue_id;
   const { data: toMember } = await supabase
     .from("members")
-    .select("id, nickname")
+    .select("id, nickname, venue_id")
     .eq("venue_id", venueId)
     .eq("phone", digits)
     .maybeSingle();
 
-  if (!toMember) return { error: "받는 분 번호를 찾을 수 없습니다." };
+  if (!toMember) {
+    return { error: "같은 지점에 등록된 받는 분 번호를 찾을 수 없습니다." };
+  }
+  if (toMember.venue_id !== venueId) {
+    return { error: "지점 간 포인트 이체는 불가능합니다." };
+  }
   if (toMember.id === member.id) return { error: "본인에게는 보낼 수 없습니다." };
 
   const { error } = await supabase.from("point_transfer_requests").insert({
@@ -158,32 +164,44 @@ export async function approvePointTransfer(requestId: string) {
 
   if (!req || req.status !== "pending") return;
 
+  const { data: fromMember } = await supabase
+    .from("members")
+    .select("point_balance, venue_id")
+    .eq("id", req.from_member_id)
+    .single();
+
+  const { data: toMember } = await supabase
+    .from("members")
+    .select("point_balance, venue_id")
+    .eq("id", req.to_member_id)
+    .single();
+
+  if (
+    !fromMember ||
+    !toMember ||
+    fromMember.venue_id !== req.venue_id ||
+    toMember.venue_id !== req.venue_id ||
+    fromMember.venue_id !== toMember.venue_id
+  ) {
+    return;
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: from } = await supabase
-    .from("members")
-    .select("point_balance")
-    .eq("id", req.from_member_id)
-    .single();
+  const from = fromMember;
 
-  if (!from || from.point_balance < req.amount) return;
+  if (from.point_balance < req.amount) return;
 
   await supabase
     .from("members")
     .update({ point_balance: from.point_balance - req.amount })
     .eq("id", req.from_member_id);
 
-  const { data: to } = await supabase
-    .from("members")
-    .select("point_balance")
-    .eq("id", req.to_member_id)
-    .single();
-
   await supabase
     .from("members")
-    .update({ point_balance: (to?.point_balance ?? 0) + req.amount })
+    .update({ point_balance: (toMember.point_balance ?? 0) + req.amount })
     .eq("id", req.to_member_id);
 
   await supabase.from("money_transactions").insert([

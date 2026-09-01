@@ -8,7 +8,7 @@ import {
 import { venueById } from "@/lib/venue/constants";
 import { signedTxnAmount, txnTypeLabel } from "@/lib/ledger/txn-labels";
 import { formatMp } from "@/lib/utils/mp";
-import { formatPaymentDue } from "@/lib/utils/payment-due";
+import { formatDisplayPointBalance, formatPaymentDue } from "@/lib/utils/payment-due";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ export default async function GuestPointsPage() {
   if (!member) return <GuestVenueEmpty venueName={venue?.name ?? "이 지점"} />;
 
   const history = await getGuestPointHistory(member.id);
-  const paymentDue = formatPaymentDue(member.credit_balance);
+  const paymentDue = formatPaymentDue(member.credit_balance, member.point_balance);
 
   return (
     <div className="space-y-5">
@@ -35,7 +35,7 @@ export default async function GuestPointsPage() {
       <section className="glass-panel rounded-2xl p-5 border border-primary/20">
         <p className="text-xs text-on-surface-variant">보유 포인트</p>
         <p className="text-3xl font-bold text-primary tabular-nums mt-1">
-          {formatMp(member.point_balance)}
+          {formatDisplayPointBalance(member.point_balance, member.credit_balance)}
         </p>
         {paymentDue && (
           <p className="text-error text-sm font-semibold mt-3">결제할 금액 {paymentDue}</p>

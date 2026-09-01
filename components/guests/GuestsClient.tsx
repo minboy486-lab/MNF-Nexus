@@ -82,9 +82,9 @@ function VisitRow({
       }`}
     >
       <span className="truncate">{m?.nickname}</span>
-      {m && formatPaymentDue(m.credit_balance) && (
+      {m && formatPaymentDue(m.credit_balance, m.point_balance) && (
         <span className="text-error text-xs font-bold tabular-nums shrink-0">
-          {formatPaymentDue(m.credit_balance)}
+          {formatPaymentDue(m.credit_balance, m.point_balance)}
         </span>
       )}
     </button>

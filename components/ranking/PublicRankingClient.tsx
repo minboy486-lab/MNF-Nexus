@@ -10,6 +10,8 @@ type Props = {
   ranking: ScoreRankingRow[];
   prevMonthTop: ScoreRankingRow | null;
   monthLabel: string;
+  venueId: string;
+  venueName: string;
   /** 로그인 손님 닉네임 (설정 시 공개 닉네임 입력 생략) */
   memberNickname?: string;
   /** 손님 앱 등에 임베드 */
@@ -161,6 +163,8 @@ export function PublicRankingClient({
   ranking,
   prevMonthTop,
   monthLabel,
+  venueId,
+  venueName,
   memberNickname,
   embedded = false,
 }: Props) {
@@ -173,7 +177,7 @@ export function PublicRankingClient({
   const closeEdit = guestNick.closeEdit;
   const myRowRef = useRef<HTMLLIElement>(null);
 
-  usePublicScoresSync("ranking");
+  usePublicScoresSync("ranking", venueId);
 
   const ranked = useMemo(
     () => ranking.map((row, i) => ({ ...row, rank: i + 1 })),
@@ -220,7 +224,9 @@ export function PublicRankingClient({
           <h1 className="text-[1.75rem] font-black mt-1 tracking-tight">{monthLabel}</h1>
         </div>
       ) : (
-        <p className="text-sm text-on-surface-variant mb-3">{monthLabel}</p>
+        <p className="text-sm text-on-surface-variant mb-3">
+          {venueName} · {monthLabel}
+        </p>
       )}
 
       {prevMonthTop && (

@@ -8,7 +8,7 @@ const tabs = [
   { href: "/guest/points", label: "포인트", icon: "account_balance_wallet", match: "prefix" as const },
   {
     href: "/guest/scores",
-    label: "승점·이벤트",
+    label: "이벤트",
     icon: "emoji_events",
     match: "prefix" as const,
   },

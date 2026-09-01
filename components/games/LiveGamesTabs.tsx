@@ -39,16 +39,6 @@ export function LiveGamesTabs({ games }: Props) {
           </Link>
         );
       })}
-      <Link
-        href="/admin/operations"
-        className={`px-4 py-2 rounded-full text-sm font-medium border ${
-          pathname === "/admin/operations"
-            ? "bg-tertiary/20 border-tertiary text-tertiary"
-            : "border-white/10 text-on-surface-variant"
-        }`}
-      >
-        운영 탭
-      </Link>
     </div>
   );
 }

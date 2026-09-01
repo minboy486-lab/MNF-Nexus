@@ -13,6 +13,8 @@ type Props = {
   playDate: string;
   hasDateInUrl: boolean;
   entries: HighHandEntry[];
+  venueId: string;
+  venueName: string;
   memberNickname?: string;
   embedded?: boolean;
   /** 영업일 자정 넘김 시 이동할 경로 */
@@ -28,6 +30,8 @@ export function PublicHighHandClient({
   playDate,
   hasDateInUrl,
   entries,
+  venueId,
+  venueName,
   memberNickname,
   embedded = false,
   refreshPath = "/ranking/highhand",
@@ -46,7 +50,7 @@ export function PublicHighHandClient({
   }, [router, refreshPath]);
 
   useVenueOperatingDateRollover(playDate, hasDateInUrl, handleOperatingRollover);
-  usePublicScoresSync("highhand");
+  usePublicScoresSync("highhand", venueId);
 
   const rows = useMemo(
     () =>
@@ -88,7 +92,9 @@ export function PublicHighHandClient({
           <p className="text-sm text-on-surface-variant mt-1">{formatDateKo(playDate)}</p>
         </div>
       ) : (
-        <p className="text-sm text-on-surface-variant mb-3">{formatDateKo(playDate)}</p>
+        <p className="text-sm text-on-surface-variant mb-3">
+          {venueName} · {formatDateKo(playDate)}
+        </p>
       )}
 
       {nickname && myHands.length > 0 && (

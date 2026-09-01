@@ -12,6 +12,7 @@ type Tab = "ranking" | "bingo" | "highhand";
 
 type Props = {
   memberNickname: string;
+  venueId: string;
   venueName: string;
   monthLabel: string;
   ranking: ScoreRankingRow[];
@@ -29,6 +30,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 export function GuestScoresClient({
   memberNickname,
+  venueId,
   venueName,
   monthLabel,
   ranking,
@@ -70,18 +72,28 @@ export function GuestScoresClient({
             ranking={ranking}
             prevMonthTop={prevMonthTop}
             monthLabel={monthLabel}
+            venueId={venueId}
+            venueName={venueName}
             memberNickname={memberNickname}
             embedded
           />
         )}
         {tab === "bingo" && (
-          <PublicBingoClient sheet={bingoSheet} memberNickname={memberNickname} embedded />
+          <PublicBingoClient
+            sheet={bingoSheet}
+            venueId={venueId}
+            venueName={venueName}
+            memberNickname={memberNickname}
+            embedded
+          />
         )}
         {tab === "highhand" && (
           <PublicHighHandClient
             playDate={highHandDate}
             hasDateInUrl={false}
             entries={highHandEntries}
+            venueId={venueId}
+            venueName={venueName}
             memberNickname={memberNickname}
             embedded
             refreshPath="/guest/scores"

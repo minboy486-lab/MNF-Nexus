@@ -2,11 +2,48 @@
 
 import { revalidatePath } from "next/cache";
 import { isAdminRole } from "@/lib/auth/roles";
+import { getGuestPointHistory } from "@/lib/data/guest-queries";
 import { getProfile } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveVenueId } from "@/lib/venue/active";
 import { mpToWon } from "@/lib/utils/mp";
+import { sendPointChangePush } from "@/lib/push/send-point-notification";
+
+export type MemberPointHistoryRow = {
+  id: string;
+  txn_type: string;
+  amount: number;
+  note: string | null;
+  occurred_at: string;
+};
+
+export async function fetchMemberPointHistory(
+  memberId: string,
+): Promise<{ rows: MemberPointHistoryRow[] } | { error: string }> {
+  if (!isSupabaseConfigured()) return { rows: [] };
+
+  const { profile } = await getProfile();
+  if (!isAdminRole(profile?.role)) return { error: "권한이 없습니다." };
+
+  const id = memberId?.trim();
+  if (!id) return { error: "손님을 선택하세요." };
+
+  const venueId = await getActiveVenueId();
+  const supabase = await createClient();
+  const { data: member, error: memberError } = await supabase
+    .from("members")
+    .select("id, venue_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (memberError) return { error: memberError.message };
+  if (!member) return { error: "손님을 찾을 수 없습니다." };
+  if (member.venue_id !== venueId) return { error: "현재 지점의 손님이 아닙니다." };
+
+  const rows = (await getGuestPointHistory(id)) as MemberPointHistoryRow[];
+  return { rows };
+}
 
 export async function adjustMemberPoints(params: {
   memberId: string;
@@ -49,12 +86,21 @@ export async function adjustMemberPoints(params: {
   if (error) return { error: error.message };
 
   const result = data as { point_balance?: number } | null;
+  const pointBalance = typeof result?.point_balance === "number" ? result.point_balance : 0;
+
+  void sendPointChangePush({
+    memberId,
+    deltaMp,
+    balanceWon: pointBalance,
+    note: params.note?.trim(),
+  });
+
   revalidatePath("/admin/guests");
   revalidatePath("/guest");
   revalidatePath("/guest/points");
 
   return {
     ok: true,
-    pointBalance: typeof result?.point_balance === "number" ? result.point_balance : 0,
+    pointBalance,
   };
 }

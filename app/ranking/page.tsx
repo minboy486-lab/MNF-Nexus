@@ -6,6 +6,8 @@ import {
   getPublicScoreRanking,
   previousMonthRange,
 } from "@/lib/data/manual-scores-queries";
+import { getActivePublicVenueId } from "@/lib/ranking/public-venue";
+import { venueById } from "@/lib/venue/constants";
 
 export const metadata: Metadata = {
   title: "월별 랭킹 | MNF HOLDEM",
@@ -15,12 +17,14 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function PublicRankingPage() {
+  const venueId = await getActivePublicVenueId();
+  const venue = venueById(venueId);
   const month = currentMonthRange();
   const prevMonth = previousMonthRange();
 
   const [ranking, prevRanking] = await Promise.all([
-    getPublicScoreRanking(month.from, month.to),
-    getPublicScoreRanking(prevMonth.from, prevMonth.to),
+    getPublicScoreRanking(month.from, month.to, venueId),
+    getPublicScoreRanking(prevMonth.from, prevMonth.to, venueId),
   ]);
 
   return (
@@ -28,6 +32,8 @@ export default async function PublicRankingPage() {
       ranking={ranking}
       prevMonthTop={prevRanking[0] ?? null}
       monthLabel={formatMonthLabel(month.from)}
+      venueId={venueId}
+      venueName={venue?.name ?? "매장"}
     />
   );
 }

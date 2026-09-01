@@ -40,7 +40,6 @@ export const listAccessibleVenueIds = cache(async (): Promise<string[]> => {
     .maybeSingle();
 
   const role = profile?.role ?? "";
-  if (role === "admin") return [...KNOWN_VENUE_IDS];
 
   const { data: rows, error } = await supabase
     .from("profile_venues")

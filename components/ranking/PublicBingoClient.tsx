@@ -8,6 +8,8 @@ import { usePublicScoresSync } from "@/lib/ranking/use-public-scores-sync";
 
 type Props = {
   sheet: BingoMonthSheet;
+  venueId: string;
+  venueName: string;
   memberNickname?: string;
   embedded?: boolean;
 };
@@ -73,7 +75,13 @@ function BingoCellModal({
   );
 }
 
-export function PublicBingoClient({ sheet, memberNickname, embedded = false }: Props) {
+export function PublicBingoClient({
+  sheet,
+  venueId,
+  venueName,
+  memberNickname,
+  embedded = false,
+}: Props) {
   const guestNick = useGuestNickname();
   const nickname = memberNickname ?? guestNick.nickname;
   const showNicknameModal = memberNickname ? false : guestNick.showNicknameModal;
@@ -82,7 +90,7 @@ export function PublicBingoClient({ sheet, memberNickname, embedded = false }: P
   const closeEdit = guestNick.closeEdit;
   const [expandedCell, setExpandedCell] = useState<number | null>(null);
 
-  usePublicScoresSync("bingo");
+  usePublicScoresSync("bingo", venueId);
 
   useEffect(() => {
     if (expandedCell === null) return;
@@ -128,7 +136,9 @@ export function PublicBingoClient({ sheet, memberNickname, embedded = false }: P
           <p className="text-sm text-on-surface-variant mt-1">{formatMonthKeyLabel(sheet.month_key)}</p>
         </div>
       ) : (
-        <p className="text-sm text-on-surface-variant mb-3">{formatMonthKeyLabel(sheet.month_key)}</p>
+        <p className="text-sm text-on-surface-variant mb-3">
+          {venueName} · {formatMonthKeyLabel(sheet.month_key)}
+        </p>
       )}
 
       {nickname && (

@@ -67,9 +67,9 @@ export function SeatAssignPopover({
                   className="w-full text-left px-2.5 py-2 rounded-lg bg-[#1e1c26] hover:bg-[#282630] text-sm disabled:opacity-50 border border-white/10"
                 >
                   <span className="font-semibold">{v.members?.nickname ?? v.member_id}</span>
-                  {v.members && formatPaymentDue(v.members.credit_balance) && (
+                  {v.members && formatPaymentDue(v.members.credit_balance, v.members.point_balance) && (
                     <span className="block text-error text-[10px] mt-0.5">
-                      결제할 금액 {formatPaymentDue(v.members.credit_balance)}
+                      결제할 금액 {formatPaymentDue(v.members.credit_balance, v.members.point_balance)}
                     </span>
                   )}
                 </button>

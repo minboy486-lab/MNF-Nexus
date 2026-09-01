@@ -25,7 +25,7 @@ export default function GuestTransferPage() {
     <div className="space-y-4">
       <h1 className="text-xl font-bold">포인트 이체</h1>
       <p className="text-sm text-on-surface-variant">
-        받는 분도 MNF 회원이어야 합니다. 매장 확인 후 이체됩니다.
+        같은 지점에 등록된 회원에게만 이체할 수 있습니다. 매장 확인 후 반영됩니다.
       </p>
       <form onSubmit={handleSubmit} className="glass-panel rounded-xl p-5 space-y-4">
         <input

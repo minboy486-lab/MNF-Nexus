@@ -56,15 +56,11 @@ const guestsGroup: NavGroup = {
 
 const topLinks: NavLink[] = [
   { href: "/admin/dashboard", label: "대시보드", icon: "dashboard" },
-  { href: "/admin/operations", label: "운영 탭", icon: "schedule" },
   { href: "/admin/tables", label: "전체 테이블", icon: "grid_view" },
   { href: "/admin/presets", label: "블라인드", icon: "tune" },
-  { href: "/admin/games/new", label: "게임 개설", icon: "add_circle" },
   { href: "/admin/settlement/daily", label: "일일 정산", icon: "receipt_long" },
   { href: "/admin/settlement/monthly", label: "월간 정산", icon: "calendar_month" },
   { href: "/admin/staff", label: "직원·급여", icon: "badge" },
-  { href: "/admin/events", label: "이벤트", icon: "casino" },
-  { href: "/tv", label: "TV 타이머", icon: "tv", external: true },
 ];
 
 type Props = {

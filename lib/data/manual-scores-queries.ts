@@ -1,7 +1,6 @@
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveVenueId } from "@/lib/venue/active";
-import { YEOKSAM_VENUE_ID } from "@/lib/venue/constants";
 import type {
   AttendanceRow,
   ManualScoreDaily,
@@ -99,9 +98,13 @@ export async function getScoreRanking(
     .map(({ dates: _, ...row }) => row).sort((a, b) => b.total_points - a.total_points);
 }
 
-/** 손님 공개 랭킹: 이번 달 점수 기록이 있는 회원만 */
-export async function getPublicScoreRanking(from: string, to: string): Promise<ScoreRankingRow[]> {
-  return getScoreRanking(from, to, YEOKSAM_VENUE_ID);
+/** 손님 공개 랭킹: 지점별 독립 */
+export async function getPublicScoreRanking(
+  from: string,
+  to: string,
+  venueId: string,
+): Promise<ScoreRankingRow[]> {
+  return getScoreRanking(from, to, venueId);
 }
 
 export async function getAttendanceSummary(

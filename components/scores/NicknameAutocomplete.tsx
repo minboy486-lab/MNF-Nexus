@@ -11,6 +11,7 @@ type Props = {
   disabled?: boolean;
   id?: string;
   placeholder?: string;
+  inputClassName?: string;
   onEnter?: () => void;
   onPick?: (member: MemberSuggestion) => void;
   /** true면 자동완성 목록과 관계없이 Enter 시 onEnter 호출 */
@@ -24,6 +25,7 @@ export function NicknameAutocomplete({
   disabled,
   id = "score-nickname",
   placeholder = "닉네임 검색 (초성 가능)",
+  inputClassName,
   onEnter,
   onPick,
   enterSubmits = false,
@@ -58,7 +60,7 @@ export function NicknameAutocomplete({
         disabled={disabled}
         autoComplete="off"
         placeholder={placeholder}
-        className="login-input w-full text-sm"
+        className={`login-input w-full text-sm ${inputClassName ?? ""}`}
         onChange={(e) => {
           onChange(e.target.value);
           setOpen(true);

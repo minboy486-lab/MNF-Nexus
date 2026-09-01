@@ -9,8 +9,7 @@ import {
   getOpenVenueSessionForGuest,
 } from "@/lib/data/guest-queries";
 import { venueById } from "@/lib/venue/constants";
-import { formatMp } from "@/lib/utils/mp";
-import { formatPaymentDue } from "@/lib/utils/payment-due";
+import { formatDisplayPointBalance, formatPaymentDue } from "@/lib/utils/payment-due";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +31,7 @@ export default async function GuestHomePage() {
     ctx.venueId ? getOpenVenueSessionForGuest(ctx.venueId) : Promise.resolve(null),
   ]);
 
-  const paymentDue = formatPaymentDue(member.credit_balance);
+  const paymentDue = formatPaymentDue(member.credit_balance, member.point_balance);
 
   return (
     <div className="space-y-5">
@@ -48,9 +47,8 @@ export default async function GuestHomePage() {
               <p className="text-[11px] text-primary/80 mt-1 font-semibold">{venue.name}</p>
             )}
           </div>
-          <Link href="/guest/settings" className="guest-settings-link shrink-0">
-            <span className="material-symbols-outlined text-base">manage_accounts</span>
-            계정설정
+          <Link href="/guest/settings" className="guest-settings-btn shrink-0" aria-label="계정설정">
+            <span className="material-symbols-outlined">manage_accounts</span>
           </Link>
         </div>
 
@@ -58,7 +56,7 @@ export default async function GuestHomePage() {
           <div className="rounded-xl bg-white/[0.04] border border-white/10 px-3 py-3">
             <p className="text-[11px] text-on-surface-variant">포인트</p>
             <p className="text-xl font-bold text-primary tabular-nums mt-0.5">
-              {formatMp(member.point_balance)}
+              {formatDisplayPointBalance(member.point_balance, member.credit_balance)}
             </p>
           </div>
           <div className="rounded-xl bg-white/[0.04] border border-white/10 px-3 py-3">
@@ -77,14 +75,14 @@ export default async function GuestHomePage() {
         )}
       </section>
 
-      <div className="flex items-center gap-2 text-sm">
+      <div
+        className={`guest-status-pill ${session ? "guest-status-pill--open" : "guest-status-pill--closed"}`}
+      >
         <span
-          className={`inline-block w-2 h-2 rounded-full ${session ? "bg-emerald-400" : "bg-on-surface-variant/40"}`}
+          className={`inline-block w-1.5 h-1.5 rounded-full ${session ? "bg-emerald-400" : "bg-on-surface-variant/50"}`}
           aria-hidden
         />
-        <span className={session ? "text-emerald-400/90" : "text-on-surface-variant"}>
-          {session ? `${venue?.shortName ?? "매장"} 영업 중` : "영업 준비 중"}
-        </span>
+        {session ? `${venue?.shortName ?? "매장"} 영업 중` : "영업 준비 중"}
       </div>
 
       {pending.length > 0 && (
@@ -96,24 +94,28 @@ export default async function GuestHomePage() {
         </section>
       )}
 
-      <section className="grid grid-cols-2 gap-3">
-        <Link
-          href="/guest/points"
-          className="glass-panel rounded-xl p-4 border border-white/10 hover:border-primary/30 transition-colors"
-        >
-          <span className="material-symbols-outlined text-primary text-2xl">account_balance_wallet</span>
-          <p className="font-bold text-sm mt-2">포인트 내역</p>
-          <p className="text-[11px] text-on-surface-variant mt-1">MP · 결제</p>
+      <nav className="guest-menu-list" aria-label="바로가기">
+        <Link href="/guest/points" className="guest-menu-row">
+          <span className="guest-menu-row__icon guest-menu-row__icon--primary">
+            <span className="material-symbols-outlined">account_balance_wallet</span>
+          </span>
+          <span className="guest-menu-row__body">
+            <span className="guest-menu-row__title">포인트 내역</span>
+            <span className="guest-menu-row__sub">MP · 결제</span>
+          </span>
+          <span className="material-symbols-outlined guest-menu-row__chevron">chevron_right</span>
         </Link>
-        <Link
-          href="/guest/scores"
-          className="glass-panel rounded-xl p-4 border border-white/10 hover:border-primary/30 transition-colors"
-        >
-          <span className="material-symbols-outlined text-secondary text-2xl">emoji_events</span>
-          <p className="font-bold text-sm mt-2">승점 · 이벤트</p>
-          <p className="text-[11px] text-on-surface-variant mt-1">빙고 · 하이핸드</p>
+        <Link href="/guest/scores" className="guest-menu-row">
+          <span className="guest-menu-row__icon guest-menu-row__icon--secondary">
+            <span className="material-symbols-outlined">emoji_events</span>
+          </span>
+          <span className="guest-menu-row__body">
+            <span className="guest-menu-row__title">승점 · 이벤트</span>
+            <span className="guest-menu-row__sub">빙고 · 하이핸드</span>
+          </span>
+          <span className="material-symbols-outlined guest-menu-row__chevron">chevron_right</span>
         </Link>
-      </section>
+      </nav>
     </div>
   );
 }

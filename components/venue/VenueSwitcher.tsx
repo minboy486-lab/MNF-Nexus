@@ -19,7 +19,19 @@ export function VenueSwitcher({ compact = false, className = "" }: Props) {
   if (!ctx || ctx.venues.length === 0) return null;
 
   const { venues, activeVenueId } = ctx;
-  const single = venues.length === 1;
+
+  if (venues.length === 1) {
+    const venue = venues[0]!;
+    return (
+      <div
+        className={`venue-switcher venue-switcher--label-only ${compact ? "venue-switcher--compact" : ""} ${className}`.trim()}
+      >
+        <span className="venue-switcher__label" aria-label={`현재 지점 ${venue.name}`}>
+          {compact ? venue.shortName : venue.name}
+        </span>
+      </div>
+    );
+  }
 
   function select(venueId: string) {
     if (venueId === activeVenueId || pending) return;
@@ -43,7 +55,7 @@ export function VenueSwitcher({ compact = false, className = "" }: Props) {
             <button
               key={v.id}
               type="button"
-              disabled={pending || (single && active)}
+              disabled={pending}
               data-active={active}
               className="venue-switcher__pill"
               onClick={() => select(v.id)}

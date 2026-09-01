@@ -4,14 +4,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Member } from "@/lib/types";
 import { adjustMemberPoints } from "@/lib/actions/points";
-import { formatMp } from "@/lib/utils/mp";
-import { formatPaymentDue } from "@/lib/utils/payment-due";
+import { formatDisplayPointBalance, formatPaymentDue } from "@/lib/utils/payment-due";
 
 type Props = {
   member: Member | null;
+  onAdjusted?: () => void;
 };
 
-export function PointAdjustPanel({ member }: Props) {
+export function PointAdjustPanel({ member, onAdjusted }: Props) {
   const router = useRouter();
   const [mode, setMode] = useState<"add" | "deduct">("add");
   const [mp, setMp] = useState("");
@@ -28,7 +28,8 @@ export function PointAdjustPanel({ member }: Props) {
     );
   }
 
-  const paymentDue = formatPaymentDue(member.credit_balance);
+  const paymentDue = formatPaymentDue(member.credit_balance, member.point_balance);
+  const displayBalance = formatDisplayPointBalance(member.point_balance, member.credit_balance);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -59,6 +60,7 @@ export function PointAdjustPanel({ member }: Props) {
         ? `${value.toLocaleString("ko-KR")} MP를 추가했습니다.`
         : `${value.toLocaleString("ko-KR")} MP를 차감했습니다.`,
     );
+    onAdjusted?.();
     router.refresh();
   }
 
@@ -72,7 +74,7 @@ export function PointAdjustPanel({ member }: Props) {
         <div className="mt-2 flex flex-wrap gap-4 text-sm">
           <div>
             <span className="text-on-surface-variant">잔액 </span>
-            <span className="font-bold text-primary tabular-nums">{formatMp(member.point_balance)}</span>
+            <span className="font-bold text-primary tabular-nums">{displayBalance}</span>
           </div>
           {paymentDue && (
             <div>

@@ -5,14 +5,16 @@ import { usePathname } from "next/navigation";
 import { GuestVenueSwitcher } from "@/components/guest/GuestVenueSwitcher";
 import type { KnownVenue } from "@/lib/venue/constants";
 import { GuestNav } from "@/components/guest/GuestNav";
+import { GuestPushBootstrap } from "@/components/guest/GuestPushBootstrap";
 
 type Props = {
   venues: KnownVenue[];
   activeVenueId: string;
+  memberId?: string | null;
   children: React.ReactNode;
 };
 
-export function GuestShell({ venues, activeVenueId, children }: Props) {
+export function GuestShell({ venues, activeVenueId, memberId, children }: Props) {
   const pathname = usePathname();
   const hideNav = pathname.startsWith("/guest/settings");
 
@@ -25,6 +27,7 @@ export function GuestShell({ venues, activeVenueId, children }: Props) {
           <GuestVenueSwitcher venues={venues} activeVenueId={activeVenueId} />
         </header>
         <main className="guest-shell__main">{children}</main>
+        <GuestPushBootstrap memberId={memberId ?? null} />
         {!hideNav && <GuestNav />}
       </div>
     </div>

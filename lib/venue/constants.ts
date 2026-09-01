@@ -38,7 +38,6 @@ export function venueName(id: string | null | undefined): string {
 }
 
 export function defaultVenuesForRole(role: string | null | undefined): string[] {
-  if (role === "admin") return [...KNOWN_VENUE_IDS];
   if (role === "manager" || role === "staff" || role === "screen" || role === "counter") {
     return [YEOKSAM_VENUE_ID];
   }

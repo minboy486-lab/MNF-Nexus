@@ -149,31 +149,30 @@ function AccountFormModal({
         {roleNeedsVenues(form.role) && (
           <fieldset className="space-y-2.5">
             <legend className="app-modal-label">지점</legend>
-            {form.role === "admin" ? (
-              <p className="text-xs text-on-surface-variant">관리자는 역삼점·미사점 모두 사용합니다.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {KNOWN_VENUES.map((v) => {
-                  const checked = form.venue_ids.includes(v.id);
-                  return (
-                    <button
-                      key={v.id}
-                      type="button"
-                      data-active={checked}
-                      className="app-role-chip"
-                      onClick={() => {
-                        const next = checked
-                          ? form.venue_ids.filter((id) => id !== v.id)
-                          : [...form.venue_ids, v.id];
-                        onFormChange({ venue_ids: next });
-                      }}
-                    >
-                      {v.name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <div className="flex flex-wrap gap-2">
+              {KNOWN_VENUES.map((v) => {
+                const checked = form.venue_ids.includes(v.id);
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    data-active={checked}
+                    className="app-role-chip"
+                    onClick={() => {
+                      const next = checked
+                        ? form.venue_ids.filter((id) => id !== v.id)
+                        : [...form.venue_ids, v.id];
+                      onFormChange({ venue_ids: next });
+                    }}
+                  >
+                    {v.name}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-on-surface-variant">
+              복수 지점 권한이 있으면 관리 화면에서 지점을 전환할 수 있습니다.
+            </p>
           </fieldset>
         )}
 
@@ -508,9 +507,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
           onFormChange={(patch) =>
             setForm((f) => {
               const next = { ...f, ...patch };
-              if (patch.role === "admin") {
-                next.venue_ids = KNOWN_VENUES.map((v) => v.id);
-              } else if (patch.role === "guest") {
+              if (patch.role === "guest") {
                 next.venue_ids = [];
               } else if (patch.role && roleNeedsVenues(patch.role) && next.venue_ids.length === 0) {
                 next.venue_ids = [YEOKSAM_VENUE_ID];
