@@ -69,9 +69,14 @@ export async function sendPointChangePush(params: Params): Promise<void> {
           keys: { p256dh: sub.p256dh, auth: sub.auth },
         },
         payload,
+        {
+          TTL: 60 * 60,
+          urgency: "high",
+        },
       );
     } catch (err) {
       const status = (err as { statusCode?: number }).statusCode;
+      console.error("[push] send failed", { status, endpoint: sub.endpoint.slice(0, 48) });
       if (status === 404 || status === 410) {
         await admin.from("push_subscriptions").delete().eq("id", sub.id);
       }

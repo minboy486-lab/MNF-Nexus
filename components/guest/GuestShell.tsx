@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { GuestVenueSwitcher } from "@/components/guest/GuestVenueSwitcher";
 import type { KnownVenue } from "@/lib/venue/constants";
 import { GuestNav } from "@/components/guest/GuestNav";
 import { GuestPushBootstrap } from "@/components/guest/GuestPushBootstrap";
 import { GuestPermissionOnboarding } from "@/components/guest/GuestPermissionOnboarding";
+import { bindGuestViewportHeight } from "@/lib/guest/viewport-height";
 
 type Props = {
   venues: KnownVenue[];
@@ -18,6 +20,15 @@ type Props = {
 export function GuestShell({ venues, activeVenueId, memberId, children }: Props) {
   const pathname = usePathname();
   const hideNav = pathname.startsWith("/guest/settings");
+
+  useEffect(() => {
+    document.documentElement.classList.add("guest-route");
+    const releaseViewport = bindGuestViewportHeight();
+    return () => {
+      document.documentElement.classList.remove("guest-route");
+      releaseViewport();
+    };
+  }, []);
 
   return (
     <div className="guest-shell-outer">

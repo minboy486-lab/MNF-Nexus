@@ -57,27 +57,31 @@ export async function ensureGuestPushSubscription(): Promise<void> {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   if (!("serviceWorker" in navigator)) return;
 
-  const vapidKey = await getPushPublicKey();
-  if (!vapidKey) return;
+  try {
+    const vapidKey = await getPushPublicKey();
+    if (!vapidKey) return;
 
-  const reg = await registerServiceWorker();
-  if (!reg) return;
+    const reg = await registerServiceWorker();
+    if (!reg) return;
 
-  let sub = await reg.pushManager.getSubscription();
-  if (!sub) {
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
+      });
+    }
+
+    const json = sub.toJSON();
+    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return;
+
+    await savePushSubscription({
+      endpoint: json.endpoint,
+      keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
     });
+  } catch {
+    /* iOS는 사용자 제스처 없이 구독 갱신이 막힐 수 있음 */
   }
-
-  const json = sub.toJSON();
-  if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return;
-
-  await savePushSubscription({
-    endpoint: json.endpoint,
-    keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
-  });
 }
 
 export async function disableGuestPushNotifications(): Promise<{ ok: true } | { error: string }> {

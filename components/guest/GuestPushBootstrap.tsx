@@ -42,7 +42,8 @@ export function GuestPushBootstrap({ memberId }: Props) {
       };
       if (!row.txn_type || !POINT_TXN_TYPES.has(row.txn_type)) return;
 
-      if (Notification.permission === "granted") {
+      // 앱이 열려 있을 때만 Realtime으로 표시. 백그라운드는 서버 Web Push가 담당.
+      if (document.visibilityState === "visible" && Notification.permission === "granted") {
         void showPointNotification({
           txnType: row.txn_type,
           amountWon: Number(row.amount ?? 0),

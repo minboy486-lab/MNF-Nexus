@@ -17,7 +17,11 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array {
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!("serviceWorker" in navigator)) return null;
   try {
-    return await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    await navigator.serviceWorker.register("/sw.js", {
+      scope: "/",
+      updateViaCache: "none",
+    });
+    return await navigator.serviceWorker.ready;
   } catch {
     return null;
   }
