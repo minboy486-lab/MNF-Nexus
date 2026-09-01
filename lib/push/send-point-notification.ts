@@ -1,6 +1,6 @@
 import webpush from "web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { isSupabaseAdminConfigured, isSupabaseConfigured } from "@/lib/supabase/env";
 import { formatMp, mpToWon } from "@/lib/utils/mp";
 import { getVapidPublicKey, getVapidSubject, isPushConfigured } from "@/lib/push/vapid";
 import { pointNotificationBody, pointNotificationTitle } from "@/lib/ledger/point-history-display";
@@ -28,7 +28,7 @@ function ensureVapid() {
 
 /** 관리자 포인트 조정 시 손님 기기로 Web Push 발송 (구독자만). */
 export async function sendPointChangePush(params: Params): Promise<void> {
-  if (!isSupabaseConfigured() || !ensureVapid()) return;
+  if (!isSupabaseConfigured() || !isSupabaseAdminConfigured() || !ensureVapid()) return;
 
   const admin = createAdminClient();
   const { data: member } = await admin

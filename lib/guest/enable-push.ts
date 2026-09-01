@@ -73,18 +73,12 @@ export async function enableGuestPushNotifications(): Promise<EnablePushResult> 
   const applicationServerKey = urlBase64ToUint8Array(vapidKey) as BufferSource;
   let sub = await reg.pushManager.getSubscription();
 
-  if (sub) {
-    try {
-      await sub.unsubscribe();
-    } catch {
-      /* stale subscription */
-    }
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey,
+    });
   }
-
-  sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey,
-  });
 
   return persistSubscription(sub);
 }

@@ -22,7 +22,18 @@ export function GuestShell({ venues, activeVenueId, memberId, children }: Props)
 
   useEffect(() => {
     document.documentElement.classList.add("guest-route");
+
+    const blockPinchZoom = (event: Event) => {
+      event.preventDefault();
+    };
+    document.addEventListener("gesturestart", blockPinchZoom, { passive: false });
+    document.addEventListener("gesturechange", blockPinchZoom, { passive: false });
+    document.addEventListener("gestureend", blockPinchZoom, { passive: false });
+
     return () => {
+      document.removeEventListener("gesturestart", blockPinchZoom);
+      document.removeEventListener("gesturechange", blockPinchZoom);
+      document.removeEventListener("gestureend", blockPinchZoom);
       document.documentElement.classList.remove("guest-route");
     };
   }, []);

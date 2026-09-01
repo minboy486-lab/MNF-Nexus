@@ -7,6 +7,7 @@ import {
   enableGuestPushNotifications,
 } from "@/lib/guest/enable-push";
 import { hasActivePushSubscription } from "@/lib/guest/push-status";
+import { showPointNotification } from "@/lib/guest/push-client";
 
 type Status = "unsupported" | "blocked" | "off" | "on" | "loading";
 
@@ -60,6 +61,20 @@ export function GuestPushSettings() {
     setPending(false);
   }
 
+  async function testNotification() {
+    setError(null);
+    if (Notification.permission !== "granted") {
+      setError("먼저 알림을 켜 주세요.");
+      return;
+    }
+    await showPointNotification({
+      txnType: "point_earn",
+      amountWon: 10000,
+      note: "테스트",
+      txnId: `test-${Date.now()}`,
+    });
+  }
+
   if (status === "loading") {
     return (
       <section className="glass-panel rounded-2xl p-5 border border-white/10">
@@ -105,15 +120,25 @@ export function GuestPushSettings() {
       {error && <p className="text-sm text-error">{error}</p>}
 
       {status === "on" ? (
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-primary font-semibold">알림 켜짐 (백그라운드 포함)</span>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-primary font-semibold">알림 켜짐 (백그라운드 포함)</span>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void disable()}
+              className="px-4 py-2 rounded-xl text-sm font-semibold border border-white/15 text-on-surface-variant hover:border-error/30 hover:text-error transition-colors disabled:opacity-50"
+            >
+              끄기
+            </button>
+          </div>
           <button
             type="button"
             disabled={pending}
-            onClick={() => void disable()}
-            className="px-4 py-2 rounded-xl text-sm font-semibold border border-white/15 text-on-surface-variant hover:border-error/30 hover:text-error transition-colors disabled:opacity-50"
+            onClick={() => void testNotification()}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold border border-white/15 text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-50"
           >
-            끄기
+            테스트 알림 보내기
           </button>
         </div>
       ) : status !== "blocked" ? (

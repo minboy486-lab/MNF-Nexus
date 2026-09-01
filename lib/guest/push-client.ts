@@ -16,14 +16,32 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 let registrationPromise: Promise<ServiceWorkerRegistration | null> | null = null;
 
+async function waitForServiceWorkerControl(
+  reg: ServiceWorkerRegistration,
+  timeoutMs = 8000,
+): Promise<ServiceWorkerRegistration> {
+  if (navigator.serviceWorker.controller) return reg;
+
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => resolve(reg), timeoutMs);
+    const onControllerChange = () => {
+      window.clearTimeout(timer);
+      navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+      resolve(reg);
+    };
+    navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
+  });
+}
+
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!("serviceWorker" in navigator)) return null;
   try {
-    await navigator.serviceWorker.register("/sw.js", {
+    const reg = await navigator.serviceWorker.register("/sw.js", {
       scope: "/",
       updateViaCache: "none",
     });
-    return await navigator.serviceWorker.ready;
+    const ready = await navigator.serviceWorker.ready;
+    return waitForServiceWorkerControl(ready);
   } catch {
     return null;
   }

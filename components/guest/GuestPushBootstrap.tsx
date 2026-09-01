@@ -41,14 +41,15 @@ export function GuestPushBootstrap({ memberId }: Props) {
     function handlePointInsert(payload: { new: Record<string, unknown> }) {
       const row = payload.new as {
         id?: string;
+        member_id?: string;
         txn_type?: string;
         amount?: number;
         note?: string | null;
       };
+      if (row.member_id !== memberId) return;
       if (!row.txn_type || !POINT_TXN_TYPES.has(row.txn_type)) return;
 
-      // 앱이 열려 있을 때만 Realtime 알림. 백그라운드는 서버 Web Push → SW.
-      if (document.visibilityState === "visible" && Notification.permission === "granted") {
+      if (Notification.permission === "granted") {
         void showPointNotification({
           txnType: row.txn_type,
           amountWon: Number(row.amount ?? 0),
@@ -74,7 +75,6 @@ export function GuestPushBootstrap({ memberId }: Props) {
             event: "INSERT",
             schema: "public",
             table: "money_transactions",
-            filter: `member_id=eq.${memberId}`,
           },
           handlePointInsert,
         )
