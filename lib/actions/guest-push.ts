@@ -29,15 +29,11 @@ export async function savePushSubscription(
   const auth = subscription.keys?.auth?.trim();
   if (!endpoint || !p256dh || !auth) return { error: "구독 정보가 올바르지 않습니다." };
 
-  const { error } = await supabase.from("push_subscriptions").upsert(
-    {
-      user_id: user.id,
-      endpoint,
-      p256dh,
-      auth,
-    },
-    { onConflict: "endpoint" },
-  );
+  const { error } = await supabase.rpc("upsert_push_subscription", {
+    p_endpoint: endpoint,
+    p_p256dh: p256dh,
+    p_auth: auth,
+  });
 
   if (error) return { error: error.message };
   return { ok: true };
@@ -64,7 +60,9 @@ export async function removePushSubscription(
   return { ok: true };
 }
 
-export async function hasServerPushSubscription(): Promise<boolean> {
+export async function hasServerPushSubscription(
+  endpoint?: string,
+): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
 
   const supabase = await createClient();
@@ -73,11 +71,16 @@ export async function hasServerPushSubscription(): Promise<boolean> {
   } = await supabase.auth.getUser();
   if (!user) return false;
 
-  const { count, error } = await supabase
+  let query = supabase
     .from("push_subscriptions")
     .select("id", { count: "exact", head: true })
     .eq("user_id", user.id);
 
+  if (endpoint?.trim()) {
+    query = query.eq("endpoint", endpoint.trim());
+  }
+
+  const { count, error } = await query;
   if (error) return false;
   return (count ?? 0) > 0;
 }

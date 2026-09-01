@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { syncExistingPushSubscriptionToServer } from "@/lib/guest/enable-push";
+import { isWebPushFullyEnabled, syncExistingPushSubscriptionToServer } from "@/lib/guest/enable-push";
 import {
   getServiceWorkerRegistration,
   showPointNotification,
@@ -23,10 +23,17 @@ export function GuestPushBootstrap({ memberId }: Props) {
   const routerRef = useRef(router);
   routerRef.current = router;
 
+  const webPushActiveRef = useRef(false);
+
+  async function refreshWebPushState() {
+    webPushActiveRef.current = await isWebPushFullyEnabled();
+  }
+
   useEffect(() => {
     void (async () => {
       await getServiceWorkerRegistration();
       await syncExistingPushSubscriptionToServer();
+      await refreshWebPushState();
     })();
   }, []);
 
@@ -49,7 +56,8 @@ export function GuestPushBootstrap({ memberId }: Props) {
       if (row.member_id !== memberId) return;
       if (!row.txn_type || !POINT_TXN_TYPES.has(row.txn_type)) return;
 
-      if (Notification.permission === "granted") {
+      // Web Push 구독이 있으면 서버→SW 경로 사용. 없을 때만 Realtime 인앱 알림.
+      if (!webPushActiveRef.current && Notification.permission === "granted") {
         void showPointNotification({
           txnType: row.txn_type,
           amountWon: Number(row.amount ?? 0),
@@ -86,9 +94,10 @@ export function GuestPushBootstrap({ memberId }: Props) {
         });
     }
 
-    function onVisible() {
+    async function onVisible() {
       if (document.visibilityState !== "visible") return;
-      void syncExistingPushSubscriptionToServer();
+      await syncExistingPushSubscriptionToServer();
+      await refreshWebPushState();
       routerRef.current.refresh();
       if (!channel || channel.state !== "joined") {
         connect();

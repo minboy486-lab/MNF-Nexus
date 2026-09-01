@@ -38,14 +38,19 @@ export async function sendPointChangePush(params: Params): Promise<void> {
     .maybeSingle();
 
   if (!member?.user_id) {
-    console.warn("[push] member has no user_id", params.memberId);
+    console.warn("[push] member has no user_id — guest account not linked", params.memberId);
     return;
   }
 
-  const { data: subs } = await admin
+  const { data: subs, error: subsError } = await admin
     .from("push_subscriptions")
     .select("id, endpoint, p256dh, auth")
     .eq("user_id", member.user_id);
+
+  if (subsError) {
+    console.error("[push] subscription query failed", subsError.message);
+    return;
+  }
 
   if (!subs?.length) {
     console.warn("[push] no subscriptions for user", member.user_id);
