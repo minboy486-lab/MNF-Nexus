@@ -10,6 +10,10 @@ type Props = {
   ranking: ScoreRankingRow[];
   prevMonthTop: ScoreRankingRow | null;
   monthLabel: string;
+  /** 로그인 손님 닉네임 (설정 시 공개 닉네임 입력 생략) */
+  memberNickname?: string;
+  /** 손님 앱 등에 임베드 */
+  embedded?: boolean;
 };
 
 type RankTier = "top" | "mid" | "low";
@@ -153,9 +157,20 @@ const SECTIONS: { tier: RankTier; label: string; min: number; max: number }[] = 
   { tier: "low", label: "41위+", min: 41, max: Infinity },
 ];
 
-export function PublicRankingClient({ ranking, prevMonthTop, monthLabel }: Props) {
-  const { nickname, ready, showNicknameModal, saveNickname, openEdit, closeEdit } =
-    useGuestNickname();
+export function PublicRankingClient({
+  ranking,
+  prevMonthTop,
+  monthLabel,
+  memberNickname,
+  embedded = false,
+}: Props) {
+  const guestNick = useGuestNickname();
+  const nickname = memberNickname ?? guestNick.nickname;
+  const ready = memberNickname ? true : guestNick.ready;
+  const showNicknameModal = memberNickname ? false : guestNick.showNicknameModal;
+  const saveNickname = guestNick.saveNickname;
+  const openEdit = guestNick.openEdit;
+  const closeEdit = guestNick.closeEdit;
   const myRowRef = useRef<HTMLLIElement>(null);
 
   usePublicScoresSync("ranking");
@@ -186,21 +201,27 @@ export function PublicRankingClient({ ranking, prevMonthTop, monthLabel }: Props
   const showPodium = top3.some((r) => r.total_points > 0);
 
   return (
-    <div className="public-ranking-page">
-      <PublicGuestHeader
-        nickname={nickname}
-        showNicknameModal={showNicknameModal}
-        onSaveNickname={saveNickname}
-        onOpenEdit={openEdit}
-        onCloseEdit={closeEdit}
-      />
+    <div className={embedded ? "" : "public-ranking-page"}>
+      {!embedded && (
+        <PublicGuestHeader
+          nickname={nickname}
+          showNicknameModal={showNicknameModal}
+          onSaveNickname={saveNickname}
+          onOpenEdit={openEdit}
+          onCloseEdit={closeEdit}
+        />
+      )}
 
-      <div className="public-ranking-hero">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-on-surface-variant/80">
-          Monthly Ranking
-        </p>
-        <h1 className="text-[1.75rem] font-black mt-1 tracking-tight">{monthLabel}</h1>
-      </div>
+      {!embedded ? (
+        <div className="public-ranking-hero">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-on-surface-variant/80">
+            Monthly Ranking
+          </p>
+          <h1 className="text-[1.75rem] font-black mt-1 tracking-tight">{monthLabel}</h1>
+        </div>
+      ) : (
+        <p className="text-sm text-on-surface-variant mb-3">{monthLabel}</p>
+      )}
 
       {prevMonthTop && (
         <section className="public-ranking-king glass-panel rounded-2xl p-4 mb-4">

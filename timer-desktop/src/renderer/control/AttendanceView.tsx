@@ -49,6 +49,13 @@ export function AttendanceView({ onBack, activeGameCount }: Props) {
     void refreshGuests();
   }, [refreshSession, refreshGuests]);
 
+  useEffect(() => {
+    const pollId = window.setInterval(() => {
+      void refreshGuests();
+    }, 5_000);
+    return () => window.clearInterval(pollId);
+  }, [refreshGuests]);
+
   const onFloorIds = useMemo(() => new Set(guests.filter((g) => g.onFloor).map((g) => g.memberId)), [guests]);
   const activeCount = guests.filter((g) => g.onFloor).length;
 

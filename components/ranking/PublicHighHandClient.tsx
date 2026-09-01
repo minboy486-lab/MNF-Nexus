@@ -13,6 +13,10 @@ type Props = {
   playDate: string;
   hasDateInUrl: boolean;
   entries: HighHandEntry[];
+  memberNickname?: string;
+  embedded?: boolean;
+  /** 영업일 자정 넘김 시 이동할 경로 */
+  refreshPath?: string;
 };
 
 function formatDateKo(iso: string) {
@@ -20,15 +24,26 @@ function formatDateKo(iso: string) {
   return `${Number(y)}년 ${Number(m)}월 ${Number(d)}일`;
 }
 
-export function PublicHighHandClient({ playDate, hasDateInUrl, entries }: Props) {
+export function PublicHighHandClient({
+  playDate,
+  hasDateInUrl,
+  entries,
+  memberNickname,
+  embedded = false,
+  refreshPath = "/ranking/highhand",
+}: Props) {
   const router = useRouter();
-  const { nickname, showNicknameModal, saveNickname, openEdit, closeEdit } =
-    useGuestNickname();
+  const guestNick = useGuestNickname();
+  const nickname = memberNickname ?? guestNick.nickname;
+  const showNicknameModal = memberNickname ? false : guestNick.showNicknameModal;
+  const saveNickname = guestNick.saveNickname;
+  const openEdit = guestNick.openEdit;
+  const closeEdit = guestNick.closeEdit;
 
   const handleOperatingRollover = useCallback(() => {
-    router.replace("/ranking/highhand");
+    router.replace(refreshPath);
     router.refresh();
-  }, [router]);
+  }, [router, refreshPath]);
 
   useVenueOperatingDateRollover(playDate, hasDateInUrl, handleOperatingRollover);
   usePublicScoresSync("highhand");
@@ -49,26 +64,32 @@ export function PublicHighHandClient({ playDate, hasDateInUrl, entries }: Props)
   }, [rows, nickname]);
 
   return (
-    <div className="public-ranking-page">
-      <PublicGuestHeader
-        nickname={nickname}
-        showNicknameModal={showNicknameModal}
-        onSaveNickname={saveNickname}
-        onOpenEdit={openEdit}
-        onCloseEdit={closeEdit}
-      />
+    <div className={embedded ? "" : "public-ranking-page"}>
+      {!embedded && (
+        <PublicGuestHeader
+          nickname={nickname}
+          showNicknameModal={showNicknameModal}
+          onSaveNickname={saveNickname}
+          onOpenEdit={openEdit}
+          onCloseEdit={closeEdit}
+        />
+      )}
 
-      <div className="public-ranking-hero">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h1 className="text-[1.75rem] font-black tracking-tight">하이핸드</h1>
-          {isVenueOperatingToday(playDate) && (
-            <span className="public-rank-badge public-rank-badge-top text-[10px] px-2 py-0.5">
-              TODAY
-            </span>
-          )}
+      {!embedded ? (
+        <div className="public-ranking-hero">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-[1.75rem] font-black tracking-tight">하이핸드</h1>
+            {isVenueOperatingToday(playDate) && (
+              <span className="public-rank-badge public-rank-badge-top text-[10px] px-2 py-0.5">
+                TODAY
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-on-surface-variant mt-1">{formatDateKo(playDate)}</p>
         </div>
-        <p className="text-sm text-on-surface-variant mt-1">{formatDateKo(playDate)}</p>
-      </div>
+      ) : (
+        <p className="text-sm text-on-surface-variant mb-3">{formatDateKo(playDate)}</p>
+      )}
 
       {nickname && myHands.length > 0 && (
         <section className="public-ranking-my-card public-ranking-my-card-found mb-4">

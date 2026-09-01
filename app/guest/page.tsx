@@ -2,10 +2,10 @@ import Link from "next/link";
 import { GuestLinkPhone } from "@/components/guest/GuestLinkPhone";
 import {
   getGuestMember,
-  getGuestWinPointsTotal,
   getGuestPendingRequests,
+  getGuestWinPointsTotal,
 } from "@/lib/data/guest-queries";
-import { getPhysicalTables, getGames, getOpenVenueSession } from "@/lib/data/queries";
+import { getOpenVenueSession } from "@/lib/data/queries";
 import { formatMp } from "@/lib/utils/mp";
 import { formatPaymentDue } from "@/lib/utils/payment-due";
 
@@ -18,87 +18,91 @@ export default async function GuestHomePage() {
     return <GuestLinkPhone />;
   }
 
-  const [winPoints, pending, session, tables, games] = await Promise.all([
+  const [winPoints, pending, session] = await Promise.all([
     getGuestWinPointsTotal(member.id),
     getGuestPendingRequests(member.id),
     getOpenVenueSession(),
-    getPhysicalTables(),
-    getGames(),
   ]);
 
-  const activeTables = tables.filter((t) => t.current_game_id);
-  const running = games.filter(
-    (g) => g.status === "running" || g.status === "registration_closed",
-  );
+  const paymentDue = formatPaymentDue(member.credit_balance);
 
   return (
-    <div className="space-y-6">
-      <section className="glass-panel rounded-2xl p-5 border border-primary/20">
-        <p className="text-sm text-on-surface-variant">안녕하세요</p>
-        <p className="text-2xl font-bold mt-1">{member.nickname}</p>
-        <div className="grid grid-cols-2 gap-4 mt-4">
-          <div>
-            <p className="text-xs text-on-surface-variant">포인트</p>
-            <p className="text-xl font-bold text-primary">{formatMp(member.point_balance)}</p>
+    <div className="space-y-5">
+      <section className="guest-hero-card glass-panel rounded-2xl p-5 border border-primary/20">
+        <div className="flex items-start justify-between gap-3 relative z-[1]">
+          <div className="min-w-0">
+            <p className="text-xs text-on-surface-variant uppercase tracking-wider">Welcome</p>
+            <p className="text-2xl font-bold mt-1 truncate">{member.nickname}</p>
+            {member.display_name && member.display_name !== member.nickname && (
+              <p className="text-sm text-on-surface-variant mt-0.5 truncate">{member.display_name}</p>
+            )}
           </div>
-          <div>
-            <p className="text-xs text-on-surface-variant">승점</p>
-            <p className="text-xl font-bold">{winPoints.toLocaleString()}p</p>
+          <Link href="/guest/settings" className="guest-settings-link shrink-0">
+            <span className="material-symbols-outlined text-base">manage_accounts</span>
+            계정설정
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mt-5 relative z-[1]">
+          <div className="rounded-xl bg-white/[0.04] border border-white/10 px-3 py-3">
+            <p className="text-[11px] text-on-surface-variant">포인트</p>
+            <p className="text-xl font-bold text-primary tabular-nums mt-0.5">
+              {formatMp(member.point_balance)}
+            </p>
+          </div>
+          <div className="rounded-xl bg-white/[0.04] border border-white/10 px-3 py-3">
+            <p className="text-[11px] text-on-surface-variant">승점</p>
+            <p className="text-xl font-bold tabular-nums mt-0.5">
+              {winPoints.toLocaleString()}
+              <span className="text-sm font-semibold text-on-surface-variant ml-0.5">p</span>
+            </p>
           </div>
         </div>
-        {formatPaymentDue(member.credit_balance) && (
-          <p className="text-error text-sm mt-3 font-semibold">
-            결제할 금액: {formatPaymentDue(member.credit_balance)}
+
+        {paymentDue && (
+          <p className="text-error text-sm mt-4 font-semibold relative z-[1]">
+            결제할 금액 {paymentDue}
           </p>
         )}
       </section>
 
-      {session ? (
-        <p className="text-sm text-emerald-400">● 영업 중</p>
-      ) : (
-        <p className="text-sm text-on-surface-variant">영업 준비 중</p>
-      )}
+      <div className="flex items-center gap-2 text-sm">
+        <span
+          className={`inline-block w-2 h-2 rounded-full ${session ? "bg-emerald-400" : "bg-on-surface-variant/40"}`}
+          aria-hidden
+        />
+        <span className={session ? "text-emerald-400/90" : "text-on-surface-variant"}>
+          {session ? "영업 중" : "영업 준비 중"}
+        </span>
+      </div>
 
       {pending.length > 0 && (
-        <section className="glass-panel rounded-xl p-4 border border-primary/30">
-          <p className="text-sm font-bold text-primary">대기 중 요청 {pending.length}건</p>
+        <section className="glass-panel rounded-xl px-4 py-3 border border-primary/25 flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-primary">대기 중 요청</p>
+          <span className="text-xs font-bold bg-primary/15 text-primary px-2 py-1 rounded-full tabular-nums">
+            {pending.length}건
+          </span>
         </section>
       )}
 
-      <section>
-        <h2 className="font-bold mb-2">진행 테이블</h2>
-        {activeTables.length === 0 ? (
-          <p className="text-sm text-on-surface-variant">진행 중인 테이블이 없습니다.</p>
-        ) : (
-          <ul className="space-y-2">
-            {activeTables.map((t) => (
-              <li key={t.id} className="glass-panel rounded-lg px-4 py-3 flex justify-between">
-                <span className="font-bold">테이블 {t.code}</span>
-                <span className="text-xs text-on-surface-variant">게임 진행 중</span>
-              </li>
-            ))}
-          </ul>
-        )}
+      <section className="grid grid-cols-2 gap-3">
+        <Link
+          href="/guest/points"
+          className="glass-panel rounded-xl p-4 border border-white/10 hover:border-primary/30 transition-colors"
+        >
+          <span className="material-symbols-outlined text-primary text-2xl">account_balance_wallet</span>
+          <p className="font-bold text-sm mt-2">포인트 내역</p>
+          <p className="text-[11px] text-on-surface-variant mt-1">MP · 결제</p>
+        </Link>
+        <Link
+          href="/guest/scores"
+          className="glass-panel rounded-xl p-4 border border-white/10 hover:border-primary/30 transition-colors"
+        >
+          <span className="material-symbols-outlined text-secondary text-2xl">emoji_events</span>
+          <p className="font-bold text-sm mt-2">승점 · 이벤트</p>
+          <p className="text-[11px] text-on-surface-variant mt-1">빙고 · 하이핸드</p>
+        </Link>
       </section>
-
-      <section>
-        <h2 className="font-bold mb-2">진행 게임</h2>
-        <ul className="space-y-2">
-          {running.map((g) => (
-            <li key={g.id} className="glass-panel rounded-lg px-4 py-3 text-sm">
-              #{(g as { daily_game_number?: number }).daily_game_number ?? "—"} ·{" "}
-              {(g as { game_presets?: { name: string } }).game_presets?.name ?? "게임"}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <Link
-        href="/guest/bingo"
-        className="block glass-panel rounded-xl p-4 text-center text-on-surface-variant text-sm"
-      >
-        빙고 현황 (준비 중)
-      </Link>
     </div>
   );
 }

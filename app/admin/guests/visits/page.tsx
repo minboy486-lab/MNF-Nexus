@@ -10,10 +10,13 @@ import {
 import { getPendingStaffRequests } from "@/lib/data/guest-queries";
 import { approveRequest } from "@/lib/actions/games";
 import { StaffRequestsPanel } from "@/components/guest/StaffRequestsPanel";
+import { VisitSyncRefresh } from "@/components/guests/VisitSyncRefresh";
+import { getActiveVenueId } from "@/lib/venue/active";
 
 export const dynamic = "force-dynamic";
 
 export default async function GuestVisitsPage() {
+  const venueId = await getActiveVenueId();
   const [visits, members, pending, staffQueue, visitingIds, visitCounts] =
     await Promise.all([
       getActiveMemberVisits(),
@@ -26,6 +29,7 @@ export default async function GuestVisitsPage() {
 
   return (
     <>
+      <VisitSyncRefresh venueId={venueId} />
       <AdminTopBar title="방문 관리" subtitle="전체 손님 ↔ 방문 중" />
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden p-4 md:p-6 gap-3">
         <StaffRequestsPanel

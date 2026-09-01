@@ -8,6 +8,8 @@ import { usePublicScoresSync } from "@/lib/ranking/use-public-scores-sync";
 
 type Props = {
   sheet: BingoMonthSheet;
+  memberNickname?: string;
+  embedded?: boolean;
 };
 
 function BingoCellModal({
@@ -71,9 +73,13 @@ function BingoCellModal({
   );
 }
 
-export function PublicBingoClient({ sheet }: Props) {
-  const { nickname, showNicknameModal, saveNickname, openEdit, closeEdit } =
-    useGuestNickname();
+export function PublicBingoClient({ sheet, memberNickname, embedded = false }: Props) {
+  const guestNick = useGuestNickname();
+  const nickname = memberNickname ?? guestNick.nickname;
+  const showNicknameModal = memberNickname ? false : guestNick.showNicknameModal;
+  const saveNickname = guestNick.saveNickname;
+  const openEdit = guestNick.openEdit;
+  const closeEdit = guestNick.closeEdit;
   const [expandedCell, setExpandedCell] = useState<number | null>(null);
 
   usePublicScoresSync("bingo");
@@ -105,19 +111,25 @@ export function PublicBingoClient({ sheet }: Props) {
   const expandedIndex = expandedCell !== null ? expandedCell - 1 : -1;
 
   return (
-    <div className="public-ranking-page">
-      <PublicGuestHeader
-        nickname={nickname}
-        showNicknameModal={showNicknameModal}
-        onSaveNickname={saveNickname}
-        onOpenEdit={openEdit}
-        onCloseEdit={closeEdit}
-      />
+    <div className={embedded ? "" : "public-ranking-page"}>
+      {!embedded && (
+        <PublicGuestHeader
+          nickname={nickname}
+          showNicknameModal={showNicknameModal}
+          onSaveNickname={saveNickname}
+          onOpenEdit={openEdit}
+          onCloseEdit={closeEdit}
+        />
+      )}
 
-      <div className="public-ranking-hero">
-        <h1 className="text-[1.75rem] font-black tracking-tight">EVENT BINGO</h1>
-        <p className="text-sm text-on-surface-variant mt-1">{formatMonthKeyLabel(sheet.month_key)}</p>
-      </div>
+      {!embedded ? (
+        <div className="public-ranking-hero">
+          <h1 className="text-[1.75rem] font-black tracking-tight">EVENT BINGO</h1>
+          <p className="text-sm text-on-surface-variant mt-1">{formatMonthKeyLabel(sheet.month_key)}</p>
+        </div>
+      ) : (
+        <p className="text-sm text-on-surface-variant mb-3">{formatMonthKeyLabel(sheet.month_key)}</p>
+      )}
 
       {nickname && (
         <section className="public-ranking-my-card public-ranking-my-card-found mb-4">
