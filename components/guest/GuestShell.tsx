@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { usePathname } from "next/navigation";
 import { GuestVenueSwitcher } from "@/components/guest/GuestVenueSwitcher";
 import type { KnownVenue } from "@/lib/venue/constants";
@@ -20,9 +20,11 @@ export function GuestShell({ venues, activeVenueId, memberId, children }: Props)
   const pathname = usePathname();
   const hideNav = pathname.startsWith("/guest/settings");
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.classList.add("guest-route");
+  }, []);
 
+  useEffect(() => {
     const blockPinchZoom = (event: Event) => {
       event.preventDefault();
     };

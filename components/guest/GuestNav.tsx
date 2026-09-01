@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -25,7 +25,7 @@ export function GuestNav() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setMounted(true);
   }, []);
 
