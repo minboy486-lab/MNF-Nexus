@@ -20,5 +20,5 @@
       "@mnf/venue/*": ["../lib/venue/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "electron.vite.config.ts", "../lib/timer/**/*.ts", "../lib/venue/index.ts", "../lib/venue/constants.ts", "../lib/venue/control-pin.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "electron.vite.config.ts", "../lib/timer/**/*.ts", "../lib/venue/index.ts", "../lib/venue/constants.ts", "../lib/venue/control-pin.ts", "../lib/venue/operating-date.ts"]
 }

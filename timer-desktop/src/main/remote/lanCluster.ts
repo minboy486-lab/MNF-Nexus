@@ -124,7 +124,6 @@ export class LanCluster {
       yeoksamRole: msg.yeoksamRole,
       timerTheme: msg.timerTheme,
     });
-    if (msg.timerTheme) this.opts.onPeerShopTheme(msg.timerTheme);
   }
 
   start(): void {

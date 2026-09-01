@@ -195,6 +195,8 @@ export class WindowManager {
       savedTimerThemes: this.getSavedTimerThemes(),
       activeControlThemeId: this.getActiveControlThemeId(),
       savedControlThemes: this.getSavedControlThemes(),
+      controlLook: this.getControlLook(),
+      timerLook: this.getTimerLook(),
     };
   }
 

@@ -182,6 +182,8 @@ export interface LeftNoticeLine {
   color: string;
 }
 
+import type { GameParticipant } from "./participants";
+
 /** Control 창에서 관리하는 진행 중인 게임 세션 */
 export interface GameSession {
   gameId: number;
@@ -222,6 +224,12 @@ export interface GameSession {
   bonusChip: number;
   /** 송출 좌측 패널 문구. null = 없음 */
   leftNotice: LeftNotice | null;
+  /** 게임 참가 손님 (출석 체크인 기준) */
+  participants: GameParticipant[];
+  /** 당일 승점 표 게임 번호 */
+  dailyGameNo: number;
+  /** 승점 저장 완료 여부 */
+  scoresSubmitted?: boolean;
 }
 
 /** 세션 TOTAL TIME 표시용 경과 ms (일시정지 반영) */

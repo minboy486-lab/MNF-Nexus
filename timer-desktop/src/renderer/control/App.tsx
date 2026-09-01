@@ -51,6 +51,11 @@ import { ControlLookEditor } from "./ControlLookEditor";
 import { ControlLookWrap } from "./ControlLookWrap";
 import { playTimerVolumePreview, setTimerSoundVolume } from "../shared/timerAnnounce";
 import { KNOWN_VENUES, YEOKSAM_VENUE_ID, isKnownVenueId, venueName } from "@mnf/venue";
+import { AttendanceView } from "./AttendanceView";
+import { GameRankingModal } from "./GameRankingModal";
+import { TableGuestsView } from "./TableGuestsView";
+import type { RankingEntry } from "../../shared/participants";
+import { MISA_TABLE_HOTKEY, YEOKSAM_TABLE_HOTKEY } from "../../shared/floorPlan";
 
 type View =
   | { kind: "main" }
@@ -60,7 +65,9 @@ type View =
   | { kind: "setup" }
   | { kind: "lan-view"; title: string }
   | { kind: "timer-look" }
-  | { kind: "control-look" };
+  | { kind: "control-look" }
+  | { kind: "attendance" }
+  | { kind: "table-guests"; openedFromSlot?: number | null };
 
 type ThemeMenu = "pick" | ThemeSurface | null;
 
@@ -114,6 +121,7 @@ export function App() {
   const [blindsLoading, setBlindsLoading] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rankingGameId, setRankingGameId] = useState<number | null>(null);
   const [, setTick] = useState(0);
 
   const refresh = useCallback(async () => {
@@ -183,6 +191,12 @@ export function App() {
       setSavedControlThemes(nextSavedControlThemes);
       setActiveTimerThemeId((prev) => t.activeTimerThemeId ?? prev);
       setActiveControlThemeId((prev) => t.activeControlThemeId ?? prev);
+      if (t.timerLook !== undefined) {
+        setTimerLook(normalizeTimerLook(t.timerLook, nextTimer));
+      }
+      if (t.controlLook !== undefined) {
+        setControlLook(normalizeControlLook(t.controlLook, nextControl));
+      }
       setConfig((prev) =>
         prev
           ? {
@@ -193,6 +207,9 @@ export function App() {
               activeTimerThemeId: t.activeTimerThemeId ?? prev.activeTimerThemeId,
               savedControlThemes: nextSavedControlThemes,
               activeControlThemeId: t.activeControlThemeId ?? prev.activeControlThemeId,
+              timerLook: t.timerLook !== undefined ? normalizeTimerLook(t.timerLook, nextTimer) : prev.timerLook,
+              controlLook:
+                t.controlLook !== undefined ? normalizeControlLook(t.controlLook, nextControl) : prev.controlLook,
             }
           : prev,
       );
@@ -555,6 +572,8 @@ export function App() {
         if (popup) { setPopup(null); return; }
         if (view.kind === "timer-look") return;
         if (view.kind === "control-look") return;
+        if (view.kind === "attendance") { setView({ kind: "main" }); return; }
+        if (view.kind === "table-guests") { setView({ kind: "main" }); return; }
         if (view.kind === "blind-select") return;
         if (view.kind === "lan-view") { setLanLeaveConfirm(true); return; }
         if (typing) return;
@@ -717,6 +736,23 @@ export function App() {
         !!t?.closest?.('[contenteditable="true"]')
       ) return;
       if (view.kind !== "main") return;
+
+      // 테이블 연결 팝업: 같은 테이블 키 → 손님 창
+      if (popup?.kind === "table") {
+        const rawKey = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+        const key = KO_TO_EN[rawKey] ?? rawKey;
+        if (key in TABLE_KEYS && TABLE_KEYS[key] === popup.slot) {
+          const gameId = snapshot.tableAssignments[popup.slot];
+          if (gameId != null) {
+            e.preventDefault();
+            const slot = popup.slot;
+            setPopup(null);
+            setView({ kind: "table-guests", openedFromSlot: slot });
+          }
+          return;
+        }
+      }
+
       if (popup || settingsOpen || quitConfirm || lanLeaveConfirm || qrOpen || venueMenuOpen) return;
 
       // 한글이면 영문으로 변환
@@ -836,10 +872,45 @@ export function App() {
 
   // ── 게임 삭제 ───────────────────────────────────────────────
 
-  async function handleDeleteGame(gameId: number): Promise<void> {
+  function handleRequestEndGame(gameId: number): void {
+    const session = snapshot.sessions.find((s) => s.gameId === gameId);
+    if (!session || (session.participants?.length ?? 0) === 0) {
+      void (async () => {
+        setPending(true);
+        const del = await window.controlApi.deleteGame(gameId);
+        setPending(false);
+        if (!del.ok) setError(del.error);
+        else setView({ kind: "main" });
+      })();
+      return;
+    }
+    setRankingGameId(gameId);
+  }
+
+  async function handleFinalizeScores(gameId: number, rankings: RankingEntry[]): Promise<void> {
     setPending(true);
-    await window.controlApi.deleteGame(gameId);
+    setError(null);
+    const session = snapshot.sessions.find((s) => s.gameId === gameId);
+    if (!session) {
+      setPending(false);
+      setRankingGameId(null);
+      return;
+    }
+    if ((session.participants?.length ?? 0) === 0) {
+      const del = await window.controlApi.deleteGame(gameId);
+      setPending(false);
+      setRankingGameId(null);
+      if (!del.ok) setError(del.error);
+      else setView({ kind: "main" });
+      return;
+    }
+    const result = await window.controlApi.finalizeGameScores(gameId, rankings);
     setPending(false);
+    setRankingGameId(null);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
     setView({ kind: "main" });
   }
 
@@ -902,7 +973,7 @@ export function App() {
 
   return (
     <div className="shell compact">
-      {view.kind !== "monitor-preview" && view.kind !== "lan-view" && view.kind !== "timer-look" && view.kind !== "control-look" && (
+      {view.kind !== "monitor-preview" && view.kind !== "lan-view" && view.kind !== "timer-look" && view.kind !== "control-look" && view.kind !== "attendance" && view.kind !== "table-guests" && (
         <ControlLookWrap id="header" look={controlLook} className="ctrl-look-wrap--header">
         <header className="shell-header compact-header">
           <div className="header-brand">
@@ -933,7 +1004,16 @@ export function App() {
           </div>
           {view.kind === "main" && (
             <div className="header-actions">
-              <button type="button" className="icon-btn" onClick={() => setSettingsOpen(true)}>
+              <ControlLookWrap id="storeMgmt" look={controlLook} className="ctrl-look-wrap--store-mgmt">
+                <button
+                  type="button"
+                  className="header-mgmt-btn"
+                  onClick={() => setView({ kind: "attendance" })}
+                >
+                  매장 관리
+                </button>
+              </ControlLookWrap>
+              <button type="button" className="icon-btn" onClick={() => setSettingsOpen(true)} aria-label="설정">
                 ⚙
               </button>
             </div>
@@ -988,7 +1068,25 @@ export function App() {
           timerLook={timerLook}
           onBack={() => setView({ kind: "main" })}
           onCommand={(action, options) => void handleCommand(currentSession.gameId, action, options)}
-          onDeleteGame={() => void handleDeleteGame(currentSession.gameId)}
+          onRequestEndGame={() => void handleRequestEndGame(currentSession.gameId)}
+        />
+      )}
+
+      {!loading && view.kind === "attendance" && (
+        <AttendanceView
+          onBack={() => setView({ kind: "main" })}
+          activeGameCount={snapshot.sessions.length}
+        />
+      )}
+
+      {!loading && view.kind === "table-guests" && (
+        <TableGuestsView
+          snapshot={snapshot}
+          timers={timers}
+          openedFromSlot={view.openedFromSlot}
+          onError={setError}
+          onBack={() => setView({ kind: "main" })}
+          onRequestEndGame={handleRequestEndGame}
         />
       )}
 
@@ -1075,6 +1173,11 @@ export function App() {
           sessions={snapshot.sessions}
           onSelect={(gid) => void handleAssignTable(popup.slot, gid)}
           onClose={() => setPopup(null)}
+          guestHotkey={
+            snapshot.tableAssignments[popup.slot] != null
+              ? (isYeoksamFloor(currentVenueId) ? YEOKSAM_TABLE_HOTKEY : MISA_TABLE_HOTKEY)[popup.slot]
+              : undefined
+          }
         />
       )}
 
@@ -1527,6 +1630,19 @@ export function App() {
           </div>
         </div>
       )}
+
+      {rankingGameId != null && (() => {
+        const rankingSession = snapshot.sessions.find((s) => s.gameId === rankingGameId);
+        if (!rankingSession) return null;
+        return (
+          <GameRankingModal
+            session={rankingSession}
+            pending={pending}
+            onCancel={() => setRankingGameId(null)}
+            onConfirm={(rankings) => void handleFinalizeScores(rankingGameId, rankings)}
+          />
+        );
+      })()}
     </div>
   );
 }

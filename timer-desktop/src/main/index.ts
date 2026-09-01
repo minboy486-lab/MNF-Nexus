@@ -84,6 +84,7 @@ app.whenReady().then(async () => {
   const saved = loadConfig();
   if (saved) {
     await windowManager.applyConfig(saved);
+    saveConfig(saved);
   } else {
     await windowManager.syncWindows();
   }

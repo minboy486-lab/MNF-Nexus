@@ -11,6 +11,7 @@ import { isYeoksamFloor, monitorLabel } from "./floorPlan";
 
 export const CONTROL_WIDGET_IDS = [
   "header",
+  "storeMgmt",
   "floor",
   "games",
   "table1",
@@ -46,6 +47,7 @@ export type ControlWidgetId = (typeof CONTROL_WIDGET_IDS)[number];
 
 export const CONTROL_WIDGET_LABELS: Record<ControlWidgetId, string> = {
   header: "상단 바",
+  storeMgmt: "매장 관리",
   floor: "플로어",
   games: "게임 목록",
   table1: "테이블 A",
@@ -109,7 +111,7 @@ export function storeSlotLabel(id: ControlWidgetId, venueId: string | null | und
   return CONTROL_WIDGET_LABELS[id];
 }
 
-export const CONTROL_FLOOR_WIDGETS: ControlWidgetId[] = ["header", "floor", "games"];
+export const CONTROL_FLOOR_WIDGETS: ControlWidgetId[] = ["header", "storeMgmt", "floor", "games"];
 export const CONTROL_GAME_WIDGETS: ControlWidgetId[] = [
   "back",
   "gameHead",

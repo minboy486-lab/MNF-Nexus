@@ -4,6 +4,30 @@ import type { AppConfig, AppSnapshot, DisplayInfo, GameSession, ThemeSurface, Ui
 import type { TimerLook, SavedTimerTheme } from "../shared/timerLook";
 import type { ControlLook, SavedControlTheme } from "../shared/controlLook";
 import type { LanDiscoveredGame, LanViewState } from "../shared/lanView";
+import type { RankingEntry } from "../shared/participants";
+
+export type OnFloorGuest = {
+  visitId: string;
+  memberId: string;
+  nickname: string;
+  displayName: string | null;
+  phone: string | null;
+  checkedInAt: string;
+};
+
+export type SessionGuest = OnFloorGuest & {
+  checkedOutAt: string | null;
+  onFloor: boolean;
+};
+
+export type MemberSummary = {
+  id: string;
+  nickname: string;
+  login_id: string;
+  display_name: string | null;
+  phone: string | null;
+  floor_status: string;
+};
 
 export type ControlApi = {
   // 디스플레이/설정
@@ -24,6 +48,8 @@ export type ControlApi = {
     savedTimerThemes?: SavedTimerTheme[];
     activeControlThemeId?: string;
     savedControlThemes?: SavedControlTheme[];
+    controlLook?: ControlLook | null;
+    timerLook?: TimerLook | null;
   }) => void) => () => void;
   selectTimerTheme: (
     id: string,
@@ -126,6 +152,56 @@ export type ControlApi = {
   // 게임
   createGame: (structure: BlindStructureOption) => Promise<{ ok: true; session: GameSession } | { ok: false; error: string }>;
   deleteGame: (gameId: number) => Promise<{ ok: true } | { ok: false; error: string }>;
+  finalizeGameScores: (
+    gameId: number,
+    rankings: RankingEntry[],
+  ) => Promise<{ ok: true; saved: number; gameNo: number } | { ok: false; error: string }>;
+  addParticipant: (opts: {
+    gameId: number;
+    memberId: string;
+    nickname: string;
+    visitId?: string;
+    tableSlot: number | null;
+  }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  removeParticipant: (gameId: number, memberId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  moveParticipantTable: (
+    gameId: number,
+    memberId: string,
+    tableSlot: number | null,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
+  sitOutParticipant: (
+    gameId: number,
+    memberId: string,
+    sitOut?: boolean,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
+  setParticipantRebuy: (
+    gameId: number,
+    memberId: string,
+    delta: number,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
+  reorderParticipants: (
+    gameId: number,
+    memberIds: string[],
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
+  // 출석
+  getVenueSession: () => Promise<
+    { ok: true; session: { id: string; opened_at: string } | null } | { ok: false; error: string }
+  >;
+  openVenueSession: () => Promise<{ ok: true; sessionId: string } | { ok: false; error: string }>;
+  closeVenueSession: () => Promise<{ ok: true; checkedOut: number } | { ok: false; error: string }>;
+  searchAttendanceMember: (query: string) => Promise<{ ok: true; member: MemberSummary | null } | { ok: false; error: string }>;
+  searchAttendanceMembers: (query: string) => Promise<{ ok: true; members: MemberSummary[] } | { ok: false; error: string }>;
+  listSessionGuests: () => Promise<{ ok: true; guests: SessionGuest[] } | { ok: false; error: string }>;
+  createAttendanceMember: (input: {
+    loginId: string;
+    password: string;
+    nickname: string;
+    displayName?: string;
+    phone?: string;
+  }) => Promise<{ ok: true; member: MemberSummary } | { ok: false; error: string }>;
+  checkInAttendance: (memberId: string) => Promise<{ ok: true; visitId: string } | { ok: false; error: string }>;
+  checkOutAttendance: (visitId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  listOnFloorGuests: () => Promise<{ ok: true; guests: OnFloorGuest[] } | { ok: false; error: string }>;
   // 테이블/모니터 연결
   assignTable: (tableSlot: number, gameId: number | null) => Promise<{ ok: true } | { ok: false; error: string }>;
   assignMonitor: (monitorSlot: number, gameId: number | null) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -231,6 +307,27 @@ const api: ControlApi = {
   },
   createGame: (structure) => ipcRenderer.invoke("game:create", structure),
   deleteGame: (gameId) => ipcRenderer.invoke("game:delete", gameId),
+  finalizeGameScores: (gameId, rankings) => ipcRenderer.invoke("game:finalizeScores", { gameId, rankings }),
+  addParticipant: (opts) => ipcRenderer.invoke("game:participants:add", opts),
+  removeParticipant: (gameId, memberId) => ipcRenderer.invoke("game:participants:remove", { gameId, memberId }),
+  moveParticipantTable: (gameId, memberId, tableSlot) =>
+    ipcRenderer.invoke("game:participants:moveTable", { gameId, memberId, tableSlot }),
+  sitOutParticipant: (gameId, memberId, sitOut = true) =>
+    ipcRenderer.invoke("game:participants:sitOut", { gameId, memberId, sitOut }),
+  setParticipantRebuy: (gameId, memberId, delta) =>
+    ipcRenderer.invoke("game:participants:setRebuy", { gameId, memberId, delta }),
+  reorderParticipants: (gameId, memberIds) =>
+    ipcRenderer.invoke("game:participants:reorder", { gameId, memberIds }),
+  getVenueSession: () => ipcRenderer.invoke("venueSession:get"),
+  openVenueSession: () => ipcRenderer.invoke("venueSession:open"),
+  closeVenueSession: () => ipcRenderer.invoke("venueSession:close"),
+  searchAttendanceMember: (query) => ipcRenderer.invoke("attendance:searchMember", query),
+  searchAttendanceMembers: (query) => ipcRenderer.invoke("attendance:searchMembers", query),
+  listSessionGuests: () => ipcRenderer.invoke("attendance:listSession"),
+  createAttendanceMember: (input) => ipcRenderer.invoke("attendance:createMember", input),
+  checkInAttendance: (memberId) => ipcRenderer.invoke("attendance:checkIn", memberId),
+  checkOutAttendance: (visitId) => ipcRenderer.invoke("attendance:checkOut", visitId),
+  listOnFloorGuests: () => ipcRenderer.invoke("attendance:listOnFloor"),
   assignTable: (tableSlot, gameId) => ipcRenderer.invoke("table:assign", { tableSlot, gameId }),
   assignMonitor: (monitorSlot, gameId) => ipcRenderer.invoke("monitor:assign", { monitorSlot, gameId }),
   assignAllMonitors: (gameId) => ipcRenderer.invoke("monitor:assign-all", gameId),

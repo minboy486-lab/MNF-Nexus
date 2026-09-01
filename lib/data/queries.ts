@@ -21,7 +21,6 @@ import type {
   VenueSession,
 } from "@/lib/types";
 import { getActiveVenueId } from "@/lib/venue/active";
-import { YEOKSAM_VENUE_ID } from "@/lib/venue/constants";
 
 export async function getPhysicalTables() {
   if (!isSupabaseConfigured()) return demoTables;
@@ -48,12 +47,11 @@ export async function getGamePresets() {
 
   const venueId = await getActiveVenueId();
   const supabase = await createClient();
-  let query = supabase.from("game_presets").select("*").order("name");
-  query =
-    venueId === YEOKSAM_VENUE_ID
-      ? query.or(`venue_id.eq.${venueId},venue_id.is.null`)
-      : query.eq("venue_id", venueId);
-  const { data, error } = await query;
+  const { data, error } = await supabase
+    .from("game_presets")
+    .select("*")
+    .eq("venue_id", venueId)
+    .order("name");
   if (error) return [];
   return data ?? [];
 }
@@ -63,12 +61,11 @@ export async function getGames() {
 
   const venueId = await getActiveVenueId();
   const supabase = await createClient();
-  let query = supabase.from("games").select("*").order("created_at", { ascending: false });
-  query =
-    venueId === YEOKSAM_VENUE_ID
-      ? query.or(`venue_id.eq.${venueId},venue_id.is.null`)
-      : query.eq("venue_id", venueId);
-  const { data } = await query;
+  const { data } = await supabase
+    .from("games")
+    .select("*")
+    .eq("venue_id", venueId)
+    .order("created_at", { ascending: false });
   return data ?? [];
 }
 

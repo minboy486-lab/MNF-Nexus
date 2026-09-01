@@ -142,6 +142,15 @@ export async function updatePresetFromPayload(
   if (structureError) return { error: structureError };
 
   const supabase = await createClient();
+  const venueId = await getActiveVenueId();
+  const { data: owned } = await supabase
+    .from("game_presets")
+    .select("id")
+    .eq("id", id)
+    .eq("venue_id", venueId)
+    .maybeSingle();
+  if (!owned) return { error: "다른 지점의 블라인드는 수정할 수 없습니다." };
+
   const result = await updateGamePresetRow(supabase, id, buildPresetRow(payload));
 
   if ("error" in result) return { error: result.error };
@@ -158,7 +167,16 @@ export async function deletePreset(id: string) {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("game_presets").delete().eq("id", id);
+  const venueId = await getActiveVenueId();
+  const { data: owned } = await supabase
+    .from("game_presets")
+    .select("id")
+    .eq("id", id)
+    .eq("venue_id", venueId)
+    .maybeSingle();
+  if (!owned) return { error: "다른 지점의 블라인드는 삭제할 수 없습니다." };
+
+  const { error } = await supabase.from("game_presets").delete().eq("id", id).eq("venue_id", venueId);
 
   if (error) return { error: error.message };
   revalidatePath("/admin/presets");
@@ -230,10 +248,12 @@ export async function startGameFromSelection(input: {
     return { error: `사용 중인 테이블이 있습니다: ${codes}` };
   }
 
+  const venueId = await getActiveVenueId();
   const { data: preset } = await supabase
     .from("game_presets")
     .select("blind_structure, buy_in")
     .eq("id", presetId)
+    .eq("venue_id", venueId)
     .single();
 
   const levels = getPlayLevels((preset?.blind_structure ?? []) as BlindStructureRow[]);

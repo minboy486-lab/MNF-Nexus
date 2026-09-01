@@ -7,8 +7,8 @@ import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 import { getAllDisplaysInfo } from "../screen/displayMapper";
 import { listBlindStructures } from "../supabase/blinds";
 import type { TimerHub } from "../timer/timerHub";
-import type { GameSession, MonitorSlot, TableSlot } from "../../shared/types";
-import { isThemeSurface, normalizeSoundVolume, normalizeUiTheme, withUiThemes } from "../../shared/types";
+import type { GameSession, MonitorSlot, TableSlot, AppConfig } from "../../shared/types";
+import { isThemeSurface, normalizeSoundVolume, normalizeUiTheme } from "../../shared/types";
 import {
   applyTimerThemeChoice,
   deleteSavedTimerTheme,
@@ -30,6 +30,11 @@ import type { RemoteServer } from "../remote/server";
 import { discoverLanGames } from "../remote/lanDiscover";
 import { LanViewClient } from "../remote/lanViewClient";
 import type { RemoteClientMsg } from "../../shared/remote";
+import { getOpenVenueSession, openVenueSession, closeVenueSession } from "../supabase/venueSession";
+import { createMember, searchMemberByNicknameOrLogin, searchMembersByQuery } from "../supabase/members";
+import { checkInMember, checkOutVisit, checkOutAllOnFloor, listOnFloorToday, listTodaySessionGuests } from "../supabase/visits";
+import { nextDailyGameNo, upsertGameScores } from "../supabase/manualScores";
+import { buildScoreRowsFromRankings, normalizeParticipant, type GameParticipant, type RankingEntry } from "../../shared/participants";
 
 const CONTROL_UNREACHABLE = "컨트롤 PC에 연결할 수 없습니다. 같은 네트워크에서 컨트롤 PC를 켜 주세요.";
 const HUB_WAIT_MS = 8000;
@@ -94,19 +99,49 @@ let volumeSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let lookSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let controlLookSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
+function cancelLookSaveTimers(): void {
+  if (lookSaveTimer) {
+    clearTimeout(lookSaveTimer);
+    lookSaveTimer = null;
+  }
+  if (controlLookSaveTimer) {
+    clearTimeout(controlLookSaveTimer);
+    controlLookSaveTimer = null;
+  }
+}
+
+/** 디스크에 방금 쓴 테마 목록이 메모리보다 최신일 수 있어, 저장 시 디스크를 우선 병합합니다. */
+function baseConfigForPersist(wm: WindowManager): AppConfig | null {
+  const disk = loadConfig();
+  const mem = wm.getConfig();
+  if (!disk && !mem) return null;
+  if (!disk) return { ...mem!, soundVolume: wm.getSoundVolume() };
+  if (!mem) return { ...disk, soundVolume: wm.getSoundVolume() };
+  return {
+    ...mem,
+    ...disk,
+    soundVolume: wm.getSoundVolume(),
+    mappings: mem.mappings,
+    controlDisplayId: mem.controlDisplayId,
+    controlOutputSlot: mem.controlOutputSlot,
+    venueId: mem.venueId,
+    yeoksamRole: mem.yeoksamRole,
+  };
+}
+
 function persistSoundVolume(wm: WindowManager): void {
-  const latest = wm.getConfig() ?? loadConfig();
+  const latest = baseConfigForPersist(wm);
   if (latest) saveConfig({ ...latest, soundVolume: wm.getSoundVolume() });
 }
 
 function persistTimerLook(wm: WindowManager, remote?: RemoteServer): void {
-  const latest = wm.getConfig() ?? loadConfig();
+  const latest = baseConfigForPersist(wm);
   if (latest) saveConfig({ ...latest, timerLook: wm.getTimerLook() });
   remote?.broadcastShopTimerTheme();
 }
 
 function persistControlLook(wm: WindowManager, remote?: RemoteServer): void {
-  const latest = wm.getConfig() ?? loadConfig();
+  const latest = baseConfigForPersist(wm);
   if (latest) saveConfig({ ...latest, controlLook: wm.getControlLook() });
   remote?.broadcastShopTimerTheme();
 }
@@ -195,8 +230,9 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const theme = normalizeUiTheme(themeRaw);
     const base = { ...current, soundVolume: wm.getSoundVolume() };
     const next = surface === "control"
-      ? withUiThemes(base, { controlTheme: theme })
+      ? applyControlThemeChoice(base, theme)
       : applyTimerThemeChoice(base, theme);
+    cancelLookSaveTimers();
     const saved = saveConfig(next);
     if (!saved.ok) return saved;
     await wm.applyConfig(next);
@@ -211,6 +247,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const id = typeof raw === "string" ? raw : typeof (raw as { id?: unknown })?.id === "string" ? (raw as { id: string }).id : "";
     if (!id) return { ok: false as const, error: "테마를 선택하세요." };
     const next = applyTimerThemeChoice({ ...current, soundVolume: wm.getSoundVolume() }, id);
+    cancelLookSaveTimers();
     const saved = saveConfig(next);
     if (!saved.ok) return saved;
     await wm.applyConfig(next);
@@ -241,6 +278,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
       },
     );
     if (!result.ok) return result;
+    cancelLookSaveTimers();
     const written = saveConfig(result.config);
     if (!written.ok) return written;
     await wm.applyConfig(result.config);
@@ -262,6 +300,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const id = typeof raw === "string" ? raw : typeof (raw as { id?: unknown })?.id === "string" ? (raw as { id: string }).id : "";
     if (!id) return { ok: false as const, error: "삭제할 테마가 없습니다." };
     const next = deleteSavedTimerTheme({ ...current, soundVolume: wm.getSoundVolume() }, id);
+    cancelLookSaveTimers();
     const saved = saveConfig(next);
     if (!saved.ok) return saved;
     await wm.applyConfig(next);
@@ -282,6 +321,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const id = typeof raw === "string" ? raw : typeof (raw as { id?: unknown })?.id === "string" ? (raw as { id: string }).id : "";
     if (!id) return { ok: false as const, error: "테마를 선택하세요." };
     const next = applyControlThemeChoice({ ...current, soundVolume: wm.getSoundVolume() }, id);
+    cancelLookSaveTimers();
     const saved = saveConfig(next);
     if (!saved.ok) return saved;
     await wm.applyConfig(next);
@@ -312,6 +352,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
       },
     );
     if (!result.ok) return result;
+    cancelLookSaveTimers();
     const written = saveConfig(result.config);
     if (!written.ok) return written;
     await wm.applyConfig(result.config);
@@ -333,6 +374,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const id = typeof raw === "string" ? raw : typeof (raw as { id?: unknown })?.id === "string" ? (raw as { id: string }).id : "";
     if (!id) return { ok: false as const, error: "삭제할 테마가 없습니다." };
     const next = deleteSavedControlTheme({ ...current, soundVolume: wm.getSoundVolume() }, id);
+    cancelLookSaveTimers();
     const saved = saveConfig(next);
     if (!saved.ok) return saved;
     await wm.applyConfig(next);
@@ -440,7 +482,9 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const sent = await forwardToHubOrLocal(remote, { type: "peer_create_game", structure });
     if (!sent.ok) return sent;
     if (!sent.forwarded) {
-      const session = hub.createGame(structure);
+      const gameNoResult = await nextDailyGameNo();
+      const dailyGameNo = typeof gameNoResult === "number" ? gameNoResult : 1;
+      const session = hub.createGame(structure, dailyGameNo);
       return { ok: true as const, session };
     }
     const started = Date.now();
@@ -627,5 +671,227 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const state = hub.getTimer(p.gameId as number);
     if (!state) return { ok: false as const, error: CONTROL_UNREACHABLE };
     return { ok: true as const, state };
+  });
+
+  // ── 영업·출석 ─────────────────────────────────────────────
+  ipcMain.handle("venueSession:get", async () => {
+    try {
+      const session = await getOpenVenueSession();
+      return { ok: true as const, session };
+    } catch (e) {
+      return { ok: false as const, error: e instanceof Error ? e.message : "영업 세션을 불러오지 못했습니다." };
+    }
+  });
+
+  ipcMain.handle("venueSession:open", async () => {
+    const result = await openVenueSession();
+    if ("error" in result) return { ok: false as const, error: result.error };
+    return { ok: true as const, sessionId: result.sessionId };
+  });
+
+  ipcMain.handle("venueSession:close", async () => {
+    const activeGames = hub.getSnapshot().sessions.length;
+    if (activeGames > 0) {
+      return {
+        ok: false as const,
+        error: `진행 중인 게임이 ${activeGames}개 있습니다. 게임을 모두 종료한 뒤 영업을 마감해 주세요.`,
+      };
+    }
+    const checkout = await checkOutAllOnFloor();
+    if ("error" in checkout) return { ok: false as const, error: checkout.error };
+    const closed = await closeVenueSession();
+    if ("error" in closed) return { ok: false as const, error: closed.error };
+    return { ok: true as const, checkedOut: checkout.checkedOut };
+  });
+
+  ipcMain.handle("attendance:searchMember", async (_e, raw: unknown) => {
+    const q = typeof raw === "string" ? raw : "";
+    try {
+      const member = await searchMemberByNicknameOrLogin(q);
+      return { ok: true as const, member };
+    } catch (e) {
+      return { ok: false as const, error: e instanceof Error ? e.message : "검색에 실패했습니다." };
+    }
+  });
+
+  ipcMain.handle("attendance:searchMembers", async (_e, raw: unknown) => {
+    const q = typeof raw === "string" ? raw : "";
+    try {
+      const members = await searchMembersByQuery(q);
+      return { ok: true as const, members };
+    } catch (e) {
+      return { ok: false as const, error: e instanceof Error ? e.message : "검색에 실패했습니다." };
+    }
+  });
+
+  ipcMain.handle("attendance:listSession", async () => {
+    const result = await listTodaySessionGuests();
+    if ("error" in result) return { ok: false as const, error: result.error };
+    return { ok: true as const, guests: result };
+  });
+
+  ipcMain.handle("attendance:createMember", async (_e, raw: unknown) => {
+    const p = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const result = await createMember({
+      loginId: typeof p.loginId === "string" ? p.loginId : "",
+      password: typeof p.password === "string" ? p.password : "",
+      nickname: typeof p.nickname === "string" ? p.nickname : "",
+      displayName: typeof p.displayName === "string" ? p.displayName : undefined,
+      phone: typeof p.phone === "string" ? p.phone : undefined,
+    });
+    if ("error" in result) return { ok: false as const, error: result.error };
+    return { ok: true as const, member: result.member };
+  });
+
+  ipcMain.handle("attendance:checkIn", async (_e, raw: unknown) => {
+    const memberId = typeof raw === "string" ? raw : typeof (raw as { memberId?: unknown })?.memberId === "string" ? (raw as { memberId: string }).memberId : "";
+    if (!memberId) return { ok: false as const, error: "손님을 선택하세요." };
+    const result = await checkInMember(memberId);
+    if ("error" in result) return { ok: false as const, error: result.error };
+    return { ok: true as const, visitId: result.visitId };
+  });
+
+  ipcMain.handle("attendance:checkOut", async (_e, raw: unknown) => {
+    const visitId = typeof raw === "string" ? raw : typeof (raw as { visitId?: unknown })?.visitId === "string" ? (raw as { visitId: string }).visitId : "";
+    if (!visitId) return { ok: false as const, error: "방문 기록이 없습니다." };
+    const result = await checkOutVisit(visitId);
+    if ("error" in result) return { ok: false as const, error: result.error };
+    return { ok: true as const };
+  });
+
+  ipcMain.handle("attendance:listOnFloor", async () => {
+    const result = await listOnFloorToday();
+    if ("error" in result) return { ok: false as const, error: result.error };
+    return { ok: true as const, guests: result };
+  });
+
+  // ── 게임 참가자 ───────────────────────────────────────────
+  ipcMain.handle("game:participants:add", async (_e, raw: unknown) => {
+    const p = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    if (!isGameId(p.gameId)) return { ok: false as const, error: "유효하지 않은 게임 ID입니다." };
+    const participant: GameParticipant = normalizeParticipant({
+      memberId: typeof p.memberId === "string" ? p.memberId : "",
+      nickname: typeof p.nickname === "string" ? p.nickname : "",
+      visitId: typeof p.visitId === "string" ? p.visitId : undefined,
+      tableSlot: isTableSlot(p.tableSlot) ? p.tableSlot : null,
+      rebuyCount: 0,
+      sitOut: false,
+      sortOrder: typeof p.sortOrder === "number" ? p.sortOrder : 0,
+    });
+    if (!participant.memberId || !participant.nickname) {
+      return { ok: false as const, error: "손님 정보가 올바르지 않습니다." };
+    }
+    const sent = await forwardToHubOrLocal(remote, {
+      type: "peer_participant_add",
+      gameId: p.gameId as number,
+      participant,
+    });
+    if (!sent.ok) return sent;
+    if (!sent.forwarded) {
+      const result = hub.addParticipant(p.gameId as number, participant);
+      if (!result.ok) return result;
+    }
+    return { ok: true as const };
+  });
+
+  ipcMain.handle("game:participants:remove", async (_e, raw: unknown) => {
+    const p = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    if (!isGameId(p.gameId)) return { ok: false as const, error: "유효하지 않은 게임 ID입니다." };
+    const memberId = typeof p.memberId === "string" ? p.memberId : "";
+    if (!memberId) return { ok: false as const, error: "손님을 선택하세요." };
+    const sent = await forwardToHubOrLocal(remote, {
+      type: "peer_participant_remove",
+      gameId: p.gameId as number,
+      memberId,
+    });
+    if (!sent.ok) return sent;
+    if (!sent.forwarded) hub.removeParticipant(p.gameId as number, memberId);
+    return { ok: true as const };
+  });
+
+  ipcMain.handle("game:participants:moveTable", async (_e, raw: unknown) => {
+    const p = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    if (!isGameId(p.gameId)) return { ok: false as const, error: "유효하지 않은 게임 ID입니다." };
+    const memberId = typeof p.memberId === "string" ? p.memberId : "";
+    if (!memberId) return { ok: false as const, error: "손님을 선택하세요." };
+    const tableSlot = p.tableSlot === null ? null : isTableSlot(p.tableSlot) ? p.tableSlot : null;
+    const sent = await forwardToHubOrLocal(remote, {
+      type: "peer_participant_move",
+      gameId: p.gameId as number,
+      memberId,
+      tableSlot,
+    });
+    if (!sent.ok) return sent;
+    if (!sent.forwarded) hub.moveParticipantTable(p.gameId as number, memberId, tableSlot);
+    return { ok: true as const };
+  });
+
+  ipcMain.handle("game:participants:sitOut", async (_e, raw: unknown) => {
+    const p = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    if (!isGameId(p.gameId)) return { ok: false as const, error: "유효하지 않은 게임 ID입니다." };
+    const memberId = typeof p.memberId === "string" ? p.memberId : "";
+    if (!memberId) return { ok: false as const, error: "손님을 선택하세요." };
+    const sitOut = p.sitOut !== false;
+    const sent = await forwardToHubOrLocal(remote, {
+      type: "peer_participant_sitout",
+      gameId: p.gameId as number,
+      memberId,
+      sitOut,
+    });
+    if (!sent.ok) return sent;
+    if (!sent.forwarded) hub.setParticipantSitOut(p.gameId as number, memberId, sitOut);
+    return { ok: true as const };
+  });
+
+  ipcMain.handle("game:participants:setRebuy", async (_e, raw: unknown) => {
+    const p = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    if (!isGameId(p.gameId)) return { ok: false as const, error: "유효하지 않은 게임 ID입니다." };
+    const memberId = typeof p.memberId === "string" ? p.memberId : "";
+    if (!memberId) return { ok: false as const, error: "손님을 선택하세요." };
+    const delta = typeof p.delta === "number" ? p.delta : 0;
+    if (delta === 0) return { ok: false as const, error: "변경할 리바인이 없습니다." };
+    const sent = await forwardToHubOrLocal(remote, {
+      type: "peer_participant_rebuy",
+      gameId: p.gameId as number,
+      memberId,
+      delta,
+    });
+    if (!sent.ok) return sent;
+    if (!sent.forwarded) hub.setParticipantRebuy(p.gameId as number, memberId, delta);
+    return { ok: true as const };
+  });
+
+  ipcMain.handle("game:participants:reorder", async (_e, raw: unknown) => {
+    const p = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    if (!isGameId(p.gameId)) return { ok: false as const, error: "유효하지 않은 게임 ID입니다." };
+    const memberIds = Array.isArray(p.memberIds)
+      ? p.memberIds.filter((id): id is string => typeof id === "string")
+      : [];
+    if (memberIds.length === 0) return { ok: false as const, error: "순서 정보가 없습니다." };
+    const sent = await forwardToHubOrLocal(remote, {
+      type: "peer_participant_reorder",
+      gameId: p.gameId as number,
+      memberIds,
+    });
+    if (!sent.ok) return sent;
+    if (!sent.forwarded) hub.reorderParticipants(p.gameId as number, memberIds);
+    return { ok: true as const };
+  });
+
+  ipcMain.handle("game:finalizeScores", async (_e, raw: unknown) => {
+    const p = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    if (!isGameId(p.gameId)) return { ok: false as const, error: "유효하지 않은 게임 ID입니다." };
+    const gameId = p.gameId as number;
+    const session = hub.getSnapshot().sessions.find((s) => s.gameId === gameId);
+    if (!session) return { ok: false as const, error: "게임을 찾을 수 없습니다." };
+    const rankings = Array.isArray(p.rankings) ? (p.rankings as RankingEntry[]) : [];
+    const rows = buildScoreRowsFromRankings(session.participants, rankings);
+    const saved = await upsertGameScores(session.dailyGameNo, rows);
+    if ("error" in saved) return { ok: false as const, error: saved.error };
+    hub.markScoresSubmitted(gameId);
+    const sent = await forwardToHubOrLocal(remote, { type: "peer_deleteGame", gameId });
+    if (!sent.ok) return sent;
+    if (!sent.forwarded) hub.deleteGame(gameId);
+    return { ok: true as const, saved: saved.saved, gameNo: session.dailyGameNo };
   });
 }

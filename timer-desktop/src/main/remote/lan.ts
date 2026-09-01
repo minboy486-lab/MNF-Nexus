@@ -1,24 +1,35 @@
 import { createSocket } from "node:dgram";
 import { networkInterfaces } from "node:os";
 
+const VIRTUAL_IFACE = /^(lo|bridge|awdl|llw|gif|stf|utun|vmnet|vboxnet|docker|veth|tap|tun|ppp|pktap)/i;
+
+function interfaceRank(name: string, ip: string): number {
+  if (/^en0$/i.test(name) && ip.startsWith("192.168.")) return 0;
+  if (/^(en|wlan|wifi)/i.test(name) && ip.startsWith("192.168.")) return 1;
+  if (ip.startsWith("192.168.")) return 2;
+  if (ip.startsWith("10.")) return 3;
+  if (ip.startsWith("172.")) return 4;
+  return 5;
+}
+
 function fromOs(): string[] {
   const nets = networkInterfaces();
-  const out: string[] = [];
-  for (const list of Object.values(nets)) {
+  const scored: Array<{ ip: string; rank: number }> = [];
+  const seen = new Set<string>();
+  for (const [name, list] of Object.entries(nets)) {
+    if (VIRTUAL_IFACE.test(name)) continue;
     for (const n of list ?? []) {
       const family = n.family === "IPv4" || String(n.family) === "4";
       if (!family || n.internal) continue;
       if (!n.address || n.address.startsWith("169.254.")) continue;
-      if (!out.includes(n.address)) out.push(n.address);
+      if (seen.has(n.address)) continue;
+      seen.add(n.address);
+      scored.push({ ip: n.address, rank: interfaceRank(name, n.address) });
     }
   }
-  const rank = (ip: string) => {
-    if (ip.startsWith("192.168.")) return 0;
-    if (ip.startsWith("10.")) return 1;
-    if (ip.startsWith("172.")) return 2;
-    return 3;
-  };
-  return out.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  return scored
+    .sort((a, b) => a.rank - b.rank || a.ip.localeCompare(b.ip))
+    .map((row) => row.ip);
 }
 
 function guessOutboundIPv4(): Promise<string | null> {

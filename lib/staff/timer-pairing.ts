@@ -7,7 +7,52 @@ export type StaffTimerPairing = {
   pin: string;
   tok: string;
   loginId: string;
+  /** QR에 포함된 LAN IP 후보 (최신 주소 우선 연결용) */
+  urls?: string[];
 };
+
+export function parseLanIpList(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const part of raw.split(",")) {
+    const ip = part.trim();
+    if (!ip || seen.has(ip)) continue;
+    seen.add(ip);
+    out.push(ip);
+  }
+  return out;
+}
+
+function baseUrlFromIp(ip: string, port = CONTROLLER_REMOTE_PORT): string | null {
+  try {
+    const host = ip.trim();
+    if (!host || !isPrivateLanHostname(host)) return null;
+    return `http://${host}:${port}`;
+  } catch {
+    return null;
+  }
+}
+
+export function baseUrlsFromPairing(pairing: Pick<StaffTimerPairing, "url" | "urls">): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (raw: string | null | undefined) => {
+    if (!raw) return;
+    try {
+      const u = new URL(raw);
+      const base = `${u.protocol}//${u.host}`;
+      if (seen.has(base)) return;
+      seen.add(base);
+      out.push(base);
+    } catch {
+      /* ignore */
+    }
+  };
+  for (const ip of pairing.urls ?? []) push(baseUrlFromIp(ip));
+  push(pairing.url);
+  return out;
+}
 
 export function isPrivateLanHostname(hostname: string): boolean {
   const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
@@ -36,7 +81,7 @@ export function isLanControllerUrl(url: string): boolean {
   }
 }
 
-export function parseControllerQr(text: string): { pin: string; tok: string; url: string } | null {
+export function parseControllerQr(text: string): { pin: string; tok: string; url: string; urls: string[] } | null {
   try {
     const u = new URL(text.trim());
     const pin = u.searchParams.get("pin")?.trim() ?? "";
@@ -44,7 +89,10 @@ export function parseControllerQr(text: string): { pin: string; tok: string; url
     if (!pin && !tok) return null;
     const url = u.toString();
     if (!isLanControllerUrl(url)) return null;
-    return { pin, tok, url };
+    const fromParam = parseLanIpList(u.searchParams.get("ips"));
+    const fromHost = u.hostname && isPrivateLanHostname(u.hostname) ? [u.hostname] : [];
+    const urls = [...fromParam, ...fromHost.filter((ip) => !fromParam.includes(ip))];
+    return { pin, tok, url, urls };
   } catch {
     return null;
   }
@@ -125,13 +173,20 @@ export function hasClockInGoHome(): boolean {
 }
 
 /** 출근 이후 매장 컨트롤용. tok/next 없이 PIN+아이디만 넘긴다. */
-export function timerRemoteHref(pairing: StaffTimerPairing): string {
+export function timerRemoteHref(
+  pairing: StaffTimerPairing,
+  opts?: { baseUrl?: string; loginId?: string },
+): string {
   try {
-    const u = new URL(pairing.url);
+    const base = opts?.baseUrl ?? pairing.url;
+    const u = new URL(base);
     u.searchParams.delete("tok");
     u.searchParams.delete("next");
-    if (pairing.pin) u.searchParams.set("pin", pairing.pin);
-    if (pairing.loginId) u.searchParams.set("id", pairing.loginId);
+    u.searchParams.delete("ips");
+    const pin = pairing.pin || u.searchParams.get("pin") || "";
+    if (pin) u.searchParams.set("pin", pin);
+    const loginId = opts?.loginId ?? pairing.loginId;
+    if (loginId) u.searchParams.set("id", loginId);
     if (typeof window !== "undefined" && window.location.origin) {
       u.searchParams.set("from", window.location.origin);
     }
@@ -139,6 +194,33 @@ export function timerRemoteHref(pairing: StaffTimerPairing): string {
   } catch {
     return pairing.url;
   }
+}
+
+export function resolveControllerConnectUrls(
+  pairing: StaffTimerPairing,
+  cloud?: { ips: string[]; port: number; pin: string; fresh: boolean } | null,
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const pushBase = (base: string | null | undefined) => {
+    if (!base || seen.has(base)) return;
+    seen.add(base);
+    out.push(base);
+  };
+
+  if (cloud?.fresh) {
+    for (const ip of cloud.ips) pushBase(baseUrlFromIp(ip, cloud.port));
+    if (cloud.pin) pairing = { ...pairing, pin: cloud.pin };
+  }
+
+  for (const base of baseUrlsFromPairing(pairing)) pushBase(base);
+  return out.map((base) => timerRemoteHref(pairing, { baseUrl: `${base}/remote/` }));
+}
+
+export function isLikelyCellularConnection(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const conn = (navigator as Navigator & { connection?: { type?: string } }).connection;
+  return conn?.type === "cellular";
 }
 
 export function pairingUrlWithoutTok(url: string): string {

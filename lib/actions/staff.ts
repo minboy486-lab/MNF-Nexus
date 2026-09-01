@@ -15,6 +15,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveVenueId } from "@/lib/venue/active";
 import { getKSTNowParts, toISODate } from "@/lib/venue/operating-date";
 import { getOpenVenueSession } from "@/lib/venue/session";
+import {
+  controllerLanIsFresh,
+  parseVenueControllerLan,
+} from "@/lib/staff/controller-lan";
 
 export type StaffListRow = {
   id: string;
@@ -604,4 +608,31 @@ export async function punchMeOut(): Promise<{ success: true } | { error: string 
   revalidatePath("/staff/attendance");
   revalidatePath("/admin/staff");
   return { success: true };
+}
+
+export type StaffControllerLan = {
+  ips: string[];
+  port: number;
+  pin: string;
+  fresh: boolean;
+};
+
+export async function getStaffControllerLan(): Promise<StaffControllerLan | null> {
+  if (!isSupabaseConfigured()) return null;
+  const me = await requireMyStaffRow();
+  if ("error" in me) return null;
+
+  const venueId = await getActiveVenueId();
+  const { data, error } = await me.supabase.from("venues").select("settings").eq("id", venueId).maybeSingle();
+  if (error || !data) return null;
+
+  const settings = data.settings as Record<string, unknown> | null;
+  const parsed = parseVenueControllerLan(settings?.controller_lan);
+  if (!parsed) return null;
+  return {
+    ips: parsed.ips,
+    port: parsed.port,
+    pin: parsed.pin,
+    fresh: controllerLanIsFresh(parsed),
+  };
 }

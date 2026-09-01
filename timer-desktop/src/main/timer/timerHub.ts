@@ -7,6 +7,8 @@ import {
 } from "@mnf/timer/engine";
 import type { BlindStructureOption, TableTimerState, TimerAction } from "@mnf/timer/types";
 import type { AppSnapshot, GameSession, MonitorSlot, TableSlot } from "../../shared/types";
+import type { GameParticipant } from "../../shared/participants";
+import { normalizeGameSession, normalizeParticipant, syncCountersFromParticipants } from "../../shared/participants";
 import { MONITOR_SLOTS } from "../../shared/types";
 import type { RemoteCounterOp } from "../../shared/remote";
 import { yeoksamOutputGameId } from "../../shared/floorPlan";
@@ -102,7 +104,7 @@ export class TimerHub {
 
   // ── 게임 생성/종료 ──────────────────────────────────────────
 
-  createGame(structure: BlindStructureOption): GameSession {
+  createGame(structure: BlindStructureOption, dailyGameNo = 1): GameSession {
     const gameId = this.nextGameId++;
     const state = openTableGame(gameId, structure);
     this.timers.set(gameId, state);
@@ -130,10 +132,109 @@ export class TimerHub {
       addon: 0,
       bonusChip: 0,
       leftNotice: null,
+      participants: [],
+      dailyGameNo,
     };
     this.sessions.set(gameId, session);
     this.pushSnapshotToControl();
     return session;
+  }
+
+  addParticipant(gameId: number, participant: GameParticipant): { ok: true } | { ok: false; error: string } {
+    const session = this.sessions.get(gameId);
+    if (!session) return { ok: false, error: "게임을 찾을 수 없습니다." };
+    if (session.participants.some((p) => p.memberId === participant.memberId)) {
+      return { ok: false, error: "이미 등록된 손님입니다." };
+    }
+    const nextOrder =
+      session.participants.length > 0
+        ? Math.max(...session.participants.map((p) => p.sortOrder)) + 1
+        : 0;
+    const normalized = normalizeParticipant(
+      { ...participant, sortOrder: participant.sortOrder ?? nextOrder },
+      nextOrder,
+    );
+    session.participants = [...session.participants, normalized];
+    syncCountersFromParticipants(session);
+    this.pushToGame(gameId);
+    this.pushSnapshotToControl();
+    return { ok: true };
+  }
+
+  removeParticipant(gameId: number, memberId: string): boolean {
+    const session = this.sessions.get(gameId);
+    if (!session) return false;
+    const next = session.participants.filter((p) => p.memberId !== memberId);
+    if (next.length === session.participants.length) return false;
+    session.participants = next;
+    syncCountersFromParticipants(session);
+    this.pushToGame(gameId);
+    this.pushSnapshotToControl();
+    return true;
+  }
+
+  setParticipantSitOut(gameId: number, memberId: string, sitOut: boolean): boolean {
+    const session = this.sessions.get(gameId);
+    if (!session) return false;
+    const idx = session.participants.findIndex((p) => p.memberId === memberId);
+    if (idx < 0) return false;
+    session.participants = session.participants.map((p, i) =>
+      i === idx ? { ...p, sitOut } : p,
+    );
+    syncCountersFromParticipants(session);
+    this.pushToGame(gameId);
+    this.pushSnapshotToControl();
+    return true;
+  }
+
+  setParticipantRebuy(gameId: number, memberId: string, delta: number): boolean {
+    const session = this.sessions.get(gameId);
+    if (!session || delta === 0) return false;
+    const idx = session.participants.findIndex((p) => p.memberId === memberId);
+    if (idx < 0) return false;
+    const current = session.participants[idx]!;
+    const nextCount = Math.max(0, current.rebuyCount + delta);
+    if (nextCount === current.rebuyCount) return true;
+    const sitOut = delta > 0 && current.sitOut ? false : current.sitOut;
+    session.participants = session.participants.map((p, i) =>
+      i === idx ? { ...p, rebuyCount: nextCount, sitOut } : p,
+    );
+    syncCountersFromParticipants(session);
+    this.pushToGame(gameId);
+    this.pushSnapshotToControl();
+    return true;
+  }
+
+  reorderParticipants(gameId: number, memberIds: string[]): boolean {
+    const session = this.sessions.get(gameId);
+    if (!session) return false;
+    const orderMap = new Map(memberIds.map((id, i) => [id, i]));
+    if (orderMap.size === 0) return false;
+    session.participants = session.participants.map((p) => {
+      const order = orderMap.get(p.memberId);
+      return order !== undefined ? { ...p, sortOrder: order } : p;
+    });
+    this.pushSnapshotToControl();
+    return true;
+  }
+
+  moveParticipantTable(gameId: number, memberId: string, tableSlot: TableSlot | null): boolean {
+    const session = this.sessions.get(gameId);
+    if (!session) return false;
+    const idx = session.participants.findIndex((p) => p.memberId === memberId);
+    if (idx < 0) return false;
+    session.participants = session.participants.map((p, i) =>
+      i === idx ? { ...p, tableSlot } : p,
+    );
+    this.pushSnapshotToControl();
+    return true;
+  }
+
+  markScoresSubmitted(gameId: number): void {
+    const session = this.sessions.get(gameId);
+    if (!session) return;
+    session.scoresSubmitted = true;
+    this.pushSnapshotToControl();
   }
 
   updateSessionCounters(
@@ -329,7 +430,7 @@ export class TimerHub {
 
   /** 이 PC 허브만. 역삼 출력 follow는 빼서 LAN 게임 목록이 중복되지 않게 한다. */
   ownedSnapshot(): AppSnapshot {
-    const sessions = Array.from(this.sessions.values());
+    const sessions = Array.from(this.sessions.values()).map(normalizeGameSession);
     const monitorAssignments: Record<number, number | null> = {};
     for (const slot of MONITOR_SLOTS) {
       monitorAssignments[slot] = this.monitorAssignments.get(slot) ?? null;
@@ -346,7 +447,13 @@ export class TimerHub {
   }
 
   setFollow(snapshot: AppSnapshot, timers: TableTimerState[]): void {
-    this.follow = { snapshot, timers };
+    this.follow = {
+      snapshot: {
+        ...snapshot,
+        sessions: snapshot.sessions.map(normalizeGameSession),
+      },
+      timers,
+    };
     this.pushFollowedState();
   }
 

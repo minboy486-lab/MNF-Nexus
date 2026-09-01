@@ -438,6 +438,9 @@ export function ControlLookEditor({
                   </span>
                 </div>
                 <div className="header-actions">
+                  <ControlLookWrap id="storeMgmt" look={look} edit={edit} className="ctrl-look-wrap--store-mgmt">
+                    <span className="header-mgmt-btn" aria-hidden>매장 관리</span>
+                  </ControlLookWrap>
                   <span className="icon-btn" aria-hidden>⚙</span>
                 </div>
               </header>

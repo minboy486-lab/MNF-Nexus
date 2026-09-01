@@ -605,6 +605,8 @@ export function sampleLookSession(): GameSession {
     addon: 0,
     bonusChip: 0,
     leftNotice: { html: "<p>등록 마감 21:00</p><p>자리 이동은 데스크</p>" },
+    participants: [],
+    dailyGameNo: 1,
   };
 }
 

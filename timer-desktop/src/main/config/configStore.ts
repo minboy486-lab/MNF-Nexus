@@ -18,6 +18,38 @@ import {
 import { normalizeTimerLook, normalizeSavedTimerThemes, resolveActiveTimerThemeId } from "../../shared/timerLook";
 import { normalizeControlLook, normalizeSavedControlThemes, resolveActiveControlThemeId } from "../../shared/controlLook";
 
+function reconcileLoadedThemes(config: AppConfig): AppConfig {
+  const timerTheme = resolveTimerTheme(config);
+  const savedTimerThemes = normalizeSavedTimerThemes(config.savedTimerThemes, timerTheme);
+  const activeTimerThemeId = resolveActiveTimerThemeId({
+    ...config,
+    timerTheme,
+    savedTimerThemes,
+  });
+  const savedTimer = savedTimerThemes.find((s) => s.id === activeTimerThemeId);
+
+  const controlTheme = resolveControlTheme(config);
+  const savedControlThemes = normalizeSavedControlThemes(config.savedControlThemes, controlTheme);
+  const activeControlThemeId = resolveActiveControlThemeId({
+    ...config,
+    controlTheme,
+    savedControlThemes,
+  });
+  const savedControl = savedControlThemes.find((s) => s.id === activeControlThemeId);
+
+  return {
+    ...config,
+    timerTheme: savedTimer?.baseTheme ?? timerTheme,
+    timerLook: savedTimer?.look ?? normalizeTimerLook(config.timerLook, timerTheme),
+    activeTimerThemeId,
+    savedTimerThemes,
+    controlTheme: savedControl?.baseTheme ?? controlTheme,
+    controlLook: savedControl?.look ?? normalizeControlLook(config.controlLook, controlTheme),
+    activeControlThemeId,
+    savedControlThemes,
+  };
+}
+
 export function getConfigPath(): string {
   return `${app.getPath("userData")}/config.json`;
 }
@@ -105,7 +137,7 @@ export function loadConfig(): AppConfig | null {
         timerTheme: resolveTimerTheme(parsed),
       },
     );
-    return {
+    return reconcileLoadedThemes({
       ...themed,
       timerLook: normalizeTimerLook(parsed.timerLook, resolveTimerTheme(themed)),
       savedTimerThemes: normalizeSavedTimerThemes(parsed.savedTimerThemes, resolveTimerTheme(themed)),
@@ -123,7 +155,7 @@ export function loadConfig(): AppConfig | null {
         activeControlThemeId: parsed.activeControlThemeId,
         controlLook: parsed.controlLook,
       }),
-    };
+    });
   } catch {
     return null;
   }

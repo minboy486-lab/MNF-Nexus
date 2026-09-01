@@ -48,6 +48,7 @@ export function StaffClockInClient({ loginId }: Props) {
         pin: parsed.pin,
         tok: parsed.tok,
         loginId,
+        urls: parsed.urls,
       });
       markClockInGoHome();
       void punchMeIn().then((result) => {

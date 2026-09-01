@@ -12,7 +12,6 @@ import {
   readTimerPairing,
   readTimerPairingRaw,
   subscribeTimerPairing,
-  timerRemoteHref,
 } from "@/lib/staff/timer-pairing";
 
 type Props = {
@@ -55,11 +54,11 @@ export function StaffHomeClient({ name, loginId, working, checkedInAt }: Props) 
   function openTimer() {
     const pairing = readTimerPairing();
     if (!pairing) {
-      setConnectHint("저장된 컨트롤러가 없습니다. 매장 와이파이를 확인한 뒤 다시 눌러 주세요.");
+      setConnectHint("저장된 컨트롤러가 없습니다. 매장 와이파이를 확인한 뒤 QR을 다시 스캔해 주세요.");
       return;
     }
     setConnectHint(null);
-    window.location.assign(timerRemoteHref({ ...pairing, loginId: pairing.loginId || loginId }));
+    router.push("/staff/timer");
   }
 
   return (

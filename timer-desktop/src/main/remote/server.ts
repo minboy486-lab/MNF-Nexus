@@ -9,6 +9,7 @@ import {
   isRemoteTimerAction,
   LAN_CLAIM_PATH,
   LAN_CLUSTER_PATH,
+  LAN_PING_PATH,
   PUNCH_TOKEN_TTL_MS,
   REMOTE_PORT,
   type RemoteClientMsg,
@@ -21,6 +22,7 @@ import type { TimerHub } from "../timer/timerHub";
 import { clockInStaff, clockOutStaff, claimStaffByLoginId, loginStaff, rejoinStaffByLoginId, refreshStaffClock, type StaffAuthOk } from "../supabase/staffAuth";
 import { getSupabase } from "../supabase/client";
 import { getConfiguredVenueId, getConfiguredYeoksamRole } from "../supabase/venue";
+import { publishControllerLanPresence } from "../supabase/controllerPresence";
 import { hostname } from "node:os";
 import { getDisplayRemainingMs } from "@mnf/timer/engine";
 import { listLanIPv4 } from "./lan";
@@ -159,6 +161,7 @@ export class RemoteServer {
   private getVolume: () => number = () => 100;
   private cluster: LanCluster | null = null;
   private applyingShopTheme = false;
+  private presenceTimer: ReturnType<typeof setInterval> | null = null;
   private shopTheme: {
     get: () => ShopTimerThemePayload | null;
     apply: (pack: ShopTimerThemePayload) => boolean;
@@ -230,10 +233,12 @@ export class RemoteServer {
     this.infoCache = await this.buildInfo();
     this.cluster.start();
     this.syncYeoksamFollow();
+    this.startPresenceHeartbeat();
     console.log(`[remote] LAN http://0.0.0.0:${this.port} PIN ${this.pin}`);
   }
 
   stop(): void {
+    this.stopPresenceHeartbeat();
     this.cluster?.stop();
     this.cluster = null;
     this.unsubHub?.();
@@ -269,7 +274,28 @@ export class RemoteServer {
   async refreshPairing(): Promise<RemotePairingInfo> {
     this.rotatePunchToken();
     this.infoCache = await this.buildInfo();
+    void this.publishPresence();
     return this.infoCache;
+  }
+
+  private async publishPresence(): Promise<void> {
+    const ips = await listLanIPv4();
+    if (!ips.length) return;
+    await publishControllerLanPresence({ ips, pin: this.pin, port: this.port });
+  }
+
+  startPresenceHeartbeat(): void {
+    if (this.presenceTimer) return;
+    void this.publishPresence();
+    this.presenceTimer = setInterval(() => {
+      void this.publishPresence();
+    }, 60_000);
+  }
+
+  stopPresenceHeartbeat(): void {
+    if (!this.presenceTimer) return;
+    clearInterval(this.presenceTimer);
+    this.presenceTimer = null;
   }
 
   private rotatePunchToken(): void {
@@ -280,9 +306,11 @@ export class RemoteServer {
   private async buildInfo(): Promise<RemotePairingInfo> {
     const ips = await listLanIPv4();
     const hosts = ips.length > 0 ? ips : ["127.0.0.1"];
+    const ipsParam = encodeURIComponent(hosts.join(","));
     const urls = hosts.map(
-      (ip) => `http://${ip}:${this.port}/remote/?pin=${this.pin}&tok=${this.punchToken}`,
+      (ip) => `http://${ip}:${this.port}/remote/?pin=${this.pin}&tok=${this.punchToken}&ips=${ipsParam}`,
     );
+    void this.publishPresence();
     return {
       pin: this.pin,
       port: this.port,
@@ -341,6 +369,7 @@ export class RemoteServer {
   }
 
   private applyIncomingShopTheme(raw: unknown): boolean {
+    if (!this.isYeoksamFollowerPc()) return false;
     const pack = normalizeShopTimerTheme(raw);
     if (!pack || !this.shopTheme) return false;
     this.applyingShopTheme = true;
@@ -708,10 +737,8 @@ export class RemoteServer {
     if (msg.type === "peer_timer_theme") {
       const pack = normalizeShopTimerTheme(msg);
       if (!pack) return;
-      const changed = this.applyIncomingShopTheme(pack);
-      if (changed && !this.isYeoksamFollowerPc()) {
-        this.cluster?.broadcastToPeers({ type: "peer_timer_theme", ...pack });
-        this.cluster?.pushLocalSnapshot();
+      if (this.isYeoksamFollowerPc()) {
+        this.applyIncomingShopTheme(pack);
       }
       return;
     }
@@ -803,7 +830,50 @@ export class RemoteServer {
         sendJson(ws, { type: "error", error: "블라인드 구조가 올바르지 않습니다." });
         return;
       }
-      hub.createGame(msg.structure);
+      void (async () => {
+        const { nextDailyGameNo } = await import("../supabase/manualScores");
+        const gameNoResult = await nextDailyGameNo();
+        const dailyGameNo = typeof gameNoResult === "number" ? gameNoResult : 1;
+        hub.createGame(msg.structure, dailyGameNo);
+      })();
+      return;
+    }
+
+    if (msg.type === "peer_participant_add") {
+      if (!Number.isInteger(msg.gameId) || msg.gameId < 1) return;
+      hub.addParticipant(msg.gameId, msg.participant);
+      return;
+    }
+
+    if (msg.type === "peer_participant_remove") {
+      if (!Number.isInteger(msg.gameId) || msg.gameId < 1) return;
+      hub.removeParticipant(msg.gameId, msg.memberId);
+      return;
+    }
+
+    if (msg.type === "peer_participant_move") {
+      if (!Number.isInteger(msg.gameId) || msg.gameId < 1) return;
+      const slot = msg.tableSlot === null ? null : msg.tableSlot;
+      if (slot !== null && (slot < 1 || slot > 6)) return;
+      hub.moveParticipantTable(msg.gameId, msg.memberId, slot as import("../../shared/types").TableSlot | null);
+      return;
+    }
+
+    if (msg.type === "peer_participant_sitout") {
+      if (!Number.isInteger(msg.gameId) || msg.gameId < 1) return;
+      hub.setParticipantSitOut(msg.gameId, msg.memberId, msg.sitOut);
+      return;
+    }
+
+    if (msg.type === "peer_participant_rebuy") {
+      if (!Number.isInteger(msg.gameId) || msg.gameId < 1) return;
+      hub.setParticipantRebuy(msg.gameId, msg.memberId, msg.delta);
+      return;
+    }
+
+    if (msg.type === "peer_participant_reorder") {
+      if (!Number.isInteger(msg.gameId) || msg.gameId < 1) return;
+      hub.reorderParticipants(msg.gameId, msg.memberIds);
       return;
     }
 
@@ -920,6 +990,10 @@ export class RemoteServer {
         this.serveLanGames(res);
         return;
       }
+      if (url.pathname === LAN_PING_PATH) {
+        this.serveLanPing(res);
+        return;
+      }
       if (url.pathname === "/manifest.webmanifest") {
         this.serveManifest(res);
         return;
@@ -1010,6 +1084,14 @@ export class RemoteServer {
       "Access-Control-Allow-Origin": "*",
     });
     res.end(JSON.stringify(body));
+  }
+
+  private serveLanPing(res: ServerResponse): void {
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      ...this.lanCors(),
+    });
+    res.end(JSON.stringify({ ok: true, port: this.port, pin: this.pin }));
   }
 
   private serveLanGames(res: ServerResponse): void {

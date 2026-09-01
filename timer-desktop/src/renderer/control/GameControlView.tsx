@@ -24,7 +24,7 @@ type Props = {
   timerLook?: TimerLook | null;
   onBack: () => void;
   onCommand: (action: TimerAction, options?: { minutes?: number; ms?: number; sec?: number }) => void;
-  onDeleteGame: () => void;
+  onRequestEndGame: () => void;
 };
 
 const POPUP_W = 280;
@@ -142,7 +142,7 @@ export function GameControlView({
   timerLook = null,
   onBack,
   onCommand,
-  onDeleteGame,
+  onRequestEndGame,
 }: Props) {
   const [players, setPlayers] = useState(session.players);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -264,7 +264,7 @@ export function GameControlView({
       // deleteConfirm 열려있을 때 1/y=YES, 2/n/ESC=NO
       if (deleteConfirmRef.current) {
         if (e.key === "1" || e.key === "y" || e.key === "Y") {
-          setDeleteConfirm(false); onDeleteGame(); return;
+          setDeleteConfirm(false); onRequestEndGame(); return;
         }
         if (e.key === "2" || e.key === "n" || e.key === "N" || e.key === "Escape") {
           setDeleteConfirm(false); return;
@@ -314,7 +314,7 @@ export function GameControlView({
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [state, timerPopup, noticeOpen, onCommand, onDeleteGame]);
+  }, [state, timerPopup, noticeOpen, onCommand, onRequestEndGame]);
 
   // 최신 deleteConfirm 상태를 ref로 유지
   const deleteConfirmRef = useRef(deleteConfirm);
@@ -601,7 +601,7 @@ export function GameControlView({
                 <div className="delete-confirm__btns">
                   <button
                     className="confirm-btn confirm-btn--yes"
-                    onClick={() => { setDeleteConfirm(false); onDeleteGame(); }}
+                    onClick={() => { setDeleteConfirm(false); onRequestEndGame(); }}
                   >
                     <span className="confirm-btn__key">1</span>
                     YES

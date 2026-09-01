@@ -1,10 +1,12 @@
 import type { AppSnapshot, GameSession, YeoksamRole } from "./types";
 import type { ShopTimerThemePayload } from "./timerLook";
+import type { GameParticipant } from "./participants";
 import type { TableTimerState, TimerAction, BlindStructureOption } from "@mnf/timer/types";
 
 export const REMOTE_PORT = 17890;
 export const LAN_CLUSTER_PATH = "/lan/cluster";
 export const LAN_CLAIM_PATH = "/lan/claim";
+export const LAN_PING_PATH = "/lan/ping";
 export const PUNCH_TOKEN_TTL_MS = 3 * 60 * 1000;
 
 export const REMOTE_TIMER_ACTIONS = [
@@ -64,6 +66,12 @@ export type RemoteClientMsg =
       patch: Partial<Pick<GameSession, "players" | "entries" | "rebuys" | "addon" | "bonusChip" | "leftNotice">>;
     }
   | { type: "peer_create_game"; structure: BlindStructureOption }
+  | { type: "peer_participant_add"; gameId: number; participant: GameParticipant }
+  | { type: "peer_participant_remove"; gameId: number; memberId: string }
+  | { type: "peer_participant_move"; gameId: number; memberId: string; tableSlot: number | null }
+  | { type: "peer_participant_sitout"; gameId: number; memberId: string; sitOut: boolean }
+  | { type: "peer_participant_rebuy"; gameId: number; memberId: string; delta: number }
+  | { type: "peer_participant_reorder"; gameId: number; memberIds: string[] }
   | {
       type: "peer_snapshot";
       hostname: string;

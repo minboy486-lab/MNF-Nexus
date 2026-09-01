@@ -9,6 +9,8 @@ type Props = {
   onSelect: (gameId: number | null) => void;
   onClose: () => void;
   hint?: string;
+  /** 테이블 손님 창 단축키 (같은 키 한 번 더) */
+  guestHotkey?: string;
 };
 
 export function AssignPopup({
@@ -19,6 +21,7 @@ export function AssignPopup({
   onSelect,
   onClose,
   hint,
+  guestHotkey,
 }: Props) {
   const popupRef = useRef<HTMLDivElement>(null);
 
@@ -62,6 +65,7 @@ export function AssignPopup({
           <div>
             <span>{title}</span>
             {hint && <span className="popup__hint">{hint}</span>}
+            {guestHotkey && <span className="popup__hint">{guestHotkey} — 손님 창</span>}
           </div>
           <button type="button" className="popup__close" onClick={onClose}>✕</button>
         </div>

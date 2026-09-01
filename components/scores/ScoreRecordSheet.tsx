@@ -16,15 +16,14 @@ const GAME_EXPAND_STEP = 3;
 const INITIAL_DRAFT_ROWS = 20;
 const ROW_EXPAND_STEP = 5;
 
-type SheetCol = "nickname" | "buyIn" | "rebuy" | "moneyIn";
-const SHEET_COLS: SheetCol[] = ["nickname", "buyIn", "rebuy", "moneyIn"];
+type SheetCol = "nickname" | "buyIn" | "moneyIn";
+const SHEET_COLS: SheetCol[] = ["nickname", "buyIn", "moneyIn"];
 
 type DraftRow = {
   id: string;
   recordId?: string;
   nickname: string;
   buyIn: string;
-  rebuy: string;
   moneyIn: string;
 };
 
@@ -47,7 +46,6 @@ function emptyRow(): DraftRow {
     id: crypto.randomUUID(),
     nickname: "",
     buyIn: "",
-    rebuy: "",
     moneyIn: "",
   };
 }
@@ -58,7 +56,6 @@ function savedToDraftRow(row: ManualScoreDaily): DraftRow {
     recordId: row.id,
     nickname: row.nickname,
     buyIn: row.buy_in_points ? String(row.buy_in_points) : "",
-    rebuy: row.rebuy_points ? String(row.rebuy_points) : "",
     moneyIn: row.money_in_points ? String(row.money_in_points) : "",
   };
 }
@@ -99,7 +96,6 @@ function draftHasInput(rows: DraftRow[]): boolean {
     (r) =>
       r.nickname.trim() !== "" ||
       r.buyIn !== "" ||
-      r.rebuy !== "" ||
       r.moneyIn !== "",
   );
 }
@@ -129,8 +125,7 @@ function applyDefaultBuyIn(rows: DraftRow[], defaultBuyIn: string): DraftRow[] {
 
 function isRowSaveable(row: DraftRow): boolean {
   if (!row.nickname.trim()) return false;
-  const total =
-    (Number(row.buyIn) || 0) + (Number(row.rebuy) || 0) + (Number(row.moneyIn) || 0);
+  const total = (Number(row.buyIn) || 0) + (Number(row.moneyIn) || 0);
   return total > 0;
 }
 
@@ -228,7 +223,7 @@ export function ScoreRecordSheet({
       gameNo,
       nickname: row.nickname.trim(),
       buyInPoints: Number(row.buyIn) || 0,
-      rebuyPoints: Number(row.rebuy) || 0,
+      rebuyPoints: 0,
       moneyInPoints: Number(row.moneyIn) || 0,
     };
 
@@ -514,7 +509,7 @@ export function ScoreRecordSheet({
   }
 
   const dayTotal = savedRows.reduce(
-    (sum, r) => sum + r.buy_in_points + r.rebuy_points + r.money_in_points,
+    (sum, r) => sum + r.buy_in_points + r.money_in_points,
     0,
   );
 
@@ -649,7 +644,6 @@ function GameBlock({
           <col className="score-sheet-col-nick" />
           <col className="score-sheet-col-score" />
           <col className="score-sheet-col-score" />
-          <col className="score-sheet-col-score" />
         </colgroup>
         <thead>
           <tr>
@@ -657,9 +651,6 @@ function GameBlock({
             <th className="score-sheet-th">닉네임</th>
             <th className="score-sheet-th score-sheet-th-score" title="바이인">
               바이
-            </th>
-            <th className="score-sheet-th score-sheet-th-score" title="리바인">
-              리바
             </th>
             <th className="score-sheet-th score-sheet-th-score" title="머니인">
               머니
@@ -717,21 +708,6 @@ function GameBlock({
                   className="score-sheet-input score-sheet-input-score tabular-nums"
                   onChange={(e) => onUpdate(row.id, { buyIn: e.target.value })}
                   onKeyDown={(e) => onCellKeyDown(e, rowIndex, "buyIn")}
-                  {...focusProps}
-                />
-              </td>
-              <td className="score-sheet-td score-sheet-td-score p-0">
-                <input
-                  type="number"
-                  min={0}
-                  value={row.rebuy}
-                  disabled={pending}
-                  data-game={gameNo}
-                  data-row={rowIndex}
-                  data-col="rebuy"
-                  className="score-sheet-input score-sheet-input-score tabular-nums"
-                  onChange={(e) => onUpdate(row.id, { rebuy: e.target.value })}
-                  onKeyDown={(e) => onCellKeyDown(e, rowIndex, "rebuy")}
                   {...focusProps}
                 />
               </td>
