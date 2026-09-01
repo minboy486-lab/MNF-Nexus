@@ -9,6 +9,7 @@ const tabs = [
   { href: "/guest/games", label: "게임", icon: "casino" },
   { href: "/guest/reserve", label: "예약", icon: "event" },
   { href: "/guest/transfer", label: "이체", icon: "swap_horiz" },
+  { href: "/guest/settings", label: "설정", icon: "settings" },
 ];
 
 export function GuestNav() {
@@ -18,7 +19,9 @@ export function GuestNav() {
     <nav className="fixed bottom-0 inset-x-0 z-50 border-t border-outline-variant/30 bg-surface-container-lowest safe-area-pb">
       <div className="flex justify-around max-w-lg mx-auto">
         {tabs.map((tab) => {
-          const active = pathname === tab.href;
+          const active =
+            pathname === tab.href ||
+            (tab.href !== "/guest" && pathname.startsWith(`${tab.href}/`));
           return (
             <Link
               key={tab.href}

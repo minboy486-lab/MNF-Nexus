@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import type { ApprovalRequest, Member, MemberVisitWithMember } from "@/lib/types";
 import { checkInVisit, checkInVisits, checkOutVisit } from "@/lib/actions/members";
 import { MemberRegisterModal } from "@/components/guests/MemberRegisterForm";
-import { PointAdjustPanel } from "@/components/guests/PointAdjustPanel";
 import { formatPaymentDue } from "@/lib/utils/payment-due";
 import { matchesNicknameSearch } from "@/lib/utils/chosung";
 
@@ -18,7 +17,6 @@ type Props = {
   visitCounts: Record<string, number>;
   pending: ApprovalRequest[];
   approveAction: (requestId: string) => Promise<void>;
-  isAdmin?: boolean;
 };
 
 const rowBase =
@@ -147,7 +145,6 @@ export function GuestsClient({
   visitCounts,
   pending,
   approveAction,
-  isAdmin = false,
 }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -159,18 +156,6 @@ export function GuestsClient({
   const [moving, setMoving] = useState(false);
 
   const selectedMemberCount = selectedMemberIds.size;
-
-  const pointAdjustMember = useMemo((): Member | null => {
-    if (selectedMemberIds.size === 1) {
-      const id = [...selectedMemberIds][0];
-      return members.find((m) => m.id === id) ?? null;
-    }
-    if (selectedVisitId) {
-      const visit = visits.find((v) => v.id === selectedVisitId);
-      return visit?.members ?? null;
-    }
-    return null;
-  }, [selectedMemberIds, selectedVisitId, members, visits]);
 
   const visitingSet = useMemo(() => new Set(visitingMemberIds), [visitingMemberIds]);
 
@@ -410,8 +395,6 @@ export function GuestsClient({
           </ul>
         </section>
       )}
-
-      {isAdmin && <PointAdjustPanel member={pointAdjustMember} />}
 
       {showRegister && <MemberRegisterModal onClose={() => setShowRegister(false)} />}
     </div>

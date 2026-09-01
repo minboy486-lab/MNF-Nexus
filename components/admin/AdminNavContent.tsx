@@ -42,11 +42,22 @@ const scoresGroup: NavGroup = {
   ],
 };
 
+const guestsGroup: NavGroup = {
+  id: "guests",
+  label: "손님 관리",
+  icon: "groups",
+  basePath: "/admin/guests",
+  children: [
+    { href: "/admin/guests/points", label: "포인트 관리", icon: "account_balance_wallet" },
+    { href: "/admin/guests/visits", label: "방문 관리", icon: "door_front" },
+    { href: "/admin/guests/accounts", label: "계정 관리", icon: "manage_accounts" },
+  ],
+};
+
 const topLinks: NavLink[] = [
   { href: "/admin/dashboard", label: "대시보드", icon: "dashboard" },
   { href: "/admin/operations", label: "운영 탭", icon: "schedule" },
   { href: "/admin/tables", label: "전체 테이블", icon: "grid_view" },
-  { href: "/admin/guests", label: "손님 관리", icon: "groups" },
   { href: "/admin/presets", label: "블라인드", icon: "tune" },
   { href: "/admin/games/new", label: "게임 개설", icon: "add_circle" },
   { href: "/admin/settlement/daily", label: "일일 정산", icon: "receipt_long" },
@@ -168,10 +179,14 @@ function NavGroupBlock({
 export function AdminNavContent({ onNavigate, showAccountLink = false }: Props) {
   const pathname = usePathname();
   const [scoresOpen, setScoresOpen] = useState(() => isGroupActive(pathname, scoresGroup));
+  const [guestsOpen, setGuestsOpen] = useState(() => isGroupActive(pathname, guestsGroup));
 
   useEffect(() => {
     if (isGroupActive(pathname, scoresGroup)) {
       setScoresOpen(true);
+    }
+    if (isGroupActive(pathname, guestsGroup)) {
+      setGuestsOpen(true);
     }
   }, [pathname]);
 
@@ -202,6 +217,13 @@ export function AdminNavContent({ onNavigate, showAccountLink = false }: Props) 
           pathname={pathname}
           open={scoresOpen}
           onToggle={() => setScoresOpen((v) => !v)}
+          onNavigate={onNavigate}
+        />
+        <NavGroupBlock
+          group={guestsGroup}
+          pathname={pathname}
+          open={guestsOpen}
+          onToggle={() => setGuestsOpen((v) => !v)}
           onNavigate={onNavigate}
         />
         {topLinks.map((link) => {

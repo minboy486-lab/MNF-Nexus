@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { sortMembersByVisitCount, type MemberSuggestion } from "@/lib/scores/types";
+import { matchesNicknameSearch } from "@/lib/utils/chosung";
 
 type Props = {
   members: MemberSuggestion[];
@@ -41,13 +42,13 @@ export function ScoreSheetNicknameInput({
   const open = openRowId === rowId;
 
   const suggestions = useMemo(() => {
-    const q = value.trim().toLowerCase();
+    const q = value.trim();
     if (!q) return [];
     return sortMembersByVisitCount(
       members.filter(
         (m) =>
-          m.nickname.toLowerCase().includes(q) ||
-          m.display_name?.toLowerCase().includes(q),
+          matchesNicknameSearch(m.nickname, q) ||
+          (m.display_name ? matchesNicknameSearch(m.display_name, q) : false),
       ),
     ).slice(0, 10);
   }, [members, value]);

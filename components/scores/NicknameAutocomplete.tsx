@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { sortMembersByVisitCount, type MemberSuggestion } from "@/lib/scores/types";
+import { matchesNicknameSearch } from "@/lib/utils/chosung";
 
 type Props = {
   members: MemberSuggestion[];
@@ -9,7 +10,9 @@ type Props = {
   onChange: (value: string) => void;
   disabled?: boolean;
   id?: string;
+  placeholder?: string;
   onEnter?: () => void;
+  onPick?: (member: MemberSuggestion) => void;
   /** true면 자동완성 목록과 관계없이 Enter 시 onEnter 호출 */
   enterSubmits?: boolean;
 };
@@ -20,26 +23,29 @@ export function NicknameAutocomplete({
   onChange,
   disabled,
   id = "score-nickname",
+  placeholder = "닉네임 검색 (초성 가능)",
   onEnter,
+  onPick,
   enterSubmits = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
 
   const suggestions = useMemo(() => {
-    const q = value.trim().toLowerCase();
+    const q = value.trim();
     const matched = q
       ? members.filter(
           (m) =>
-            m.nickname.toLowerCase().includes(q) ||
-            m.display_name?.toLowerCase().includes(q),
+            matchesNicknameSearch(m.nickname, q) ||
+            (m.display_name ? matchesNicknameSearch(m.display_name, q) : false),
         )
       : members;
     return sortMembersByVisitCount(matched).slice(0, 12);
   }, [members, value]);
 
-  function pick(nickname: string) {
-    onChange(nickname);
+  function pick(member: MemberSuggestion) {
+    onChange(member.nickname);
+    onPick?.(member);
     setOpen(false);
   }
 
@@ -51,7 +57,7 @@ export function NicknameAutocomplete({
         value={value}
         disabled={disabled}
         autoComplete="off"
-        placeholder="닉네임"
+        placeholder={placeholder}
         className="login-input w-full text-sm"
         onChange={(e) => {
           onChange(e.target.value);
@@ -74,7 +80,7 @@ export function NicknameAutocomplete({
               onEnter();
             } else if (open && suggestions.length > 0 && suggestions[highlight]) {
               e.preventDefault();
-              pick(suggestions[highlight].nickname);
+              pick(suggestions[highlight]);
             } else if (onEnter && value.trim()) {
               e.preventDefault();
               onEnter();
@@ -94,7 +100,7 @@ export function NicknameAutocomplete({
                   i === highlight ? "bg-primary/15 text-primary" : "hover:bg-white/5"
                 }`}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(m.nickname)}
+                onClick={() => pick(m)}
               >
                 <span className="font-semibold">{m.nickname}</span>
                 {m.display_name && (

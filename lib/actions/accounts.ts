@@ -142,7 +142,7 @@ export async function listAccounts(): Promise<
   });
 
   accounts.sort((a, b) => a.login_id.localeCompare(b.login_id, "ko"));
-  return { accounts };
+  return { accounts: accounts.filter((a) => a.role !== "guest") };
 }
 
 export async function createAccount(payload: {
@@ -168,6 +168,9 @@ export async function createAccount(payload: {
   }
   if (!PROFILE_ROLES.includes(role)) {
     return { error: "유효하지 않은 권한입니다." };
+  }
+  if (role === "guest") {
+    return { error: "손님 계정은 손님 관리 → 계정 관리에서 생성하세요." };
   }
   const venues = normalizeAccountVenues(role, payload.venue_ids);
   if ("error" in venues) return { error: venues.error };
@@ -234,13 +237,25 @@ export async function updateAccount(payload: {
   if (!PROFILE_ROLES.includes(role)) {
     return { error: "유효하지 않은 권한입니다." };
   }
+
+  const admin = createAdminClient();
+  const { data: existingProfile } = await admin
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+  if (existingProfile?.role === "guest") {
+    return { error: "손님 계정은 손님 관리 → 계정 관리에서 수정하세요." };
+  }
+
+  if (role === "guest") {
+    return { error: "손님 계정은 손님 관리 → 계정 관리에서 수정하세요." };
+  }
   const venues = normalizeAccountVenues(role, payload.venue_ids);
   if ("error" in venues) return { error: venues.error };
   if (userId === gate.user.id && role !== "admin") {
     return { error: "본인 계정의 관리자 권한은 해제할 수 없습니다." };
   }
-
-  const admin = createAdminClient();
 
   if (password && password.length >= 6) {
     const { error: pwError } = await admin.auth.admin.updateUserById(userId, {

@@ -281,7 +281,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
 
   const roleOptions = useMemo(
     () =>
-      PROFILE_ROLES.map((r) => ({
+      PROFILE_ROLES.filter((r) => r !== "guest").map((r) => ({
         value: r,
         label: PROFILE_ROLE_LABELS[r],
       })),
@@ -402,7 +402,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
             로그인 계정 <span className="text-on-surface font-semibold">{accounts.length}</span>개
           </p>
           <p className="text-xs text-on-surface-variant/80 mt-0.5">
-            관리자 · 매니저 · 직원 · 손님 · 스크린
+            관리자 · 매니저 · 직원 · 스크린 (손님은 손님 관리 → 계정 관리)
           </p>
         </div>
         <button
