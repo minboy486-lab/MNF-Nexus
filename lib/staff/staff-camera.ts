@@ -49,6 +49,20 @@ export function openAppSettings(): void {
   window.location.href = `intent://#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;scheme=package;package=${pkg};S.browser_fallback_url=${fallback};end`;
 }
 
+export async function requestStaffCameraAccess(): Promise<
+  "granted" | "denied" | "unsupported"
+> {
+  if (!navigator.mediaDevices?.getUserMedia) return "unsupported";
+  try {
+    const stream = await openStaffCamera();
+    for (const track of stream.getTracks()) track.stop();
+    return "granted";
+  } catch (err) {
+    if (isCameraDeniedError(err)) return "denied";
+    return "denied";
+  }
+}
+
 export async function openStaffCamera(): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new DOMException("카메라 없음", "NotFoundError");

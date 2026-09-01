@@ -85,8 +85,10 @@ export async function adjustMemberPoints(params: {
 
   if (error) return { error: error.message };
 
-  const result = data as { point_balance?: number } | null;
+  const result = data as { point_balance?: number; transaction_id?: string } | null;
   const pointBalance = typeof result?.point_balance === "number" ? result.point_balance : 0;
+  const transactionId =
+    typeof result?.transaction_id === "string" ? result.transaction_id : undefined;
 
   try {
     await sendPointChangePush({
@@ -94,6 +96,7 @@ export async function adjustMemberPoints(params: {
       deltaMp,
       balanceWon: pointBalance,
       note: params.note?.trim(),
+      transactionId,
     });
   } catch {
     /* 푸시 실패해도 조정은 완료 */

@@ -1,17 +1,19 @@
 self.addEventListener("push", (event) => {
-  let payload = { title: "MNF HOLDEM", body: "", url: "/guest/points" };
+  let payload = { title: "MNF HOLDEM", body: "", url: "/guest/points", tag: "" };
   try {
     if (event.data) payload = { ...payload, ...event.data.json() };
   } catch {
     /* ignore */
   }
 
+  const tag = payload.tag || `mnf-point-${Date.now()}`;
+
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-192.png",
-      tag: "mnf-point",
+      tag,
       renotify: true,
       data: { url: payload.url ?? "/guest/points" },
     }),

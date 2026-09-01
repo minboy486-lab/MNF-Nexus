@@ -8,6 +8,7 @@ import {
 import { venueById } from "@/lib/venue/constants";
 import { formatDisplayPointBalance, formatPaymentDue } from "@/lib/utils/payment-due";
 import { PointHistoryRow } from "@/components/ledger/PointHistoryRow";
+import { GuestRefreshButton } from "@/components/guest/GuestRefreshButton";
 
 export const dynamic = "force-dynamic";
 
@@ -24,11 +25,14 @@ export default async function GuestPointsPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold">포인트</h1>
-        <p className="text-sm text-on-surface-variant mt-1">
-          {venue?.name ?? "매장"} · MP 잔액 및 이용 내역
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold">포인트</h1>
+          <p className="text-sm text-on-surface-variant mt-1">
+            {venue?.name ?? "매장"} · MP 잔액 및 이용 내역
+          </p>
+        </div>
+        <GuestRefreshButton />
       </div>
 
       <section className="glass-panel rounded-2xl p-5 border border-primary/20">

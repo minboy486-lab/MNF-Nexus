@@ -27,11 +27,13 @@ export async function showPointNotification(params: {
   txnType: string;
   amountWon: number;
   note?: string | null;
+  txnId?: string;
 }) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
 
   const title = pointNotificationTitle(params.txnType);
   const body = pointNotificationBody(params);
+  const tag = params.txnId ? `mnf-point-${params.txnId}` : `mnf-point-${Date.now()}`;
 
   const reg = await navigator.serviceWorker?.getRegistration();
   if (reg) {
@@ -39,11 +41,12 @@ export async function showPointNotification(params: {
       body,
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-192.png",
-      tag: "mnf-point",
+      tag,
+      renotify: true,
       data: { url: "/guest/points" },
     });
     return;
   }
 
-  new Notification(title, { body, icon: "/icons/icon-192.png" });
+  new Notification(title, { body, icon: "/icons/icon-192.png", tag });
 }

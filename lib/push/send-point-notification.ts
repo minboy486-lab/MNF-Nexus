@@ -10,6 +10,7 @@ type Params = {
   deltaMp: number;
   balanceWon: number;
   note?: string;
+  transactionId?: string;
 };
 
 let vapidReady = false;
@@ -57,6 +58,7 @@ export async function sendPointChangePush(params: Params): Promise<void> {
     title,
     body,
     url: "/guest/points",
+    tag: params.transactionId ? `mnf-point-${params.transactionId}` : `mnf-point-${Date.now()}`,
   });
 
   for (const sub of subs) {

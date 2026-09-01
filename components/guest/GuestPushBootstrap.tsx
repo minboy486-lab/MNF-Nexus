@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { ensureGuestPushSubscription } from "@/lib/guest/enable-push";
 import { registerServiceWorker, showPointNotification } from "@/lib/guest/push-client";
 
 const POINT_TXN_TYPES = new Set(["point_earn", "point_spend"]);
@@ -15,49 +17,88 @@ type Props = {
 /** 손님 앱: SW 등록 + 포인트 거래 Realtime 알림 (앱 열림·알림 허용 시). */
 export function GuestPushBootstrap({ memberId }: Props) {
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
 
   useEffect(() => {
     void registerServiceWorker();
+    void ensureGuestPushSubscription();
   }, []);
 
   useEffect(() => {
     if (!memberId || !isSupabaseConfigured()) return;
 
     const supabase = createClient();
-    const channel = supabase
-      .channel(`guest-point-${memberId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "money_transactions",
-          filter: `member_id=eq.${memberId}`,
-        },
-        (payload) => {
-          const row = payload.new as {
-            txn_type?: string;
-            amount?: number;
-            note?: string | null;
-          };
-          if (!row.txn_type || !POINT_TXN_TYPES.has(row.txn_type)) return;
+    let channel: RealtimeChannel | null = null;
+    let reconnectTimer: number | undefined;
+    let disposed = false;
 
-          if (Notification.permission === "granted") {
-            void showPointNotification({
-              txnType: row.txn_type,
-              amountWon: Number(row.amount ?? 0),
-              note: row.note,
-            });
+    function handlePointInsert(payload: { new: Record<string, unknown> }) {
+      const row = payload.new as {
+        id?: string;
+        txn_type?: string;
+        amount?: number;
+        note?: string | null;
+      };
+      if (!row.txn_type || !POINT_TXN_TYPES.has(row.txn_type)) return;
+
+      if (Notification.permission === "granted") {
+        void showPointNotification({
+          txnType: row.txn_type,
+          amountWon: Number(row.amount ?? 0),
+          note: row.note,
+          txnId: row.id,
+        });
+      }
+      routerRef.current.refresh();
+    }
+
+    function connect() {
+      if (disposed) return;
+      if (channel) {
+        void supabase.removeChannel(channel);
+        channel = null;
+      }
+
+      channel = supabase
+        .channel(`guest-point-${memberId}-${Date.now()}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "money_transactions",
+            filter: `member_id=eq.${memberId}`,
+          },
+          handlePointInsert,
+        )
+        .subscribe((status) => {
+          if (disposed) return;
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            reconnectTimer = window.setTimeout(connect, 2000);
           }
-          router.refresh();
-        },
-      )
-      .subscribe();
+        });
+    }
+
+    function onVisible() {
+      if (document.visibilityState !== "visible") return;
+      void ensureGuestPushSubscription();
+      routerRef.current.refresh();
+      if (!channel || channel.state !== "joined") {
+        connect();
+      }
+    }
+
+    connect();
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
-      void supabase.removeChannel(channel);
+      disposed = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+      if (channel) void supabase.removeChannel(channel);
     };
-  }, [memberId, router]);
+  }, [memberId]);
 
   return null;
 }

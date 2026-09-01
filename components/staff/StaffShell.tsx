@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { StaffBackLink } from "@/components/staff/StaffBackLink";
 import { StaffNav } from "@/components/staff/StaffNav";
+import { StaffPermissionOnboarding } from "@/components/staff/StaffPermissionOnboarding";
 import { VenueSwitcher } from "@/components/venue/VenueSwitcher";
 import { signOut } from "@/lib/actions/auth";
 
@@ -53,6 +54,7 @@ export function StaffShell({
         )}
       </header>
       <main className={`flex-1 min-h-0 ${hideNav ? "" : "pb-20"}`}>{children}</main>
+      <StaffPermissionOnboarding />
       <StaffNav />
     </div>
   );

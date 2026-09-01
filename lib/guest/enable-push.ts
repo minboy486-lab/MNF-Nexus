@@ -52,6 +52,34 @@ export async function enableGuestPushNotifications(): Promise<EnablePushResult> 
   return { ok: true };
 }
 
+/** 알림 허용 상태에서 구독이 끊겼으면 다시 등록합니다. */
+export async function ensureGuestPushSubscription(): Promise<void> {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  if (!("serviceWorker" in navigator)) return;
+
+  const vapidKey = await getPushPublicKey();
+  if (!vapidKey) return;
+
+  const reg = await registerServiceWorker();
+  if (!reg) return;
+
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
+    });
+  }
+
+  const json = sub.toJSON();
+  if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return;
+
+  await savePushSubscription({
+    endpoint: json.endpoint,
+    keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+  });
+}
+
 export async function disableGuestPushNotifications(): Promise<{ ok: true } | { error: string }> {
   const reg = await navigator.serviceWorker.getRegistration();
   const sub = await reg?.pushManager.getSubscription();
