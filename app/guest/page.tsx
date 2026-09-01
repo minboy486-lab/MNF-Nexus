@@ -1,27 +1,35 @@
 import Link from "next/link";
 import { GuestLinkPhone } from "@/components/guest/GuestLinkPhone";
+import { GuestVenueEmpty } from "@/components/guest/GuestShell";
 import {
   getGuestMember,
   getGuestPendingRequests,
+  getGuestVenueContext,
   getGuestWinPointsTotal,
+  getOpenVenueSessionForGuest,
 } from "@/lib/data/guest-queries";
-import { getOpenVenueSession } from "@/lib/data/queries";
+import { venueById } from "@/lib/venue/constants";
 import { formatMp } from "@/lib/utils/mp";
 import { formatPaymentDue } from "@/lib/utils/payment-due";
 
 export const dynamic = "force-dynamic";
 
 export default async function GuestHomePage() {
-  const member = await getGuestMember();
-
-  if (!member) {
+  const ctx = await getGuestVenueContext();
+  if (!ctx.userId || ctx.venueIds.length === 0) {
     return <GuestLinkPhone />;
+  }
+
+  const member = await getGuestMember();
+  const venue = venueById(ctx.venueId ?? "");
+  if (!member) {
+    return <GuestVenueEmpty venueName={venue?.name ?? "이 지점"} />;
   }
 
   const [winPoints, pending, session] = await Promise.all([
     getGuestWinPointsTotal(member.id),
     getGuestPendingRequests(member.id),
-    getOpenVenueSession(),
+    ctx.venueId ? getOpenVenueSessionForGuest(ctx.venueId) : Promise.resolve(null),
   ]);
 
   const paymentDue = formatPaymentDue(member.credit_balance);
@@ -35,6 +43,9 @@ export default async function GuestHomePage() {
             <p className="text-2xl font-bold mt-1 truncate">{member.nickname}</p>
             {member.display_name && member.display_name !== member.nickname && (
               <p className="text-sm text-on-surface-variant mt-0.5 truncate">{member.display_name}</p>
+            )}
+            {venue && (
+              <p className="text-[11px] text-primary/80 mt-1 font-semibold">{venue.name}</p>
             )}
           </div>
           <Link href="/guest/settings" className="guest-settings-link shrink-0">
@@ -72,7 +83,7 @@ export default async function GuestHomePage() {
           aria-hidden
         />
         <span className={session ? "text-emerald-400/90" : "text-on-surface-variant"}>
-          {session ? "영업 중" : "영업 준비 중"}
+          {session ? `${venue?.shortName ?? "매장"} 영업 중` : "영업 준비 중"}
         </span>
       </div>
 

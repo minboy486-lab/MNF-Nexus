@@ -1,5 +1,11 @@
 import { GuestLinkPhone } from "@/components/guest/GuestLinkPhone";
-import { getGuestMember, getGuestPointHistory } from "@/lib/data/guest-queries";
+import { GuestVenueEmpty } from "@/components/guest/GuestShell";
+import {
+  getGuestMember,
+  getGuestPointHistory,
+  getGuestVenueContext,
+} from "@/lib/data/guest-queries";
+import { venueById } from "@/lib/venue/constants";
 import { signedTxnAmount, txnTypeLabel } from "@/lib/ledger/txn-labels";
 import { formatMp } from "@/lib/utils/mp";
 import { formatPaymentDue } from "@/lib/utils/payment-due";
@@ -7,8 +13,12 @@ import { formatPaymentDue } from "@/lib/utils/payment-due";
 export const dynamic = "force-dynamic";
 
 export default async function GuestPointsPage() {
+  const ctx = await getGuestVenueContext();
+  if (!ctx.userId || ctx.venueIds.length === 0) return <GuestLinkPhone />;
+
   const member = await getGuestMember();
-  if (!member) return <GuestLinkPhone />;
+  const venue = venueById(ctx.venueId ?? "");
+  if (!member) return <GuestVenueEmpty venueName={venue?.name ?? "이 지점"} />;
 
   const history = await getGuestPointHistory(member.id);
   const paymentDue = formatPaymentDue(member.credit_balance);
@@ -17,7 +27,9 @@ export default async function GuestPointsPage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-bold">포인트</h1>
-        <p className="text-sm text-on-surface-variant mt-1">MP 잔액 및 이용 내역</p>
+        <p className="text-sm text-on-surface-variant mt-1">
+          {venue?.name ?? "매장"} · MP 잔액 및 이용 내역
+        </p>
       </div>
 
       <section className="glass-panel rounded-2xl p-5 border border-primary/20">

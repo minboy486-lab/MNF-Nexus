@@ -15,7 +15,7 @@ export default async function GuestGamesPage() {
 
   const [recent, running] = await Promise.all([
     getGuestRecentPlacements(member.id),
-    getRunningGamesForGuest(),
+    getRunningGamesForGuest(member.venue_id ?? ""),
   ]);
 
   return (

@@ -1,10 +1,13 @@
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import { resolveGuestMember } from "@/lib/guest/member-for-user";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
-import type { ApprovalRequest, Game, Member, PointTransferRequest } from "@/lib/types";
+import {
+  getActiveGuestVenueId,
+  listGuestVenueIdsForUser,
+  resolveGuestMember,
+} from "@/lib/guest/venue";
+import type { ApprovalRequest, Game, Member, PointTransferRequest, VenueSession } from "@/lib/types";
 
-export async function getGuestMember() {
+export async function getGuestMember(): Promise<Member | null> {
   if (!isSupabaseConfigured()) return null;
 
   const supabase = await createClient();
@@ -13,7 +16,42 @@ export async function getGuestMember() {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  return resolveGuestMember(supabase, user.id);
+  const venueId = await getActiveGuestVenueId(supabase, user.id);
+  return resolveGuestMember(supabase, user.id, venueId);
+}
+
+export async function getGuestVenueContext() {
+  if (!isSupabaseConfigured()) {
+    return { userId: null as string | null, venueId: null as string | null, venueIds: [] as string[] };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { userId: null, venueId: null, venueIds: [] };
+  }
+
+  const venueIds = await listGuestVenueIdsForUser(supabase, user.id);
+  const venueId = await getActiveGuestVenueId(supabase, user.id);
+  return { userId: user.id, venueId, venueIds };
+}
+
+export async function getOpenVenueSessionForGuest(venueId: string): Promise<VenueSession | null> {
+  if (!isSupabaseConfigured()) return null;
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("venue_sessions")
+    .select("*")
+    .eq("venue_id", venueId)
+    .eq("status", "open")
+    .order("opened_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return data as VenueSession | null;
 }
 
 export async function getGuestPointHistory(memberId: string) {
@@ -73,14 +111,14 @@ export async function getGuestPointTransfers(memberId: string) {
   return (data ?? []) as PointTransferRequest[];
 }
 
-export async function getRunningGamesForGuest() {
+export async function getRunningGamesForGuest(venueId: string) {
   if (!isSupabaseConfigured()) return [] as Game[];
 
   const supabase = await createClient();
   const { data } = await supabase
     .from("games")
     .select("id, daily_game_number, status, game_presets(name)")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", venueId)
     .in("status", ["running", "registration_closed"])
     .order("created_at", { ascending: false });
 

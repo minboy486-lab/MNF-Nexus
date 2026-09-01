@@ -23,26 +23,18 @@ export function GuestNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="guest-nav fixed bottom-0 inset-x-0 z-50 border-t border-white/10 bg-surface-container-lowest/95 backdrop-blur-md">
-      <div className="flex justify-around max-w-lg mx-auto">
+    <nav className="guest-nav" aria-label="손님 메뉴">
+      <div className="guest-nav__inner">
         {tabs.map((tab) => {
           const active = isActive(pathname, tab.href, tab.match);
           return (
             <Link
               key={tab.href}
               href={tab.href}
-              className={`guest-nav-item flex flex-col items-center py-2.5 px-4 min-w-[5.5rem] text-[10px] font-semibold transition-colors ${
-                active ? "text-primary" : "text-on-surface-variant"
-              }`}
+              className={`guest-nav-item ${active ? "guest-nav-item--active" : ""}`}
             >
-              <span
-                className={`material-symbols-outlined text-[1.65rem] mb-0.5 ${
-                  active ? "guest-nav-icon-active" : ""
-                }`}
-              >
-                {tab.icon}
-              </span>
-              {tab.label}
+              <span className="material-symbols-outlined guest-nav-item__icon">{tab.icon}</span>
+              <span className="guest-nav-item__label">{tab.label}</span>
               {active && <span className="guest-nav-indicator" aria-hidden />}
             </Link>
           );

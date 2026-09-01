@@ -12,6 +12,7 @@ type Tab = "ranking" | "bingo" | "highhand";
 
 type Props = {
   memberNickname: string;
+  venueName: string;
   monthLabel: string;
   ranking: ScoreRankingRow[];
   prevMonthTop: ScoreRankingRow | null;
@@ -28,6 +29,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 export function GuestScoresClient({
   memberNickname,
+  venueName,
   monthLabel,
   ranking,
   prevMonthTop,
@@ -41,7 +43,9 @@ export function GuestScoresClient({
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-bold">승점 및 이벤트</h1>
-        <p className="text-sm text-on-surface-variant mt-1">월간 승점 · 빙고 · 하이핸드 현황</p>
+        <p className="text-sm text-on-surface-variant mt-1">
+          {venueName} · 승점 · 빙고 · 하이핸드
+        </p>
       </div>
 
       <div className="guest-scores-tabs" role="tablist" aria-label="승점 및 이벤트">

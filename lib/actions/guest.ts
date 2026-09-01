@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import { resolveGuestMember } from "@/lib/guest/member-for-user";
+import { getActiveGuestVenueId, resolveGuestMember } from "@/lib/guest/venue";
 import { requireOpenSession } from "@/lib/venue/session";
 
 export async function getMemberForUser() {
@@ -15,7 +15,8 @@ export async function getMemberForUser() {
   } = await supabase.auth.getUser();
   if (!user) return { member: null };
 
-  const member = await resolveGuestMember(supabase, user.id);
+  const venueId = await getActiveGuestVenueId(supabase, user.id);
+  const member = await resolveGuestMember(supabase, user.id, venueId);
   return { member };
 }
 
