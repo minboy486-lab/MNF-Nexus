@@ -34,17 +34,18 @@ export async function showPointNotification(params: {
   const title = pointNotificationTitle(params.txnType);
   const body = pointNotificationBody(params);
   const tag = params.txnId ? `mnf-point-${params.txnId}` : `mnf-point-${Date.now()}`;
+  const options: NotificationOptions & { renotify?: boolean } = {
+    body,
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    tag,
+    renotify: true,
+    data: { url: "/guest/points" },
+  };
 
   const reg = await navigator.serviceWorker?.getRegistration();
   if (reg) {
-    await reg.showNotification(title, {
-      body,
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
-      tag,
-      renotify: true,
-      data: { url: "/guest/points" },
-    });
+    await reg.showNotification(title, options);
     return;
   }
 
