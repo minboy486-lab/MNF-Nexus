@@ -1,3 +1,4 @@
+/* v2 — point push */
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });

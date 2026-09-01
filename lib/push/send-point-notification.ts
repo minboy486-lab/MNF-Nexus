@@ -37,14 +37,20 @@ export async function sendPointChangePush(params: Params): Promise<void> {
     .eq("id", params.memberId)
     .maybeSingle();
 
-  if (!member?.user_id) return;
+  if (!member?.user_id) {
+    console.warn("[push] member has no user_id", params.memberId);
+    return;
+  }
 
   const { data: subs } = await admin
     .from("push_subscriptions")
     .select("id, endpoint, p256dh, auth")
     .eq("user_id", member.user_id);
 
-  if (!subs?.length) return;
+  if (!subs?.length) {
+    console.warn("[push] no subscriptions for user", member.user_id);
+    return;
+  }
 
   const absMp = Math.abs(params.deltaMp);
   const txnType = params.deltaMp > 0 ? "point_earn" : "point_spend";

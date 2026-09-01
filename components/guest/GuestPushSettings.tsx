@@ -5,6 +5,7 @@ import {
   disableGuestPushNotifications,
   enableGuestPushNotifications,
 } from "@/lib/guest/enable-push";
+import { hasActivePushSubscription } from "@/lib/guest/push-status";
 
 type Status = "unsupported" | "blocked" | "off" | "on" | "loading";
 
@@ -14,15 +15,18 @@ export function GuestPushSettings() {
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
-    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-      setStatus("unsupported");
-      return;
-    }
-    if (Notification.permission === "denied") {
-      setStatus("blocked");
-      return;
-    }
-    setStatus(Notification.permission === "granted" ? "on" : "off");
+    void (async () => {
+      if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+        setStatus("unsupported");
+        return;
+      }
+      if (Notification.permission === "denied") {
+        setStatus("blocked");
+        return;
+      }
+      const subscribed = await hasActivePushSubscription();
+      setStatus(subscribed ? "on" : "off");
+    })();
   }, []);
 
   async function enable() {
@@ -65,7 +69,8 @@ export function GuestPushSettings() {
       <section className="glass-panel rounded-2xl p-5 border border-white/10">
         <h2 className="text-base font-bold">포인트 알림</h2>
         <p className="text-sm text-on-surface-variant mt-2">
-          이 기기·브라우저에서는 알림을 지원하지 않습니다.
+          이 기기·브라우저에서는 알림을 지원하지 않습니다. iOS는 홈 화면에 추가한 앱에서만
+          지원됩니다.
         </p>
       </section>
     );
@@ -76,14 +81,19 @@ export function GuestPushSettings() {
       <div>
         <h2 className="text-base font-bold">포인트 알림</h2>
         <p className="text-sm text-on-surface-variant mt-1 leading-relaxed">
-          매장에서 포인트가 추가·차감되면 휴대폰 알림을 받습니다. 홈 화면에 추가한 앱에서도
-          동작합니다.
+          매장에서 포인트가 추가·차감되면 휴대폰 알림을 받습니다. 앱을 닫아 두어도 동작합니다.
         </p>
       </div>
 
       {status === "blocked" && (
         <p className="text-sm text-error">
-          알림이 차단되어 있습니다. 브라우저 또는 기기 설정에서 MNF HOLDEM 알림을 허용해 주세요.
+          알림이 차단되어 있습니다. iOS 설정 → 알림 → MNF HOLDEM에서 허용해 주세요.
+        </p>
+      )}
+
+      {status === "off" && Notification.permission === "granted" && (
+        <p className="text-sm text-on-surface-variant">
+          알림 권한은 허용됐지만 구독이 없습니다. 아래 버튼으로 다시 등록해 주세요.
         </p>
       )}
 

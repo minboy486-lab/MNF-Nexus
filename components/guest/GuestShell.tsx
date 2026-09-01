@@ -35,7 +35,9 @@ export function GuestShell({ venues, activeVenueId, memberId, children }: Props)
           <p className="guest-shell__brand">MNF HOLDEM</p>
           <GuestVenueSwitcher venues={venues} activeVenueId={activeVenueId} />
         </header>
-        <main className={`guest-shell__main${hideNav ? " guest-shell__main--no-nav" : ""}`}>
+        <main
+          className={`guest-shell__main${hideNav ? " guest-shell__main--no-nav" : " guest-shell__main--with-nav"}`}
+        >
           {children}
         </main>
         <GuestPushBootstrap memberId={memberId ?? null} />

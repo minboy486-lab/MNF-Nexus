@@ -12,16 +12,6 @@ import {
 } from "@/lib/guest/push-client";
 
 const POINT_TXN_TYPES = new Set(["point_earn", "point_spend"]);
-const RECENT_TXN_MS = 15_000;
-const recentTxnIds = new Set<string>();
-
-function rememberTxn(txnId: string | undefined) {
-  if (!txnId) return false;
-  if (recentTxnIds.has(txnId)) return true;
-  recentTxnIds.add(txnId);
-  window.setTimeout(() => recentTxnIds.delete(txnId), RECENT_TXN_MS);
-  return false;
-}
 
 type Props = {
   memberId: string | null;
@@ -56,7 +46,6 @@ export function GuestPushBootstrap({ memberId }: Props) {
         note?: string | null;
       };
       if (!row.txn_type || !POINT_TXN_TYPES.has(row.txn_type)) return;
-      if (rememberTxn(row.id)) return;
 
       if (Notification.permission === "granted") {
         void showPointNotification({

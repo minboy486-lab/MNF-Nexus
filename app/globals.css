@@ -50,12 +50,17 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-html.guest-route,
+html.guest-route {
+  height: 100%;
+  height: 100dvh;
+}
+
 html.guest-route body {
   margin: 0;
-  overflow: hidden;
   height: 100%;
-  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .staff-shell {
@@ -73,12 +78,10 @@ html.guest-route body {
 }
 
 .guest-shell-outer {
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  height: 100dvh;
-  height: 100svh;
-  max-height: 100dvh;
-  max-height: 100svh;
   overflow: hidden;
   background: var(--background);
 }
@@ -134,14 +137,17 @@ html.guest-route body {
   -webkit-overflow-scrolling: touch;
   padding: 1rem 1rem 0.75rem;
 }
+.guest-shell__main--with-nav {
+  padding-bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+}
 .guest-shell__main--no-nav {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
 }
 .guest-nav {
-  flex-shrink: 0;
-  margin-top: auto;
-  width: 100%;
-  position: relative;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
   z-index: 50;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   background: color-mix(in srgb, var(--surface-container-lowest) 98%, transparent);
