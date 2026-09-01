@@ -1,8 +1,9 @@
 import webpush from "web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { formatMp } from "@/lib/utils/mp";
+import { formatMp, mpToWon } from "@/lib/utils/mp";
 import { getVapidPublicKey, getVapidSubject, isPushConfigured } from "@/lib/push/vapid";
+import { pointNotificationBody, pointNotificationTitle } from "@/lib/ledger/point-history-display";
 
 type Params = {
   memberId: string;
@@ -45,16 +46,16 @@ export async function sendPointChangePush(params: Params): Promise<void> {
   if (!subs?.length) return;
 
   const absMp = Math.abs(params.deltaMp);
-  const title = params.deltaMp > 0 ? "포인트 충전" : "포인트 차감";
-  const lines = [
-    `${params.deltaMp > 0 ? "+" : "−"}${absMp.toLocaleString("ko-KR")} MP`,
+  const txnType = params.deltaMp > 0 ? "point_earn" : "point_spend";
+  const title = pointNotificationTitle(txnType);
+  const body = [
+    pointNotificationBody({ txnType, amountWon: mpToWon(absMp), note: params.note }),
     `잔액 ${formatMp(params.balanceWon)}`,
-  ];
-  if (params.note?.trim()) lines.push(params.note.trim());
+  ].join(" · ");
 
   const payload = JSON.stringify({
     title,
-    body: lines.join(" · "),
+    body,
     url: "/guest/points",
   });
 

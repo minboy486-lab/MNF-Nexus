@@ -88,12 +88,16 @@ export async function adjustMemberPoints(params: {
   const result = data as { point_balance?: number } | null;
   const pointBalance = typeof result?.point_balance === "number" ? result.point_balance : 0;
 
-  void sendPointChangePush({
-    memberId,
-    deltaMp,
-    balanceWon: pointBalance,
-    note: params.note?.trim(),
-  });
+  try {
+    await sendPointChangePush({
+      memberId,
+      deltaMp,
+      balanceWon: pointBalance,
+      note: params.note?.trim(),
+    });
+  } catch {
+    /* 푸시 실패해도 조정은 완료 */
+  }
 
   revalidatePath("/admin/guests");
   revalidatePath("/guest");

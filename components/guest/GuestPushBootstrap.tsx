@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { registerServiceWorker, showPointNotification } from "@/lib/guest/push-client";
@@ -13,13 +14,14 @@ type Props = {
 
 /** 손님 앱: SW 등록 + 포인트 거래 Realtime 알림 (앱 열림·알림 허용 시). */
 export function GuestPushBootstrap({ memberId }: Props) {
+  const router = useRouter();
+
   useEffect(() => {
     void registerServiceWorker();
   }, []);
 
   useEffect(() => {
     if (!memberId || !isSupabaseConfigured()) return;
-    if (!("Notification" in window) || Notification.permission !== "granted") return;
 
     const supabase = createClient();
     const channel = supabase
@@ -39,11 +41,15 @@ export function GuestPushBootstrap({ memberId }: Props) {
             note?: string | null;
           };
           if (!row.txn_type || !POINT_TXN_TYPES.has(row.txn_type)) return;
-          void showPointNotification({
-            txnType: row.txn_type,
-            amountWon: Number(row.amount ?? 0),
-            note: row.note,
-          });
+
+          if (Notification.permission === "granted") {
+            void showPointNotification({
+              txnType: row.txn_type,
+              amountWon: Number(row.amount ?? 0),
+              note: row.note,
+            });
+          }
+          router.refresh();
         },
       )
       .subscribe();
@@ -51,7 +57,7 @@ export function GuestPushBootstrap({ memberId }: Props) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [memberId]);
+  }, [memberId, router]);
 
   return null;
 }

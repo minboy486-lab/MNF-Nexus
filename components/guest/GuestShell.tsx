@@ -6,6 +6,7 @@ import { GuestVenueSwitcher } from "@/components/guest/GuestVenueSwitcher";
 import type { KnownVenue } from "@/lib/venue/constants";
 import { GuestNav } from "@/components/guest/GuestNav";
 import { GuestPushBootstrap } from "@/components/guest/GuestPushBootstrap";
+import { GuestPermissionOnboarding } from "@/components/guest/GuestPermissionOnboarding";
 
 type Props = {
   venues: KnownVenue[];
@@ -28,6 +29,7 @@ export function GuestShell({ venues, activeVenueId, memberId, children }: Props)
         </header>
         <main className="guest-shell__main">{children}</main>
         <GuestPushBootstrap memberId={memberId ?? null} />
+        <GuestPermissionOnboarding />
         {!hideNav && <GuestNav />}
       </div>
     </div>

@@ -1,7 +1,9 @@
 "use client";
 
-import { signedTxnAmount, txnTypeLabel } from "@/lib/ledger/txn-labels";
-import { wonToMp } from "@/lib/utils/mp";
+import {
+  pointNotificationBody,
+  pointNotificationTitle,
+} from "@/lib/ledger/point-history-display";
 
 export function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -28,11 +30,8 @@ export async function showPointNotification(params: {
 }) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
 
-  const signed = signedTxnAmount(params.txnType, params.amountWon);
-  const absMp = Math.abs(wonToMp(signed));
-  const sign = signed >= 0 ? "+" : "−";
-  const title = txnTypeLabel(params.txnType);
-  const body = `${sign}${absMp.toLocaleString("ko-KR")} MP${params.note ? ` · ${params.note}` : ""}`;
+  const title = pointNotificationTitle(params.txnType);
+  const body = pointNotificationBody(params);
 
   const reg = await navigator.serviceWorker?.getRegistration();
   if (reg) {

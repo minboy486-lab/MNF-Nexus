@@ -6,9 +6,8 @@ import {
   getGuestVenueContext,
 } from "@/lib/data/guest-queries";
 import { venueById } from "@/lib/venue/constants";
-import { signedTxnAmount, txnTypeLabel } from "@/lib/ledger/txn-labels";
-import { formatMp } from "@/lib/utils/mp";
 import { formatDisplayPointBalance, formatPaymentDue } from "@/lib/utils/payment-due";
+import { PointHistoryRow } from "@/components/ledger/PointHistoryRow";
 
 export const dynamic = "force-dynamic";
 
@@ -44,35 +43,22 @@ export default async function GuestPointsPage() {
 
       <section>
         <h2 className="font-bold text-sm mb-3">최근 내역</h2>
-        <ul className="space-y-2">
+        <ul className="space-y-1.5">
           {history.map((row: {
             id: string;
             txn_type: string;
             amount: number;
             note: string | null;
             occurred_at: string;
-          }) => {
-            const signed = signedTxnAmount(row.txn_type, row.amount);
-            return (
-              <li
-                key={row.id}
-                className="glass-panel rounded-xl px-4 py-3 flex justify-between gap-3 text-sm border border-white/5"
-              >
-                <div className="min-w-0">
-                  <span className="font-medium">{txnTypeLabel(row.txn_type)}</span>
-                  {row.note && (
-                    <p className="text-xs text-on-surface-variant mt-0.5 truncate">{row.note}</p>
-                  )}
-                </div>
-                <span
-                  className={`shrink-0 tabular-nums font-semibold ${signed >= 0 ? "text-primary" : "text-error"}`}
-                >
-                  {signed >= 0 ? "+" : ""}
-                  {formatMp(signed)}
-                </span>
-              </li>
-            );
-          })}
+          }) => (
+            <PointHistoryRow
+              key={row.id}
+              txnType={row.txn_type}
+              amount={row.amount}
+              occurredAt={row.occurred_at}
+              note={row.note}
+            />
+          ))}
           {history.length === 0 && (
             <p className="text-on-surface-variant text-sm text-center py-8">내역이 없습니다.</p>
           )}

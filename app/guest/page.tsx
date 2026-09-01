@@ -63,7 +63,7 @@ export default async function GuestHomePage() {
             <p className="text-[11px] text-on-surface-variant">승점</p>
             <p className="text-xl font-bold tabular-nums mt-0.5">
               {winPoints.toLocaleString()}
-              <span className="text-sm font-semibold text-on-surface-variant ml-0.5">p</span>
+              <span className="text-sm font-semibold text-on-surface-variant ml-0.5">점</span>
             </p>
           </div>
         </div>

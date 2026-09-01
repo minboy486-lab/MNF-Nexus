@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from "react";
 import {
-  getPushPublicKey,
-  removePushSubscription,
-  savePushSubscription,
-} from "@/lib/actions/guest-push";
-import { registerServiceWorker, urlBase64ToUint8Array } from "@/lib/guest/push-client";
+  disableGuestPushNotifications,
+  enableGuestPushNotifications,
+} from "@/lib/guest/enable-push";
 
 type Status = "unsupported" | "blocked" | "off" | "on" | "loading";
 
@@ -30,69 +28,23 @@ export function GuestPushSettings() {
   async function enable() {
     setError(null);
     setPending(true);
-    try {
-      const vapidKey = await getPushPublicKey();
-      if (!vapidKey) {
-        setError("서버에 알림 키가 설정되지 않았습니다.");
-        setPending(false);
-        return;
-      }
-
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        setStatus(permission === "denied" ? "blocked" : "off");
-        setPending(false);
-        return;
-      }
-
-      const reg = await registerServiceWorker();
-      if (!reg) {
-        setError("알림을 사용할 수 없는 환경입니다.");
-        setPending(false);
-        return;
-      }
-
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
-      });
-
-      const json = sub.toJSON();
-      if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
-        setError("구독에 실패했습니다.");
-        setPending(false);
-        return;
-      }
-
-      const result = await savePushSubscription({
-        endpoint: json.endpoint,
-        keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
-      });
-
-      if ("error" in result) {
-        setError(result.error);
-        setPending(false);
-        return;
-      }
-
-      setStatus("on");
-    } catch {
-      setError("알림 설정에 실패했습니다.");
-    }
+    const result = await enableGuestPushNotifications();
     setPending(false);
+    if ("ok" in result && result.ok) {
+      setStatus("on");
+      return;
+    }
+    if ("error" in result) {
+      setError(result.error);
+      if (result.denied) setStatus("blocked");
+    }
   }
 
   async function disable() {
     setError(null);
     setPending(true);
     try {
-      const reg = await navigator.serviceWorker.getRegistration();
-      const sub = await reg?.pushManager.getSubscription();
-      if (sub) {
-        const endpoint = sub.endpoint;
-        await sub.unsubscribe();
-        await removePushSubscription(endpoint);
-      }
+      await disableGuestPushNotifications();
       setStatus("off");
     } catch {
       setError("알림 해제에 실패했습니다.");
