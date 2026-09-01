@@ -28,23 +28,25 @@ export function GuestShell({ venues, activeVenueId, memberId, children }: Props)
   }, []);
 
   return (
-    <div className="guest-shell-outer">
-      <div className="guest-shell">
-        <div className="bg-mesh" aria-hidden />
-        <header className="guest-shell__header">
-          <p className="guest-shell__brand">MNF HOLDEM</p>
-          <GuestVenueSwitcher venues={venues} activeVenueId={activeVenueId} />
-        </header>
-        <main
-          className={`guest-shell__main${hideNav ? " guest-shell__main--no-nav" : " guest-shell__main--with-nav"}`}
-        >
-          {children}
-        </main>
-        <GuestPushBootstrap memberId={memberId ?? null} />
-        <GuestPermissionOnboarding />
-        {!hideNav && <GuestNav />}
+    <>
+      <div className="guest-shell-outer">
+        <div className="guest-shell">
+          <div className="bg-mesh" aria-hidden />
+          <header className="guest-shell__header">
+            <p className="guest-shell__brand">MNF HOLDEM</p>
+            <GuestVenueSwitcher venues={venues} activeVenueId={activeVenueId} />
+          </header>
+          <main
+            className={`guest-shell__main${hideNav ? " guest-shell__main--no-nav" : " guest-shell__main--with-nav"}`}
+          >
+            {children}
+          </main>
+          <GuestPushBootstrap memberId={memberId ?? null} />
+          <GuestPermissionOnboarding />
+        </div>
       </div>
-    </div>
+      {!hideNav && <GuestNav />}
+    </>
   );
 }
 
