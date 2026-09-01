@@ -155,7 +155,7 @@ export function GuestPushSettings() {
             onClick={() => void testNotification()}
             className="w-full py-2.5 rounded-xl text-sm font-semibold border border-white/15 text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-50"
           >
-            테스트 알림 보내기
+            테스트 알림 (이 기기 표시 확인)
           </button>
         </div>
       ) : status !== "blocked" ? (

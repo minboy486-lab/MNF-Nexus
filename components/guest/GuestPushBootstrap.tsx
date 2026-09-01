@@ -56,8 +56,13 @@ export function GuestPushBootstrap({ memberId }: Props) {
       if (row.member_id !== memberId) return;
       if (!row.txn_type || !POINT_TXN_TYPES.has(row.txn_type)) return;
 
-      // Web Push 구독이 있으면 서버→SW 경로 사용. 없을 때만 Realtime 인앱 알림.
-      if (!webPushActiveRef.current && Notification.permission === "granted") {
+      // 앱이 열려 있으면 Realtime으로 즉시 표시 (테스트 알림과 동일 경로).
+      // 백그라운드는 서버 Web Push → SW.
+      const isForeground = document.visibilityState === "visible";
+      if (
+        Notification.permission === "granted" &&
+        (isForeground || !webPushActiveRef.current)
+      ) {
         void showPointNotification({
           txnType: row.txn_type,
           amountWon: Number(row.amount ?? 0),
