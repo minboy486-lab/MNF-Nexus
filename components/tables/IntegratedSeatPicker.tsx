@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { PaymentMethod } from "@/lib/actions/ledger";
 import { PAYMENT_METHOD_OPTIONS } from "@/lib/ledger/payment-methods";
 import type { MemberVisitWithMember } from "@/lib/types";
-import { formatMp } from "@/lib/utils/mp";
+import { formatPaymentDue } from "@/lib/utils/payment-due";
 
 type Props = {
   seatNumber: number;
@@ -86,9 +86,9 @@ export function IntegratedSeatPicker({
                         ({v.members.display_name})
                       </span>
                     )}
-                    {v.members && v.members.credit_balance < 0 && (
+                    {v.members && formatPaymentDue(v.members.credit_balance) && (
                       <span className="block text-error text-xs mt-0.5">
-                        후불 {formatMp(v.members.credit_balance)}
+                        결제할 금액 {formatPaymentDue(v.members.credit_balance)}
                       </span>
                     )}
                   </button>

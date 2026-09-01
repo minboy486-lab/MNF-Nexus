@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
+import { resolveGuestMember } from "@/lib/guest/member-for-user";
 import { requireOpenSession } from "@/lib/venue/session";
 
 export async function getMemberForUser() {
@@ -15,13 +15,8 @@ export async function getMemberForUser() {
   } = await supabase.auth.getUser();
   if (!user) return { member: null };
 
-  const { data } = await supabase
-    .from("members")
-    .select("*")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  return { member: data };
+  const member = await resolveGuestMember(supabase, user.id);
+  return { member };
 }
 
 export async function linkMemberByPhone(phone: string) {
@@ -34,13 +29,14 @@ export async function linkMemberByPhone(phone: string) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "로그인이 필요합니다." };
 
-  const { data: member } = await supabase
+  const { data: matches } = await supabase
     .from("members")
-    .select("id")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .select("id, venue_id")
     .eq("phone", digits)
-    .maybeSingle();
+    .order("created_at", { ascending: false })
+    .limit(1);
 
+  const member = matches?.[0];
   if (!member) return { error: "등록된 번호가 없습니다. 매장에서 가입하세요." };
 
   const { error } = await supabase
@@ -123,10 +119,11 @@ export async function requestPointTransfer(
 
   const digits = toPhone.replace(/\D/g, "");
   const supabase = await createClient();
+  const venueId = member.venue_id;
   const { data: toMember } = await supabase
     .from("members")
     .select("id, nickname")
-    .eq("venue_id", DEFAULT_VENUE_ID)
+    .eq("venue_id", venueId)
     .eq("phone", digits)
     .maybeSingle();
 
@@ -134,7 +131,7 @@ export async function requestPointTransfer(
   if (toMember.id === member.id) return { error: "본인에게는 보낼 수 없습니다." };
 
   const { error } = await supabase.from("point_transfer_requests").insert({
-    venue_id: DEFAULT_VENUE_ID,
+    venue_id: venueId,
     from_member_id: member.id,
     to_member_id: toMember.id,
     amount,

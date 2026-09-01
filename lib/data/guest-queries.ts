@@ -1,5 +1,6 @@
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
+import { resolveGuestMember } from "@/lib/guest/member-for-user";
 import { DEFAULT_VENUE_ID } from "@/lib/venue/constants";
 import type { ApprovalRequest, Game, Member, PointTransferRequest } from "@/lib/types";
 
@@ -12,13 +13,7 @@ export async function getGuestMember() {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data } = await supabase
-    .from("members")
-    .select("*")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  return data;
+  return resolveGuestMember(supabase, user.id);
 }
 
 export async function getGuestPointHistory(memberId: string) {

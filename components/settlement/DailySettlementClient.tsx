@@ -93,7 +93,7 @@ export function DailySettlementClient({
           <div className="text-right font-mono">{formatMp(totals?.totalTransfer ?? 0)}</div>
           <div>포인트 순변동</div>
           <div className="text-right font-mono">{formatMp(totals?.totalPointNet ?? 0)}</div>
-          <div>후불 회수 / 신규</div>
+          <div>결제할 금액 회수 / 신규</div>
           <div className="text-right font-mono">
             {formatMp(totals?.totalCreditCollected ?? 0, { suffix: false })} / −
             {formatMp(totals?.totalCreditNew ?? 0, { suffix: false })} MP

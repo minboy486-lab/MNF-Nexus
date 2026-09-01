@@ -10,10 +10,15 @@ import {
 import { getPendingStaffRequests } from "@/lib/data/guest-queries";
 import { approveRequest } from "@/lib/actions/games";
 import { StaffRequestsPanel } from "@/components/guest/StaffRequestsPanel";
+import { getProfile } from "@/lib/supabase/server";
+import { isAdminRole } from "@/lib/auth/roles";
 
 export const dynamic = "force-dynamic";
 
 export default async function GuestsPage() {
+  const { profile } = await getProfile();
+  const isAdmin = isAdminRole(profile?.role);
+
   const [visits, members, pending, staffQueue, visitingIds, visitCounts] =
     await Promise.all([
       getActiveMemberVisits(),
@@ -39,6 +44,7 @@ export default async function GuestsPage() {
           visitCounts={visitCounts}
           pending={pending}
           approveAction={approveRequest}
+          isAdmin={isAdmin}
         />
       </div>
     </>

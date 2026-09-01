@@ -7,6 +7,7 @@ import {
 } from "@/lib/data/guest-queries";
 import { getPhysicalTables, getGames, getOpenVenueSession } from "@/lib/data/queries";
 import { formatMp } from "@/lib/utils/mp";
+import { formatPaymentDue } from "@/lib/utils/payment-due";
 
 export const dynamic = "force-dynamic";
 
@@ -45,9 +46,9 @@ export default async function GuestHomePage() {
             <p className="text-xl font-bold">{winPoints.toLocaleString()}p</p>
           </div>
         </div>
-        {member.credit_balance < 0 && (
+        {formatPaymentDue(member.credit_balance) && (
           <p className="text-error text-sm mt-3 font-semibold">
-            후불: {formatMp(member.credit_balance)}
+            결제할 금액: {formatPaymentDue(member.credit_balance)}
           </p>
         )}
       </section>

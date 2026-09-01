@@ -1,7 +1,7 @@
 import type { PaymentMethod } from "@/lib/actions/ledger";
 
 export const PAYMENT_METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
-  { value: "credit", label: "후불" },
+  { value: "credit", label: "미수" },
   { value: "cash", label: "현금" },
   { value: "card", label: "카드" },
   { value: "transfer", label: "계좌" },

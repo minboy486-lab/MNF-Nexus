@@ -5,7 +5,7 @@ import { SeatAnchoredPopover } from "@/components/tables/SeatAnchoredPopover";
 import type { PaymentMethod } from "@/lib/actions/ledger";
 import { PAYMENT_METHOD_OPTIONS } from "@/lib/ledger/payment-methods";
 import type { MemberVisitWithMember } from "@/lib/types";
-import { formatMp } from "@/lib/utils/mp";
+import { formatPaymentDue } from "@/lib/utils/payment-due";
 
 type Props = {
   seatNumber: number;
@@ -67,9 +67,9 @@ export function SeatAssignPopover({
                   className="w-full text-left px-2.5 py-2 rounded-lg bg-[#1e1c26] hover:bg-[#282630] text-sm disabled:opacity-50 border border-white/10"
                 >
                   <span className="font-semibold">{v.members?.nickname ?? v.member_id}</span>
-                  {v.members && v.members.credit_balance < 0 && (
+                  {v.members && formatPaymentDue(v.members.credit_balance) && (
                     <span className="block text-error text-[10px] mt-0.5">
-                      후불 {formatMp(v.members.credit_balance)}
+                      결제할 금액 {formatPaymentDue(v.members.credit_balance)}
                     </span>
                   )}
                 </button>
