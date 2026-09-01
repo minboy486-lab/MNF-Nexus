@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { ensureGuestPushSubscription } from "@/lib/guest/enable-push";
+import { syncExistingPushSubscriptionToServer } from "@/lib/guest/enable-push";
 import {
   getServiceWorkerRegistration,
   showPointNotification,
@@ -26,7 +26,7 @@ export function GuestPushBootstrap({ memberId }: Props) {
   useEffect(() => {
     void (async () => {
       await getServiceWorkerRegistration();
-      await ensureGuestPushSubscription();
+      await syncExistingPushSubscriptionToServer();
     })();
   }, []);
 
@@ -47,7 +47,8 @@ export function GuestPushBootstrap({ memberId }: Props) {
       };
       if (!row.txn_type || !POINT_TXN_TYPES.has(row.txn_type)) return;
 
-      if (Notification.permission === "granted") {
+      // 앱이 열려 있을 때만 Realtime 알림. 백그라운드는 서버 Web Push → SW.
+      if (document.visibilityState === "visible" && Notification.permission === "granted") {
         void showPointNotification({
           txnType: row.txn_type,
           amountWon: Number(row.amount ?? 0),
@@ -87,7 +88,7 @@ export function GuestPushBootstrap({ memberId }: Props) {
 
     function onVisible() {
       if (document.visibilityState !== "visible") return;
-      void ensureGuestPushSubscription();
+      void syncExistingPushSubscriptionToServer();
       routerRef.current.refresh();
       if (!channel || channel.state !== "joined") {
         connect();

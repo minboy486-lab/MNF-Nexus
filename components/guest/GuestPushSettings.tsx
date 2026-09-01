@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { hasServerPushSubscription } from "@/lib/actions/guest-push";
 import {
   disableGuestPushNotifications,
   enableGuestPushNotifications,
@@ -9,24 +10,27 @@ import { hasActivePushSubscription } from "@/lib/guest/push-status";
 
 type Status = "unsupported" | "blocked" | "off" | "on" | "loading";
 
+async function resolveStatus(): Promise<Status> {
+  if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+    return "unsupported";
+  }
+  if (Notification.permission === "denied") return "blocked";
+  if (Notification.permission !== "granted") return "off";
+
+  const [local, server] = await Promise.all([
+    hasActivePushSubscription(),
+    hasServerPushSubscription(),
+  ]);
+  return local && server ? "on" : "off";
+}
+
 export function GuestPushSettings() {
   const [status, setStatus] = useState<Status>("loading");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
-    void (async () => {
-      if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-        setStatus("unsupported");
-        return;
-      }
-      if (Notification.permission === "denied") {
-        setStatus("blocked");
-        return;
-      }
-      const subscribed = await hasActivePushSubscription();
-      setStatus(subscribed ? "on" : "off");
-    })();
+    void resolveStatus().then(setStatus);
   }, []);
 
   async function enable() {
@@ -81,7 +85,8 @@ export function GuestPushSettings() {
       <div>
         <h2 className="text-base font-bold">포인트 알림</h2>
         <p className="text-sm text-on-surface-variant mt-1 leading-relaxed">
-          매장에서 포인트가 추가·차감되면 휴대폰 알림을 받습니다. 앱을 닫아 두어도 동작합니다.
+          앱을 닫아 두거나 다른 앱을 써도 포인트 변경 알림을 받습니다. 홈 화면에 추가한 앱에서
+          한 번 켜 주세요.
         </p>
       </div>
 
@@ -93,7 +98,7 @@ export function GuestPushSettings() {
 
       {status === "off" && Notification.permission === "granted" && (
         <p className="text-sm text-on-surface-variant">
-          알림 권한은 허용됐지만 구독이 없습니다. 아래 버튼으로 다시 등록해 주세요.
+          알림 권한은 허용됐지만 백그라운드 구독이 없습니다. 아래 버튼으로 등록해 주세요.
         </p>
       )}
 
@@ -101,7 +106,7 @@ export function GuestPushSettings() {
 
       {status === "on" ? (
         <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-primary font-semibold">알림 켜짐</span>
+          <span className="text-sm text-primary font-semibold">알림 켜짐 (백그라운드 포함)</span>
           <button
             type="button"
             disabled={pending}

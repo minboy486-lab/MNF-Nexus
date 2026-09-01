@@ -37,6 +37,7 @@ export function GuestPermissionOnboarding() {
     if ("error" in result) {
       setMessage(result.error);
       if (result.denied) setNotifyDone(true);
+      return;
     }
     finish();
   }
@@ -55,7 +56,7 @@ export function GuestPermissionOnboarding() {
           알림 안내
         </h2>
         <p className="text-sm text-on-surface-variant mt-2 leading-relaxed">
-          포인트 충전·차감 시 알려드립니다. 버튼을 누르면 휴대폰 설정 창이 열립니다.
+          포인트 충전·차감 시 알려드립니다. 앱을 닫아 두어도 받으려면 아래에서 허용해 주세요.
         </p>
 
         <ul className="guest-permission-list mt-4 space-y-3">

@@ -67,6 +67,7 @@ export async function sendPointChangePush(params: Params): Promise<void> {
     tag: params.transactionId ? `mnf-point-${params.transactionId}` : `mnf-point-${Date.now()}`,
   });
 
+  let sent = 0;
   for (const sub of subs) {
     try {
       await webpush.sendNotification(
@@ -78,8 +79,10 @@ export async function sendPointChangePush(params: Params): Promise<void> {
         {
           TTL: 60 * 60,
           urgency: "high",
+          topic: "mnf-point",
         },
       );
+      sent += 1;
     } catch (err) {
       const status = (err as { statusCode?: number }).statusCode;
       console.error("[push] send failed", { status, endpoint: sub.endpoint.slice(0, 48) });
@@ -87,5 +90,11 @@ export async function sendPointChangePush(params: Params): Promise<void> {
         await admin.from("push_subscriptions").delete().eq("id", sub.id);
       }
     }
+  }
+
+  if (sent === 0) {
+    console.warn("[push] all deliveries failed for user", member.user_id);
+  } else {
+    console.info("[push] sent", sent, "notification(s) to user", member.user_id);
   }
 }

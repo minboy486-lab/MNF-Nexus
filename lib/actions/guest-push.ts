@@ -63,3 +63,21 @@ export async function removePushSubscription(
   if (error) return { error: error.message };
   return { ok: true };
 }
+
+export async function hasServerPushSubscription(): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { count, error } = await supabase
+    .from("push_subscriptions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+
+  if (error) return false;
+  return (count ?? 0) > 0;
+}
