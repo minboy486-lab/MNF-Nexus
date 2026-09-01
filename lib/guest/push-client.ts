@@ -14,6 +14,8 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return out;
 }
 
+let registrationPromise: Promise<ServiceWorkerRegistration | null> | null = null;
+
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!("serviceWorker" in navigator)) return null;
   try {
@@ -25,6 +27,13 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
   } catch {
     return null;
   }
+}
+
+export function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
+  if (!registrationPromise) {
+    registrationPromise = registerServiceWorker();
+  }
+  return registrationPromise;
 }
 
 export async function showPointNotification(params: {
@@ -47,11 +56,18 @@ export async function showPointNotification(params: {
     data: { url: "/guest/points" },
   };
 
-  const reg = await navigator.serviceWorker?.getRegistration();
-  if (reg) {
-    await reg.showNotification(title, options);
-    return;
+  try {
+    const reg = await getServiceWorkerRegistration();
+    if (reg) {
+      await reg.showNotification(title, options);
+      return;
+    }
+    new Notification(title, { body, icon: "/icons/icon-192.png", tag });
+  } catch {
+    try {
+      new Notification(title, { body, icon: "/icons/icon-192.png", tag });
+    } catch {
+      /* 알림 표시 실패 */
+    }
   }
-
-  new Notification(title, { body, icon: "/icons/icon-192.png", tag });
 }

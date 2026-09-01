@@ -5,7 +5,7 @@ import {
   removePushSubscription,
   savePushSubscription,
 } from "@/lib/actions/guest-push";
-import { registerServiceWorker, urlBase64ToUint8Array } from "@/lib/guest/push-client";
+import { urlBase64ToUint8Array, getServiceWorkerRegistration } from "@/lib/guest/push-client";
 
 export type EnablePushResult =
   | { ok: true }
@@ -30,7 +30,7 @@ export async function enableGuestPushNotifications(): Promise<EnablePushResult> 
     };
   }
 
-  const reg = await registerServiceWorker();
+  const reg = await getServiceWorkerRegistration();
   if (!reg) return { error: "알림을 사용할 수 없는 환경입니다." };
 
   const sub = await reg.pushManager.subscribe({
@@ -61,7 +61,7 @@ export async function ensureGuestPushSubscription(): Promise<void> {
     const vapidKey = await getPushPublicKey();
     if (!vapidKey) return;
 
-    const reg = await registerServiceWorker();
+    const reg = await getServiceWorkerRegistration();
     if (!reg) return;
 
     let sub = await reg.pushManager.getSubscription();

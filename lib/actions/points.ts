@@ -98,8 +98,8 @@ export async function adjustMemberPoints(params: {
       note: params.note?.trim(),
       transactionId,
     });
-  } catch {
-    /* 푸시 실패해도 조정은 완료 */
+  } catch (err) {
+    console.error("[push] point change notification failed", err);
   }
 
   revalidatePath("/admin/guests");

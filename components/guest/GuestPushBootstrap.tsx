@@ -6,23 +6,38 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { ensureGuestPushSubscription } from "@/lib/guest/enable-push";
-import { registerServiceWorker, showPointNotification } from "@/lib/guest/push-client";
+import {
+  getServiceWorkerRegistration,
+  showPointNotification,
+} from "@/lib/guest/push-client";
 
 const POINT_TXN_TYPES = new Set(["point_earn", "point_spend"]);
+const RECENT_TXN_MS = 15_000;
+const recentTxnIds = new Set<string>();
+
+function rememberTxn(txnId: string | undefined) {
+  if (!txnId) return false;
+  if (recentTxnIds.has(txnId)) return true;
+  recentTxnIds.add(txnId);
+  window.setTimeout(() => recentTxnIds.delete(txnId), RECENT_TXN_MS);
+  return false;
+}
 
 type Props = {
   memberId: string | null;
 };
 
-/** 손님 앱: SW 등록 + 포인트 거래 Realtime 알림 (앱 열림·알림 허용 시). */
+/** 손님 앱: SW 등록 + 포인트 거래 Realtime 알림 + Web Push 구독 유지. */
 export function GuestPushBootstrap({ memberId }: Props) {
   const router = useRouter();
   const routerRef = useRef(router);
   routerRef.current = router;
 
   useEffect(() => {
-    void registerServiceWorker();
-    void ensureGuestPushSubscription();
+    void (async () => {
+      await getServiceWorkerRegistration();
+      await ensureGuestPushSubscription();
+    })();
   }, []);
 
   useEffect(() => {
@@ -41,9 +56,9 @@ export function GuestPushBootstrap({ memberId }: Props) {
         note?: string | null;
       };
       if (!row.txn_type || !POINT_TXN_TYPES.has(row.txn_type)) return;
+      if (rememberTxn(row.id)) return;
 
-      // 앱이 열려 있을 때만 Realtime으로 표시. 백그라운드는 서버 Web Push가 담당.
-      if (document.visibilityState === "visible" && Notification.permission === "granted") {
+      if (Notification.permission === "granted") {
         void showPointNotification({
           txnType: row.txn_type,
           amountWon: Number(row.amount ?? 0),
@@ -62,7 +77,7 @@ export function GuestPushBootstrap({ memberId }: Props) {
       }
 
       channel = supabase
-        .channel(`guest-point-${memberId}-${Date.now()}`)
+        .channel(`guest-point-${memberId}`)
         .on(
           "postgres_changes",
           {

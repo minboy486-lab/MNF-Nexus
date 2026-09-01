@@ -8,7 +8,6 @@ import type { KnownVenue } from "@/lib/venue/constants";
 import { GuestNav } from "@/components/guest/GuestNav";
 import { GuestPushBootstrap } from "@/components/guest/GuestPushBootstrap";
 import { GuestPermissionOnboarding } from "@/components/guest/GuestPermissionOnboarding";
-import { bindGuestViewportHeight } from "@/lib/guest/viewport-height";
 
 type Props = {
   venues: KnownVenue[];
@@ -23,10 +22,8 @@ export function GuestShell({ venues, activeVenueId, memberId, children }: Props)
 
   useEffect(() => {
     document.documentElement.classList.add("guest-route");
-    const releaseViewport = bindGuestViewportHeight();
     return () => {
       document.documentElement.classList.remove("guest-route");
-      releaseViewport();
     };
   }, []);
 

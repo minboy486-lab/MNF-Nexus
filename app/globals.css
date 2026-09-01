@@ -52,12 +52,10 @@
 
 html.guest-route,
 html.guest-route body {
+  margin: 0;
   overflow: hidden;
+  height: 100%;
   width: 100%;
-  height: var(--guest-vh, 100dvh);
-  position: fixed;
-  inset: 0;
-  overscroll-behavior: none;
 }
 
 .staff-shell {
@@ -75,22 +73,25 @@ html.guest-route body {
 }
 
 .guest-shell-outer {
-  position: absolute;
-  inset: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  height: 100svh;
+  max-height: 100dvh;
+  max-height: 100svh;
   overflow: hidden;
   background: var(--background);
-  height: var(--guest-vh, 100dvh);
 }
 
 .guest-shell {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
   min-height: 0;
+  width: 100%;
   max-width: 32rem;
   margin-left: auto;
   margin-right: auto;
-  width: 100%;
   position: relative;
   isolation: isolate;
   padding-top: env(safe-area-inset-top, 0px);
@@ -138,6 +139,8 @@ html.guest-route body {
 }
 .guest-nav {
   flex-shrink: 0;
+  margin-top: auto;
+  width: 100%;
   position: relative;
   z-index: 50;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
