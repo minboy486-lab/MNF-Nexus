@@ -9,7 +9,6 @@ import { fetchServerVapidPublicKey } from "@/lib/guest/fetch-vapid-public-key";
 import { isPushApiAvailable } from "@/lib/guest/push-environment";
 import {
   getServiceWorkerRegistration,
-  resetServiceWorkerRegistrationCache,
   unregisterAllServiceWorkers,
   urlBase64ToUint8Array,
 } from "@/lib/guest/push-client";
@@ -105,6 +104,14 @@ async function subscribeWithVapidKey(
   return subscribeFresh(reg, vapidKey);
 }
 
+function formatSubscribeError(err: unknown): string {
+  const message = err instanceof Error ? err.message : "구독에 실패했습니다.";
+  if (/user gesture|user activation|requires a user/i.test(message)) {
+    return "알림 켜기 또는 구독 새로고침 버튼을 눌러 주세요.";
+  }
+  return message;
+}
+
 /** 기존 브라우저 구독만 서버에 동기화 (사용자 제스처 없이 호출 가능). */
 export async function syncExistingPushSubscriptionToServer(): Promise<void> {
   if (!isPushApiAvailable() || Notification.permission !== "granted") return;
@@ -116,15 +123,20 @@ export async function syncExistingPushSubscriptionToServer(): Promise<void> {
   if (!reg) return;
 
   const existing = await reg.pushManager.getSubscription();
-  if (existing && !subscriptionUsesVapidKey(existing, vapidKey)) {
-    await clearBrowserPushSubscription();
+  if (!existing) return;
+
+  if (!subscriptionUsesVapidKey(existing, vapidKey)) {
+    try {
+      await existing.unsubscribe();
+    } catch {
+      /* ignore */
+    }
     await removeAllPushSubscriptions();
-    resetServiceWorkerRegistrationCache();
+    return;
   }
 
   try {
-    const sub = await subscribeWithVapidKey(reg, vapidKey);
-    await persistSubscription(sub);
+    await persistSubscription(existing);
   } catch {
     /* 동기화 실패 — 설정에서 다시 켜기 */
   }
@@ -162,8 +174,7 @@ export async function enableGuestPushNotifications(): Promise<EnablePushResult> 
     const sub = await subscribeWithVapidKey(reg, vapidKey);
     return persistSubscription(sub);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "구독에 실패했습니다.";
-    return { error: message };
+    return { error: formatSubscribeError(err) };
   }
 }
 
@@ -215,8 +226,7 @@ export async function forceRefreshGuestPushNotifications(): Promise<EnablePushRe
     }
     return saved;
   } catch (err) {
-    const message = err instanceof Error ? err.message : "구독에 실패했습니다.";
-    return { error: message };
+    return { error: formatSubscribeError(err) };
   }
 }
 
