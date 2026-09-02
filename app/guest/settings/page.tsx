@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { GuestPasswordForm } from "@/components/guest/GuestPasswordForm";
 import { GuestPushSettings } from "@/components/guest/GuestPushSettings";
+import { GuestSiteDataReset } from "@/components/guest/GuestSiteDataReset";
 import { signOut } from "@/lib/actions/auth";
 
 export default function GuestSettingsPage() {
@@ -23,6 +24,8 @@ export default function GuestSettingsPage() {
       <GuestPushSettings />
 
       <GuestPasswordForm />
+
+      <GuestSiteDataReset />
 
       <form action={signOut} className="flex justify-center">
         <button

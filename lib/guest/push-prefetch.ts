@@ -14,6 +14,11 @@ export function setCachedVapidPublicKey(key: string | null): void {
   cachedVapidPublicKey = key;
 }
 
+export function resetPushPrefetchCache(): void {
+  cachedVapidPublicKey = null;
+  preloadPromise = null;
+}
+
 async function fetchAndCacheVapidKey(): Promise<string | null> {
   try {
     const key = await fetchServerVapidPublicKey();
