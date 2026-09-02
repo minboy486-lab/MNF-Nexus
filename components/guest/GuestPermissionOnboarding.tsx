@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { enableGuestPushNotifications } from "@/lib/guest/enable-push";
+import { preloadPushEnvironment } from "@/lib/guest/push-prefetch";
 import {
   markGuestPermissionOnboardingDone,
   shouldShowGuestPermissionOnboarding,
@@ -14,6 +15,7 @@ export function GuestPermissionOnboarding() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    void preloadPushEnvironment();
     if (shouldShowGuestPermissionOnboarding()) {
       setOpen(true);
     }

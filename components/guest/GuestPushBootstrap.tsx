@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { preloadPushEnvironment } from "@/lib/guest/push-prefetch";
 import { isWebPushFullyEnabled, syncExistingPushSubscriptionToServer } from "@/lib/guest/enable-push";
 import {
   getServiceWorkerRegistration,
@@ -43,7 +44,7 @@ export function GuestPushBootstrap({ memberId }: Props) {
 
   useEffect(() => {
     void (async () => {
-      await getServiceWorkerRegistration();
+      await preloadPushEnvironment();
       await syncExistingPushSubscriptionToServer();
       await refreshWebPushState();
     })();
