@@ -60,6 +60,22 @@ export async function removePushSubscription(
   return { ok: true };
 }
 
+export async function removeAllPushSubscriptions(): Promise<
+  { ok: true } | { error: string }
+> {
+  if (!isSupabaseConfigured()) return { error: "연결되지 않았습니다." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+
+  const { error } = await supabase.from("push_subscriptions").delete().eq("user_id", user.id);
+  if (error) return { error: error.message };
+  return { ok: true };
+}
+
 export async function hasServerPushSubscription(
   endpoint?: string,
 ): Promise<boolean> {

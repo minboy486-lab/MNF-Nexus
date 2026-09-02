@@ -39,6 +39,7 @@ export async function POST() {
         error: result.reason,
         detail: result.detail,
         subscriptionCount: result.subscriptionCount,
+        publicKeyHint: result.publicKeyHint,
       },
       { status: 502 },
     );

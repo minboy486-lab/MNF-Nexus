@@ -16,6 +16,17 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 let registrationPromise: Promise<ServiceWorkerRegistration | null> | null = null;
 
+export function resetServiceWorkerRegistrationCache(): void {
+  registrationPromise = null;
+}
+
+export async function unregisterAllServiceWorkers(): Promise<void> {
+  if (!("serviceWorker" in navigator)) return;
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(registrations.map((reg) => reg.unregister()));
+  resetServiceWorkerRegistrationCache();
+}
+
 async function waitForServiceWorkerControl(
   reg: ServiceWorkerRegistration,
   timeoutMs = 8000,

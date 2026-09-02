@@ -5,14 +5,37 @@ import { hasServerPushSubscription } from "@/lib/actions/guest-push";
 import {
   disableGuestPushNotifications,
   enableGuestPushNotifications,
-  syncExistingPushSubscriptionToServer,
+  forceRefreshGuestPushNotifications,
 } from "@/lib/guest/enable-push";
 import { isInstalledGuestPwa } from "@/lib/guest/permissions-onboarding";
 import { isPushApiAvailable } from "@/lib/guest/push-environment";
 import { getLocalPushEndpoint } from "@/lib/guest/push-status";
 import { showPointNotification } from "@/lib/guest/push-client";
+import { fetchServerVapidConfig, type ServerVapidConfig } from "@/lib/guest/fetch-vapid-public-key";
 
 type Status = "unsupported" | "blocked" | "off" | "on" | "loading";
+
+function serverConfigErrorMessage(config: ServerVapidConfig): string {
+  if (config.keysMatch === false) {
+    return "Vercel의 VAPID 공개키와 비밀키가 한 쌍이 아닙니다. npm run vapid:generate 결과를 다시 넣어 주세요.";
+  }
+  if (!config.pushConfigured) {
+    if (config.missingPublic && config.missingPrivate) {
+      return "서버에 VAPID 키가 없습니다. 관리자가 npm run vapid:generate 로 생성한 공개·비밀 키 쌍을 Vercel에 넣고 재배포해야 합니다.";
+    }
+    if (config.missingPublic) {
+      return "서버에 VAPID 공개키(NEXT_PUBLIC_VAPID_PUBLIC_KEY)가 없습니다.";
+    }
+    if (config.missingPrivate) {
+      return "서버에 VAPID 비밀키(VAPID_PRIVATE_KEY)가 없습니다.";
+    }
+    return "서버 VAPID 키가 설정되지 않았습니다.";
+  }
+  if (!config.adminConfigured) {
+    return "서버에 SUPABASE_SERVICE_ROLE_KEY가 없어 푸시를 보낼 수 없습니다.";
+  }
+  return "";
+}
 
 function isIos(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -36,10 +59,16 @@ export function GuestPushSettings() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [serverConfig, setServerConfig] = useState<ServerVapidConfig | null>(null);
   const needsPwa = isIos() && !isInstalledGuestPwa();
 
   useEffect(() => {
-    void resolveStatus().then(setStatus);
+    void Promise.all([resolveStatus(), fetchServerVapidConfig()]).then(([nextStatus, config]) => {
+      setStatus(nextStatus);
+      setServerConfig(config);
+      const configError = serverConfigErrorMessage(config);
+      if (configError) setError(configError);
+    });
   }, []);
 
   async function enable() {
@@ -73,31 +102,63 @@ export function GuestPushSettings() {
     setPending(false);
   }
 
+  async function refreshSubscription() {
+    setError(null);
+    setSuccess(null);
+    setPending(true);
+    const result = await forceRefreshGuestPushNotifications();
+    setPending(false);
+    if ("ok" in result && result.ok) {
+      setStatus("on");
+      setSuccess("푸시 구독을 새로 등록했습니다.");
+      return;
+    }
+    if ("error" in result) {
+      setError(result.error);
+    }
+  }
+
   async function testServerPush() {
     setError(null);
     setSuccess(null);
     setPending(true);
     try {
-      await syncExistingPushSubscriptionToServer();
+      const config = serverConfig ?? (await fetchServerVapidConfig());
+      setServerConfig(config);
+      const configError = serverConfigErrorMessage(config);
+      if (configError) {
+        setError(configError);
+        return;
+      }
+
+      const refreshed = await forceRefreshGuestPushNotifications();
+      if ("error" in refreshed) {
+        setError(refreshed.error);
+        setStatus("off");
+        return;
+      }
+      setStatus("on");
+
       const res = await fetch("/api/push/test", { method: "POST" });
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
         detail?: string;
         sent?: number;
+        publicKeyHint?: string;
       };
       if (!res.ok) {
         const message =
           data.error === "no_member"
             ? "손님 정보가 없어 서버 푸시를 보낼 수 없습니다."
             : data.error === "not_configured"
-              ? data.detail ??
-                "서버에 VAPID 키 또는 SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다."
+              ? data.detail ?? serverConfigErrorMessage(config)
               : data.error === "no_subscriptions"
-                ? "서버에 푸시 구독이 없습니다. 알림을 끄고 다시 켜 주세요."
+                ? "서버에 푸시 구독이 없습니다. 아래 ‘구독 새로고침’을 눌러 주세요."
                 : data.error === "no_user"
                   ? "로그인 계정이 연결되지 않았습니다. 매장에 문의해 주세요."
-                  : data.detail ??
-                    "서버 푸시 전송에 실패했습니다. 알림을 끄고 다시 켜 주세요.";
+                  : data.detail
+                    ? `${data.detail}${data.publicKeyHint ? ` (서버 공개키 ${data.publicKeyHint})` : ""}`
+                    : "서버 푸시 전송에 실패했습니다. Vercel의 VAPID 공개·비밀 키가 한 쌍인지 확인한 뒤 구독 새로고침을 눌러 주세요.";
         setError(message);
         if (data.error === "no_subscriptions" || data.error === "delivery_failed") {
           setStatus("off");
@@ -179,6 +240,13 @@ export function GuestPushSettings() {
         </p>
       )}
 
+      {serverConfig?.publicKeyHint && (
+        <p className="text-xs text-on-surface-variant">
+          서버 VAPID 공개키: <span className="font-mono">{serverConfig.publicKeyHint}</span>
+          {" "}(Vercel 값과 같아야 합니다)
+        </p>
+      )}
+
       {error && <p className="text-sm text-error">{error}</p>}
       {success && <p className="text-sm text-primary">{success}</p>}
 
@@ -202,6 +270,14 @@ export function GuestPushSettings() {
             className="w-full py-2.5 rounded-xl text-sm font-semibold border border-primary/30 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50"
           >
             서버 푸시 테스트 (백그라운드와 동일)
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => void refreshSubscription()}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold border border-white/15 text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-50"
+          >
+            구독 새로고침 (VAPID 재등록)
           </button>
           <button
             type="button"

@@ -1,4 +1,4 @@
-/* v7 — point push diagnostics */
+/* v8 — reset stale push subscriptions */
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });

@@ -9,6 +9,7 @@
     "lint": "eslint",
     "check:env": "node scripts/check-env.mjs",
     "generate:scores-xlsx": "node scripts/generate-scores-xlsx.mjs",
+    "vapid:generate": "node scripts/generate-vapid-keys.mjs",
     "timer:dev": "npm run dev --prefix timer-desktop",
     "timer:build": "npm run build --prefix timer-desktop"
   },

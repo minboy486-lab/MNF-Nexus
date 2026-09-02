@@ -2,7 +2,8 @@ import webpush from "web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseAdminConfigured, isSupabaseConfigured } from "@/lib/supabase/env";
 import { formatMp, mpToWon } from "@/lib/utils/mp";
-import { getVapidPublicKey, getVapidSubject, isPushConfigured } from "@/lib/push/vapid";
+import { getPublicKeyHint, getVapidPublicKey, getVapidPrivateKey, getVapidSubject, isPushConfigured } from "@/lib/push/vapid";
+import { vapidKeysMatch } from "@/lib/push/vapid-pair";
 import { pointNotificationBody, pointNotificationTitle } from "@/lib/ledger/point-history-display";
 
 type Params = {
@@ -20,6 +21,7 @@ export type PushSendResult =
       reason: "not_configured" | "no_user" | "no_subscriptions" | "delivery_failed";
       subscriptionCount?: number;
       detail?: string;
+      publicKeyHint?: string | null;
     };
 
 let vapidReady = false;
@@ -29,14 +31,16 @@ function ensureVapid(): boolean {
   webpush.setVapidDetails(
     getVapidSubject(),
     getVapidPublicKey()!,
-    process.env.VAPID_PRIVATE_KEY!.trim(),
+    getVapidPrivateKey()!,
   );
   vapidReady = true;
   return true;
 }
 
 function pushFailureReason(status?: number): string {
-  if (status === 401 || status === 403) return "VAPID 키가 구독과 맞지 않습니다. 알림을 끄고 다시 켜 주세요.";
+  if (status === 401 || status === 403) {
+    return "기기에 예전 푸시 구독이 남아 있습니다. 알림 끄기 → 사이트 데이터 삭제 → 다시 켜 주세요.";
+  }
   if (status === 404 || status === 410) return "구독이 만료되었습니다. 알림을 다시 켜 주세요.";
   if (status) return `푸시 서버 오류 (${status})`;
   return "푸시 전송에 실패했습니다.";
@@ -52,6 +56,18 @@ export async function sendPointChangePush(params: Params): Promise<PushSendResul
       ok: false,
       reason: "not_configured",
       detail: "VAPID 키(NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)가 필요합니다.",
+    };
+  }
+
+  const publicKey = getVapidPublicKey()!;
+  const privateKey = getVapidPrivateKey()!;
+  if (!vapidKeysMatch(publicKey, privateKey)) {
+    return {
+      ok: false,
+      reason: "not_configured",
+      detail:
+        "VAPID 공개키와 비밀키가 한 쌍이 아닙니다. npm run vapid:generate 결과를 Vercel에 다시 넣어 주세요.",
+      publicKeyHint: getPublicKeyHint(publicKey),
     };
   }
 
@@ -136,6 +152,7 @@ export async function sendPointChangePush(params: Params): Promise<PushSendResul
       reason: "delivery_failed",
       subscriptionCount: subs.length,
       detail: lastDetail,
+      publicKeyHint: getPublicKeyHint(getVapidPublicKey()),
     };
   }
 
