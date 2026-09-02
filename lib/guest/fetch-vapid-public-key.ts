@@ -9,6 +9,8 @@ export type ServerVapidConfig = {
   missingPublic?: boolean;
   missingPrivate?: boolean;
   derivedPublicKeyHint?: string | null;
+  fetchFailed?: boolean;
+  httpStatus?: number;
 };
 
 export async function fetchServerVapidConfig(): Promise<ServerVapidConfig> {
@@ -34,6 +36,9 @@ export async function fetchServerVapidConfig(): Promise<ServerVapidConfig> {
         adminConfigured: false,
         missingPublic: data.missingPublic,
         missingPrivate: data.missingPrivate,
+        keysMatch: data.keysMatch,
+        derivedPublicKeyHint: data.derivedPublicKeyHint ?? null,
+        httpStatus: res.status,
       };
     }
 
@@ -50,6 +55,7 @@ export async function fetchServerVapidConfig(): Promise<ServerVapidConfig> {
       publicKeyHint: null,
       pushConfigured: false,
       adminConfigured: false,
+      fetchFailed: true,
     };
   }
 }

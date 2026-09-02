@@ -17,6 +17,9 @@ import { getCachedVapidPublicKey, preloadPushEnvironment } from "@/lib/guest/pus
 type Status = "unsupported" | "blocked" | "off" | "on" | "loading";
 
 function serverConfigErrorMessage(config: ServerVapidConfig): string {
+  if (config.fetchFailed) {
+    return "서버 VAPID 설정을 불러오지 못했습니다. 인터넷 연결을 확인하고 페이지를 새로고침해 주세요.";
+  }
   if (config.keysMatch === false) {
     return "Vercel의 VAPID 공개키와 비밀키가 한 쌍이 아닙니다. npm run vapid:generate 결과를 다시 넣어 주세요.";
   }
@@ -249,6 +252,15 @@ export function GuestPushSettings() {
         <p className="text-xs text-on-surface-variant">
           서버 VAPID 공개키: <span className="font-mono">{serverConfig.publicKeyHint}</span>
           {" "}(Vercel 값과 같아야 합니다)
+        </p>
+      )}
+
+      {serverConfig && !serverConfig.pushConfigured && serverConfig.derivedPublicKeyHint && (
+        <p className="text-xs text-on-surface-variant">
+          비밀키에서 계산한 공개키:{" "}
+          <span className="font-mono">{serverConfig.derivedPublicKeyHint}</span>
+          {" "}
+          (위 공개키와 다르면 Vercel에 잘못 넣은 것입니다)
         </p>
       )}
 

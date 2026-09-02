@@ -27,7 +27,8 @@ export type PushSendResult =
 let vapidReady = false;
 
 function ensureVapid(): boolean {
-  if (vapidReady || !isPushConfigured()) return false;
+  if (!isPushConfigured()) return false;
+  if (vapidReady) return true;
   webpush.setVapidDetails(
     getVapidSubject(),
     getVapidPublicKey()!,
