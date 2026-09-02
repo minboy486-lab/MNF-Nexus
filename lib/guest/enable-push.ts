@@ -45,31 +45,45 @@ function formatSubscribeError(err: unknown): string {
   return message;
 }
 
-function subscribeFromGesture(vapidKey: string): Promise<EnablePushResult> {
+function subscribeFromGesture(
+  vapidKey: string,
+  options?: { forceNew?: boolean },
+): Promise<EnablePushResult> {
   if (!("serviceWorker" in navigator)) {
     return Promise.resolve({ error: "서비스 워커를 사용할 수 없습니다." });
   }
 
   return navigator.serviceWorker.ready
-    .then((reg) =>
-      reg.pushManager.getSubscription().then((existing) => {
-        if (existing && subscriptionUsesVapidKey(existing, vapidKey)) {
-          return existing;
+    .then(async (reg) => {
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) {
+        const canReuse =
+          !options?.forceNew && subscriptionUsesVapidKey(existing, vapidKey);
+        if (canReuse) return existing;
+
+        try {
+          await existing.unsubscribe();
+        } catch {
+          /* ignore */
         }
-        if (existing) {
-          return existing.unsubscribe().then(() =>
-            reg.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
-            }),
-          );
+
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          const still = await reg.pushManager.getSubscription();
+          if (!still) break;
+          try {
+            await still.unsubscribe();
+          } catch {
+            /* ignore */
+          }
+          await new Promise((resolve) => setTimeout(resolve, 200));
         }
-        return reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
-        });
-      }),
-    )
+      }
+
+      return reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
+      });
+    })
     .then((sub) => persistSubscription(sub))
     .catch((err) => ({ error: formatSubscribeError(err) }));
 }
@@ -87,7 +101,7 @@ export async function syncExistingPushSubscriptionToServer(): Promise<void> {
   const existing = await reg.pushManager.getSubscription();
   if (!existing) return;
 
-  if (!subscriptionUsesVapidKey(existing, vapidKey)) {
+  if (!existing.options?.applicationServerKey || !subscriptionUsesVapidKey(existing, vapidKey)) {
     try {
       await existing.unsubscribe();
     } catch {
@@ -120,7 +134,8 @@ export function enableGuestPushNotifications(): Promise<EnablePushResult> {
     });
   }
 
-  const subscribeWithKey = (vapidKey: string) => subscribeFromGesture(vapidKey);
+  const subscribeWithKey = (vapidKey: string) =>
+    subscribeFromGesture(vapidKey, { forceNew: true });
 
   const loadKeyAndSubscribe = () =>
     ensureVapidPublicKey().then((vapidKey) => {
@@ -195,16 +210,16 @@ export function forceRefreshGuestPushNotifications(): Promise<EnablePushResult> 
 }
 
 function runForceRefresh(vapidKey: string): Promise<EnablePushResult> {
-  void removeAllPushSubscriptions();
-
   if (!("serviceWorker" in navigator)) {
     return Promise.resolve({ error: "서비스 워커를 사용할 수 없습니다." });
   }
 
-  return navigator.serviceWorker.ready
-    .then((reg) => reg.pushManager.getSubscription())
-    .then((existing) => (existing ? existing.unsubscribe() : undefined))
-    .then(() => subscribeFromGesture(vapidKey));
+  return removeAllPushSubscriptions().then((removed) => {
+    if ("error" in removed) return removed;
+    return unsubscribeAllPushLocally().then(() =>
+      subscribeFromGesture(vapidKey, { forceNew: true }),
+    );
+  });
 }
 
 export async function isWebPushFullyEnabled(): Promise<boolean> {

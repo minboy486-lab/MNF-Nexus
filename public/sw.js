@@ -1,4 +1,4 @@
-/* v8 — reset stale push subscriptions */
+/* v9 — force fresh push subscription */
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });

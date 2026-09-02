@@ -7,6 +7,7 @@ import {
   enableGuestPushNotifications,
   forceRefreshGuestPushNotifications,
 } from "@/lib/guest/enable-push";
+import { isStalePushDeliveryError, purgePushOnDevice } from "@/lib/guest/push-reset";
 import { isInstalledGuestPwa } from "@/lib/guest/permissions-onboarding";
 import { isPushApiAvailable } from "@/lib/guest/push-environment";
 import { getLocalPushEndpoint } from "@/lib/guest/push-status";
@@ -126,6 +127,23 @@ export function GuestPushSettings() {
     }
   }
 
+  async function purgePush() {
+    setError(null);
+    setSuccess(null);
+    setPending(true);
+    const result = await purgePushOnDevice();
+    setPending(false);
+    if ("error" in result) {
+      setError(result.error);
+      return;
+    }
+    setStatus("off");
+    setSuccess("기기·서버의 푸시 구독을 지웠습니다. 아래 ‘알림 켜기’를 눌러 다시 등록해 주세요.");
+    void preloadPushEnvironment().finally(() => {
+      setPushReady(Boolean(getCachedVapidPublicKey()));
+    });
+  }
+
   async function testServerPush() {
     setError(null);
     setSuccess(null);
@@ -170,6 +188,12 @@ export function GuestPushSettings() {
         setError(message);
         if (data.error === "no_subscriptions" || data.error === "delivery_failed") {
           setStatus("off");
+          if (isStalePushDeliveryError(message)) {
+            await purgePushOnDevice();
+            setError(
+              `${message} 기기·서버 구독을 자동으로 지웠습니다. ‘알림 켜기’를 눌러 다시 등록해 주세요.`,
+            );
+          }
         }
         return;
       }
@@ -299,6 +323,14 @@ export function GuestPushSettings() {
           <button
             type="button"
             disabled={pending}
+            onClick={() => void purgePush()}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold border border-error/30 text-error hover:bg-error/10 transition-colors disabled:opacity-50"
+          >
+            기기 푸시 구독 지우기
+          </button>
+          <button
+            type="button"
+            disabled={pending}
             onClick={() => void testLocalNotification()}
             className="w-full py-2.5 rounded-xl text-sm font-semibold border border-white/15 text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-50"
           >
@@ -306,14 +338,24 @@ export function GuestPushSettings() {
           </button>
         </div>
       ) : status !== "blocked" ? (
-        <button
-          type="button"
-          disabled={pending || needsPwa}
-          onClick={() => void enable()}
-          className="btn-primary px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50"
-        >
-          {pending ? "설정 중…" : pushReady ? "알림 켜기" : "알림 켜기 (준비 중…)"}
-        </button>
+        <div className="space-y-3">
+          <button
+            type="button"
+            disabled={pending || needsPwa}
+            onClick={() => void enable()}
+            className="btn-primary w-full px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50"
+          >
+            {pending ? "설정 중…" : pushReady ? "알림 켜기" : "알림 켜기 (준비 중…)"}
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => void purgePush()}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold border border-error/30 text-error hover:bg-error/10 transition-colors disabled:opacity-50"
+          >
+            기기 푸시 구독 지우기
+          </button>
+        </div>
       ) : null}
     </section>
   );

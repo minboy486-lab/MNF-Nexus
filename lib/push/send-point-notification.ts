@@ -40,7 +40,7 @@ function ensureVapid(): boolean {
 
 function pushFailureReason(status?: number): string {
   if (status === 401 || status === 403) {
-    return "기기에 예전 푸시 구독이 남아 있습니다. 알림 끄기 → 사이트 데이터 삭제 → 다시 켜 주세요.";
+    return "이 기기의 푸시 구독이 서버와 맞지 않습니다. 설정에서 ‘기기 푸시 구독 지우기’ 후 ‘알림 켜기’를 눌러 주세요.";
   }
   if (status === 404 || status === 410) return "구독이 만료되었습니다. 알림을 다시 켜 주세요.";
   if (status) return `푸시 서버 오류 (${status})`;
