@@ -1,4 +1,4 @@
-/* v6 — point push */
+/* v7 — point push diagnostics */
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });

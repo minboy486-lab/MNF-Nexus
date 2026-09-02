@@ -13,9 +13,18 @@ type Params = {
   transactionId?: string;
 };
 
+export type PushSendResult =
+  | { ok: true; sent: number; total: number }
+  | {
+      ok: false;
+      reason: "not_configured" | "no_user" | "no_subscriptions" | "delivery_failed";
+      subscriptionCount?: number;
+      detail?: string;
+    };
+
 let vapidReady = false;
 
-function ensureVapid() {
+function ensureVapid(): boolean {
   if (vapidReady || !isPushConfigured()) return false;
   webpush.setVapidDetails(
     getVapidSubject(),
@@ -26,9 +35,25 @@ function ensureVapid() {
   return true;
 }
 
+function pushFailureReason(status?: number): string {
+  if (status === 401 || status === 403) return "VAPID 키가 구독과 맞지 않습니다. 알림을 끄고 다시 켜 주세요.";
+  if (status === 404 || status === 410) return "구독이 만료되었습니다. 알림을 다시 켜 주세요.";
+  if (status) return `푸시 서버 오류 (${status})`;
+  return "푸시 전송에 실패했습니다.";
+}
+
 /** 관리자 포인트 조정 시 손님 기기로 Web Push 발송 (구독자만). */
-export async function sendPointChangePush(params: Params): Promise<void> {
-  if (!isSupabaseConfigured() || !isSupabaseAdminConfigured() || !ensureVapid()) return;
+export async function sendPointChangePush(params: Params): Promise<PushSendResult> {
+  if (!isSupabaseConfigured() || !isSupabaseAdminConfigured()) {
+    return { ok: false, reason: "not_configured", detail: "SUPABASE_SERVICE_ROLE_KEY가 필요합니다." };
+  }
+  if (!ensureVapid()) {
+    return {
+      ok: false,
+      reason: "not_configured",
+      detail: "VAPID 키(NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)가 필요합니다.",
+    };
+  }
 
   const admin = createAdminClient();
   const { data: member } = await admin
@@ -39,7 +64,7 @@ export async function sendPointChangePush(params: Params): Promise<void> {
 
   if (!member?.user_id) {
     console.warn("[push] member has no user_id — guest account not linked", params.memberId);
-    return;
+    return { ok: false, reason: "no_user", detail: "로그인 계정이 연결되지 않은 손님입니다." };
   }
 
   const { data: subs, error: subsError } = await admin
@@ -49,12 +74,12 @@ export async function sendPointChangePush(params: Params): Promise<void> {
 
   if (subsError) {
     console.error("[push] subscription query failed", subsError.message);
-    return;
+    return { ok: false, reason: "delivery_failed", detail: subsError.message };
   }
 
   if (!subs?.length) {
     console.warn("[push] no subscriptions for user", member.user_id);
-    return;
+    return { ok: false, reason: "no_subscriptions", subscriptionCount: 0 };
   }
 
   const absMp = Math.abs(params.deltaMp);
@@ -78,6 +103,8 @@ export async function sendPointChangePush(params: Params): Promise<void> {
   });
 
   let sent = 0;
+  let lastDetail: string | undefined;
+
   for (const sub of subs) {
     try {
       await webpush.sendNotification(
@@ -94,8 +121,9 @@ export async function sendPointChangePush(params: Params): Promise<void> {
       sent += 1;
     } catch (err) {
       const status = (err as { statusCode?: number }).statusCode;
+      lastDetail = pushFailureReason(status);
       console.error("[push] send failed", { status, endpoint: sub.endpoint.slice(0, 48) });
-      if (status === 404 || status === 410) {
+      if (status === 404 || status === 410 || status === 401 || status === 403) {
         await admin.from("push_subscriptions").delete().eq("id", sub.id);
       }
     }
@@ -103,7 +131,14 @@ export async function sendPointChangePush(params: Params): Promise<void> {
 
   if (sent === 0) {
     console.warn("[push] all deliveries failed for user", member.user_id);
-  } else {
-    console.info("[push] sent", sent, "notification(s) to user", member.user_id);
+    return {
+      ok: false,
+      reason: "delivery_failed",
+      subscriptionCount: subs.length,
+      detail: lastDetail,
+    };
   }
+
+  console.info("[push] sent", sent, "notification(s) to user", member.user_id);
+  return { ok: true, sent, total: subs.length };
 }

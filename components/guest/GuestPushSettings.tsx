@@ -5,6 +5,7 @@ import { hasServerPushSubscription } from "@/lib/actions/guest-push";
 import {
   disableGuestPushNotifications,
   enableGuestPushNotifications,
+  syncExistingPushSubscriptionToServer,
 } from "@/lib/guest/enable-push";
 import { isInstalledGuestPwa } from "@/lib/guest/permissions-onboarding";
 import { isPushApiAvailable } from "@/lib/guest/push-environment";
@@ -33,6 +34,7 @@ async function resolveStatus(): Promise<Status> {
 export function GuestPushSettings() {
   const [status, setStatus] = useState<Status>("loading");
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const needsPwa = isIos() && !isInstalledGuestPwa();
 
@@ -73,19 +75,40 @@ export function GuestPushSettings() {
 
   async function testServerPush() {
     setError(null);
+    setSuccess(null);
     setPending(true);
     try {
+      await syncExistingPushSubscriptionToServer();
       const res = await fetch("/api/push/test", { method: "POST" });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        detail?: string;
+        sent?: number;
+      };
       if (!res.ok) {
-        setError(
+        const message =
           data.error === "no_member"
             ? "손님 정보가 없어 서버 푸시를 보낼 수 없습니다."
-            : "서버 푸시 전송에 실패했습니다. 알림을 다시 켜 주세요.",
-        );
+            : data.error === "not_configured"
+              ? data.detail ??
+                "서버에 VAPID 키 또는 SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다."
+              : data.error === "no_subscriptions"
+                ? "서버에 푸시 구독이 없습니다. 알림을 끄고 다시 켜 주세요."
+                : data.error === "no_user"
+                  ? "로그인 계정이 연결되지 않았습니다. 매장에 문의해 주세요."
+                  : data.detail ??
+                    "서버 푸시 전송에 실패했습니다. 알림을 끄고 다시 켜 주세요.";
+        setError(message);
+        if (data.error === "no_subscriptions" || data.error === "delivery_failed") {
+          setStatus("off");
+        }
         return;
       }
-      setError(null);
+      setSuccess(
+        data.sent
+          ? `서버에서 푸시를 보냈습니다 (${data.sent}건). 잠시 후 알림을 확인해 주세요.`
+          : "서버에서 푸시를 보냈습니다. 잠시 후 알림을 확인해 주세요.",
+      );
     } catch {
       setError("서버 푸시 요청에 실패했습니다.");
     } finally {
@@ -157,6 +180,7 @@ export function GuestPushSettings() {
       )}
 
       {error && <p className="text-sm text-error">{error}</p>}
+      {success && <p className="text-sm text-primary">{success}</p>}
 
       {status === "on" ? (
         <div className="space-y-3">

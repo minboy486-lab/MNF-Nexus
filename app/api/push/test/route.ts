@@ -25,7 +25,7 @@ export async function POST() {
     return NextResponse.json({ error: "no_member" }, { status: 404 });
   }
 
-  await sendPointChangePush({
+  const result = await sendPointChangePush({
     memberId: member.id,
     deltaMp: 1,
     balanceWon: member.point_balance ?? 0,
@@ -33,5 +33,16 @@ export async function POST() {
     transactionId: `test-server-${Date.now()}`,
   });
 
-  return NextResponse.json({ ok: true });
+  if (!result.ok) {
+    return NextResponse.json(
+      {
+        error: result.reason,
+        detail: result.detail,
+        subscriptionCount: result.subscriptionCount,
+      },
+      { status: 502 },
+    );
+  }
+
+  return NextResponse.json({ ok: true, sent: result.sent, total: result.total });
 }
