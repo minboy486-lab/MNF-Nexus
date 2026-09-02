@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppModal } from "@/components/ui/AppModal";
 import {
+  checkGuestLoginIdAvailable,
+  checkGuestNicknameAvailable,
   createGuestAccount,
   deleteGuestAccount,
   linkOrphanGuestProfile,
@@ -47,6 +49,49 @@ export function GuestAccountsClient({
   const [modal, setModal] = useState<"create" | { edit: GuestAccountRow } | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [search, setSearch] = useState("");
+  const [loginOk, setLoginOk] = useState<boolean | null>(null);
+  const [nickOk, setNickOk] = useState<boolean | null>(null);
+
+  const isCreate = modal === "create";
+  const editMemberId =
+    modal && modal !== "create" ? modal.edit.member_id : undefined;
+
+  const loginInvalid = isCreate && loginOk === false;
+  const nickInvalid = nickOk === false;
+  const submitDisabled =
+    pending || (isCreate ? loginOk !== true || nickOk !== true : nickOk !== true);
+
+  useEffect(() => {
+    if (!modal || !isCreate) {
+      setLoginOk(null);
+      return;
+    }
+    if (!form.login_id.trim()) {
+      setLoginOk(null);
+      return;
+    }
+    const t = setTimeout(async () => {
+      const res = await checkGuestLoginIdAvailable(form.login_id);
+      setLoginOk(res.available ?? false);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [form.login_id, modal, isCreate]);
+
+  useEffect(() => {
+    if (!modal) {
+      setNickOk(null);
+      return;
+    }
+    if (!form.nickname.trim()) {
+      setNickOk(null);
+      return;
+    }
+    const t = setTimeout(async () => {
+      const res = await checkGuestNicknameAvailable(form.nickname, editMemberId);
+      setNickOk(res.available ?? false);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [form.nickname, modal, editMemberId]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -61,6 +106,8 @@ export function GuestAccountsClient({
 
   function openCreate() {
     setForm(emptyForm);
+    setLoginOk(null);
+    setNickOk(null);
     setModal("create");
   }
 
@@ -71,12 +118,16 @@ export function GuestAccountsClient({
       display_name: row.display_name ?? "",
       phone: row.phone ?? "",
     });
+    setLoginOk(null);
+    setNickOk(null);
     setModal({ edit: row });
   }
 
   function closeModal() {
     setModal(null);
     setForm(emptyForm);
+    setLoginOk(null);
+    setNickOk(null);
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -321,7 +372,7 @@ export function GuestAccountsClient({
               <button
                 type="submit"
                 form="guest-account-form"
-                disabled={pending}
+                disabled={submitDisabled}
                 className="flex-1 h-11 rounded-xl text-sm font-bold btn-primary disabled:opacity-50"
               >
                 {pending ? "처리 중…" : modal === "create" ? "생성" : "저장"}
@@ -342,13 +393,19 @@ export function GuestAccountsClient({
                   type="text"
                   required
                   autoComplete="off"
-                  className="app-modal-field"
+                  className={`app-modal-field ${loginInvalid ? "!border-error" : ""}`}
                   minLength={3}
                   maxLength={32}
                   pattern="[a-zA-Z0-9_]+"
                   value={form.login_id}
                   onChange={(e) => setForm((f) => ({ ...f, login_id: e.target.value.toLowerCase() }))}
                 />
+                {loginInvalid && (
+                  <span className="app-modal-hint-error mt-1 block">이미 사용 중인 아이디</span>
+                )}
+                {loginOk === true && (
+                  <span className="app-modal-hint-ok mt-1 block">사용 가능</span>
+                )}
                 <p className="text-[10px] text-on-surface-variant/70 mt-1">
                   영문 소문자·숫자·_ (3~32자, 전 지점 중복 불가)
                 </p>
@@ -360,10 +417,19 @@ export function GuestAccountsClient({
               <input
                 type="text"
                 required
-                className="app-modal-field"
+                className={`app-modal-field ${nickInvalid ? "!border-error" : ""}`}
                 value={form.nickname}
                 onChange={(e) => setForm((f) => ({ ...f, nickname: e.target.value }))}
               />
+              {nickInvalid && (
+                <span className="app-modal-hint-error mt-1 block">이 지점에서 이미 사용 중인 닉네임</span>
+              )}
+              {nickOk === true && (
+                <span className="app-modal-hint-ok mt-1 block">사용 가능</span>
+              )}
+              <p className="text-[10px] text-on-surface-variant/70 mt-1">
+                같은 지점 내 중복 불가 (다른 지점은 가능)
+              </p>
             </label>
 
             <label>

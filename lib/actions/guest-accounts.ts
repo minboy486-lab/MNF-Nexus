@@ -54,6 +54,49 @@ export async function isLoginIdTakenGlobally(loginId: string): Promise<boolean> 
   return !!memberHit;
 }
 
+export async function checkGuestLoginIdAvailable(
+  loginId: string,
+): Promise<{ available: boolean; error?: string }> {
+  const gate = await requireGuestAccountAdmin();
+  if ("error" in gate) return { available: false, error: gate.error };
+
+  const id = normalizeStaffLoginId(loginId);
+  if (!id) return { available: false, error: "아이디를 입력하세요." };
+  if (!isValidStaffLoginId(id)) {
+    return { available: false, error: "영문 소문자·숫자·_(3~32자)만 사용할 수 있습니다." };
+  }
+
+  const taken = await isLoginIdTakenGlobally(id);
+  return { available: !taken };
+}
+
+export async function checkGuestNicknameAvailable(
+  nickname: string,
+  excludeMemberId?: string,
+): Promise<{ available: boolean; error?: string }> {
+  const gate = await requireGuestAccountAdmin();
+  if ("error" in gate) return { available: false, error: gate.error };
+
+  const nick = nickname.trim();
+  if (!nick) return { available: false, error: "닉네임을 입력하세요." };
+
+  const venueId = await getActiveVenueId();
+  const admin = createAdminClient();
+
+  let query = admin
+    .from("members")
+    .select("id")
+    .eq("venue_id", venueId)
+    .eq("nickname", nick);
+
+  if (excludeMemberId) {
+    query = query.neq("id", excludeMemberId);
+  }
+
+  const { data } = await query.maybeSingle();
+  return { available: !data };
+}
+
 export async function listGuestAccounts(): Promise<
   { accounts: GuestAccountRow[] } | { error: string }
 > {

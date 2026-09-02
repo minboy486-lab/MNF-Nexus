@@ -1,11 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { isSupabaseConfigured, isSupabaseAdminConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { hashPassword } from "@/lib/auth/password";
 import { getActiveVenueId } from "@/lib/venue/active";
 import { requireOpenSession } from "@/lib/venue/session";
+import { isLoginIdTakenGlobally } from "@/lib/actions/guest-accounts";
 
 function normalizePhone(raw: string) {
   const digits = raw.replace(/\D/g, "");
@@ -37,6 +38,11 @@ export async function checkLoginIdAvailable(loginId: string) {
   if (!id) return { available: false, error: "아이디를 입력하세요." };
   if (id.length < 3) return { available: false, error: "아이디는 3자 이상입니다." };
   if (!isSupabaseConfigured()) return { available: true };
+
+  if (isSupabaseAdminConfigured()) {
+    const taken = await isLoginIdTakenGlobally(id);
+    return { available: !taken };
+  }
 
   const supabase = await createClient();
   const { data } = await supabase
