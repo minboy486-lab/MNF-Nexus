@@ -17,8 +17,13 @@ export function GuestSiteDataReset() {
     setPending(true);
     try {
       await clearGuestSiteData();
-    } catch {
-      setError("데이터 삭제에 실패했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "데이터 삭제에 실패했습니다.";
+      setError(
+        message.includes("clear_my_push_subscriptions") || message.includes("function")
+          ? "서버 구독 삭제 기능이 아직 없습니다. Supabase에 038_clear_my_push_subscriptions.sql 마이그레이션을 적용해 주세요."
+          : message || "데이터 삭제에 실패했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.",
+      );
       setPending(false);
     }
   }

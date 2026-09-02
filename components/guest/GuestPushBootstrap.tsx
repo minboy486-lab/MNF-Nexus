@@ -8,6 +8,11 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { preloadPushEnvironment } from "@/lib/guest/push-prefetch";
 import { isWebPushFullyEnabled, syncExistingPushSubscriptionToServer } from "@/lib/guest/enable-push";
 import {
+  clearSkipPushSyncCookie,
+  shouldSkipPushSync,
+  unsubscribeAllPushLocally,
+} from "@/lib/guest/push-unsubscribe";
+import {
   getServiceWorkerRegistration,
   showPointNotification,
 } from "@/lib/guest/push-client";
@@ -45,7 +50,12 @@ export function GuestPushBootstrap({ memberId }: Props) {
   useEffect(() => {
     void (async () => {
       await preloadPushEnvironment();
-      await syncExistingPushSubscriptionToServer();
+      if (shouldSkipPushSync()) {
+        clearSkipPushSyncCookie();
+        await unsubscribeAllPushLocally();
+      } else {
+        await syncExistingPushSubscriptionToServer();
+      }
       await refreshWebPushState();
     })();
   }, []);
@@ -157,7 +167,9 @@ export function GuestPushBootstrap({ memberId }: Props) {
 
     async function onVisible() {
       if (document.visibilityState !== "visible") return;
-      await syncExistingPushSubscriptionToServer();
+      if (!shouldSkipPushSync()) {
+        await syncExistingPushSubscriptionToServer();
+      }
       await refreshWebPushState();
       scheduleGuestRefresh();
       if (!channel || channel.state !== "joined") {

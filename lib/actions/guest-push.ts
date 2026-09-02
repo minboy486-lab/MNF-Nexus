@@ -71,6 +71,9 @@ export async function removeAllPushSubscriptions(): Promise<
   } = await supabase.auth.getUser();
   if (!user) return { error: "로그인이 필요합니다." };
 
+  const { error: rpcError } = await supabase.rpc("clear_my_push_subscriptions");
+  if (!rpcError) return { ok: true };
+
   const { error } = await supabase.from("push_subscriptions").delete().eq("user_id", user.id);
   if (error) return { error: error.message };
   return { ok: true };

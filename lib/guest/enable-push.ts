@@ -10,6 +10,7 @@ import { isPushApiAvailable } from "@/lib/guest/push-environment";
 import { ensureVapidPublicKey, getCachedVapidPublicKey } from "@/lib/guest/push-prefetch";
 import { getServiceWorkerRegistration, urlBase64ToUint8Array } from "@/lib/guest/push-client";
 import { subscriptionUsesVapidKey } from "@/lib/guest/push-vapid";
+import { unsubscribeAllPushLocally } from "@/lib/guest/push-unsubscribe";
 
 export type EnablePushResult =
   | { ok: true }
@@ -155,18 +156,11 @@ export async function ensureGuestPushSubscription(): Promise<void> {
 }
 
 export async function disableGuestPushNotifications(): Promise<{ ok: true } | { error: string }> {
-  const registrations = await navigator.serviceWorker.getRegistrations();
-  for (const reg of registrations) {
-    const sub = await reg.pushManager.getSubscription();
-    if (sub) {
-      try {
-        await sub.unsubscribe();
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-  await removeAllPushSubscriptions();
+  await unsubscribeAllPushLocally();
+
+  const removed = await removeAllPushSubscriptions();
+  if ("error" in removed) return removed;
+
   return { ok: true };
 }
 
