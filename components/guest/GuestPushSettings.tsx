@@ -65,14 +65,14 @@ export function GuestPushSettings() {
   const needsPwa = isIos() && !isInstalledGuestPwa();
 
   useEffect(() => {
-    void preloadPushEnvironment().then(() => {
+    void preloadPushEnvironment().finally(() => {
       setPushReady(Boolean(getCachedVapidPublicKey()));
     });
     void Promise.all([resolveStatus(), fetchServerVapidConfig()]).then(([nextStatus, config]) => {
       setStatus(nextStatus);
       setServerConfig(config);
       const configError = serverConfigErrorMessage(config);
-      if (configError) setError(configError);
+      setError(configError || null);
     });
   }, []);
 
@@ -80,10 +80,6 @@ export function GuestPushSettings() {
     setError(null);
     if (needsPwa) {
       setError("iOS에서는 Safari 공유 → 홈 화면에 추가한 뒤, 그 앱에서 알림을 켜 주세요.");
-      return;
-    }
-    if (!getCachedVapidPublicKey()) {
-      setError("알림 준비가 안 됐습니다. 페이지를 새로고침한 뒤 다시 눌러 주세요.");
       return;
     }
     setPending(true);
@@ -300,11 +296,11 @@ export function GuestPushSettings() {
       ) : status !== "blocked" ? (
         <button
           type="button"
-          disabled={pending || needsPwa || !pushReady}
+          disabled={pending || needsPwa}
           onClick={() => void enable()}
           className="btn-primary px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50"
         >
-          {pending ? "설정 중…" : pushReady ? "알림 켜기" : "알림 준비 중…"}
+          {pending ? "설정 중…" : pushReady ? "알림 켜기" : "알림 켜기 (준비 중…)"}
         </button>
       ) : null}
     </section>

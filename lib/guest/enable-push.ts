@@ -7,7 +7,7 @@ import {
 } from "@/lib/actions/guest-push";
 import { fetchServerVapidPublicKey } from "@/lib/guest/fetch-vapid-public-key";
 import { isPushApiAvailable } from "@/lib/guest/push-environment";
-import { getCachedVapidPublicKey } from "@/lib/guest/push-prefetch";
+import { ensureVapidPublicKey, getCachedVapidPublicKey } from "@/lib/guest/push-prefetch";
 import { getServiceWorkerRegistration, urlBase64ToUint8Array } from "@/lib/guest/push-client";
 import { subscriptionUsesVapidKey } from "@/lib/guest/push-vapid";
 
@@ -112,22 +112,30 @@ export function enableGuestPushNotifications(): Promise<EnablePushResult> {
     });
   }
 
-  const vapidKey = getCachedVapidPublicKey();
-  if (!vapidKey) {
-    return Promise.resolve({
-      error: "알림 준비가 안 됐습니다. 잠시 후 다시 눌러 주세요.",
-    });
-  }
-
-  if (Notification.permission === "granted") {
-    return subscribeFromGesture(vapidKey);
-  }
-
   if (Notification.permission === "denied") {
     return Promise.resolve({
       error: "알림이 차단되었습니다.",
       denied: true,
     });
+  }
+
+  const subscribeWithKey = (vapidKey: string) => subscribeFromGesture(vapidKey);
+
+  const loadKeyAndSubscribe = () =>
+    ensureVapidPublicKey().then((vapidKey) => {
+      if (!vapidKey) {
+        return {
+          error:
+            "서버 VAPID 키를 불러오지 못했습니다. 인터넷 연결을 확인하고 페이지를 새로고침해 주세요.",
+        };
+      }
+      return subscribeWithKey(vapidKey);
+    });
+
+  if (Notification.permission === "granted") {
+    const cached = getCachedVapidPublicKey();
+    if (cached) return subscribeWithKey(cached);
+    return loadKeyAndSubscribe();
   }
 
   return Notification.requestPermission().then((permission) => {
@@ -137,7 +145,7 @@ export function enableGuestPushNotifications(): Promise<EnablePushResult> {
         denied: permission === "denied",
       };
     }
-    return subscribeFromGesture(vapidKey);
+    return loadKeyAndSubscribe();
   });
 }
 
@@ -180,9 +188,19 @@ export function forceRefreshGuestPushNotifications(): Promise<EnablePushResult> 
 
   const vapidKey = getCachedVapidPublicKey();
   if (!vapidKey) {
-    return Promise.resolve({ error: "알림 준비가 안 됐습니다. 잠시 후 다시 눌러 주세요." });
+    return ensureVapidPublicKey().then((key) => {
+      if (!key) {
+        return Promise.resolve({
+          error: "서버 VAPID 키를 불러오지 못했습니다. 페이지를 새로고침해 주세요.",
+        });
+      }
+      return runForceRefresh(key);
+    });
   }
+  return runForceRefresh(vapidKey);
+}
 
+function runForceRefresh(vapidKey: string): Promise<EnablePushResult> {
   void removeAllPushSubscriptions();
 
   if (!("serviceWorker" in navigator)) {
