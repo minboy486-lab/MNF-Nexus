@@ -1,22 +1,18 @@
 "use client";
 
 import { removeAllPushSubscriptions } from "@/lib/actions/guest-push";
+import { getServiceWorkerRegistration } from "@/lib/guest/push-client";
 import { resetPushPrefetchCache } from "@/lib/guest/push-prefetch";
-import {
-  resetServiceWorkerRegistrationCache,
-  unregisterAllServiceWorkers,
-} from "@/lib/guest/push-client";
 import { unsubscribeAllPushLocally } from "@/lib/guest/push-unsubscribe";
 
-/** 기기·서버의 푸시 구독을 모두 지웁니다. (로그아웃 없음) */
+/** 기기·서버의 푸시 구독을 모두 지웁니다. (로그아웃·서비스 워커는 유지) */
 export async function purgePushOnDevice(): Promise<{ ok: true } | { error: string }> {
   const removed = await removeAllPushSubscriptions();
   if ("error" in removed) return removed;
 
   await unsubscribeAllPushLocally();
-  await unregisterAllServiceWorkers();
-  resetServiceWorkerRegistrationCache();
   resetPushPrefetchCache();
+  await getServiceWorkerRegistration();
 
   return { ok: true };
 }

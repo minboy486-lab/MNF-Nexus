@@ -42,25 +42,32 @@ function formatSubscribeError(err: unknown): string {
   if (/user gesture|user activation|requires a user/i.test(message)) {
     return "알림 켜기 버튼을 다시 눌러 주세요. (페이지 로딩 후 바로 누르면 더 잘 됩니다)";
   }
+  if (/service worker/i.test(message)) {
+    return "서비스 워커가 준비되지 않았습니다. 페이지를 새로고침한 뒤 ‘알림 켜기’를 다시 눌러 주세요.";
+  }
   return message;
 }
 
-function subscribeFromGesture(
+async function subscribeFromGesture(
   vapidKey: string,
   options?: { forceNew?: boolean },
 ): Promise<EnablePushResult> {
   if (!("serviceWorker" in navigator)) {
-    return Promise.resolve({ error: "서비스 워커를 사용할 수 없습니다." });
+    return { error: "서비스 워커를 사용할 수 없습니다." };
   }
 
-  return navigator.serviceWorker.ready
-    .then(async (reg) => {
-      const existing = await reg.pushManager.getSubscription();
-      if (existing) {
-        const canReuse =
-          !options?.forceNew && subscriptionUsesVapidKey(existing, vapidKey);
-        if (canReuse) return existing;
+  try {
+    const reg = await getServiceWorkerRegistration();
+    if (!reg) {
+      return {
+        error: "서비스 워커를 등록하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.",
+      };
+    }
 
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) {
+      const canReuse = !options?.forceNew && subscriptionUsesVapidKey(existing, vapidKey);
+      if (!canReuse) {
         try {
           await existing.unsubscribe();
         } catch {
@@ -77,15 +84,19 @@ function subscribeFromGesture(
           }
           await new Promise((resolve) => setTimeout(resolve, 200));
         }
+      } else {
+        return persistSubscription(existing);
       }
+    }
 
-      return reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
-      });
-    })
-    .then((sub) => persistSubscription(sub))
-    .catch((err) => ({ error: formatSubscribeError(err) }));
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
+    });
+    return persistSubscription(sub);
+  } catch (err) {
+    return { error: formatSubscribeError(err) };
+  }
 }
 
 /** 기존 브라우저 구독만 서버에 동기화 (사용자 제스처 없이 호출 가능). */
@@ -138,7 +149,7 @@ export function enableGuestPushNotifications(): Promise<EnablePushResult> {
     subscribeFromGesture(vapidKey, { forceNew: true });
 
   const loadKeyAndSubscribe = () =>
-    ensureVapidPublicKey().then((vapidKey) => {
+    Promise.all([ensureVapidPublicKey(), getServiceWorkerRegistration()]).then(([vapidKey]) => {
       if (!vapidKey) {
         return {
           error:
@@ -150,7 +161,9 @@ export function enableGuestPushNotifications(): Promise<EnablePushResult> {
 
   if (Notification.permission === "granted") {
     const cached = getCachedVapidPublicKey();
-    if (cached) return subscribeWithKey(cached);
+    if (cached) {
+      return getServiceWorkerRegistration().then(() => subscribeWithKey(cached));
+    }
     return loadKeyAndSubscribe();
   }
 
@@ -214,11 +227,11 @@ function runForceRefresh(vapidKey: string): Promise<EnablePushResult> {
     return Promise.resolve({ error: "서비스 워커를 사용할 수 없습니다." });
   }
 
-  return removeAllPushSubscriptions().then((removed) => {
+  return removeAllPushSubscriptions().then(async (removed) => {
     if ("error" in removed) return removed;
-    return unsubscribeAllPushLocally().then(() =>
-      subscribeFromGesture(vapidKey, { forceNew: true }),
-    );
+    await unsubscribeAllPushLocally();
+    await getServiceWorkerRegistration();
+    return subscribeFromGesture(vapidKey, { forceNew: true });
   });
 }
 
