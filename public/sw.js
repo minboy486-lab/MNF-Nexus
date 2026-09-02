@@ -1,4 +1,4 @@
-/* v4 — point push */
+/* v5 — point push */
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });
@@ -72,14 +72,19 @@ self.addEventListener("push", (event) => {
   const targetUrl = new URL(payload.url || "/guest/points", self.location.origin).href;
 
   event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
-      tag,
-      renotify: true,
-      data: { url: targetUrl },
-    }),
+    self.registration
+      .showNotification(payload.title, {
+        body: payload.body,
+        icon: "/icons/icon-192.png",
+        badge: "/icons/icon-192.png",
+        tag,
+        renotify: true,
+        data: { url: targetUrl },
+        vibrate: [200, 100, 200],
+      })
+      .catch((err) => {
+        console.error("[sw] showNotification failed", err);
+      }),
   );
 });
 

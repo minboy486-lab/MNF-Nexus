@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { after } from "next/server";
 import { isAdminRole } from "@/lib/auth/roles";
 import { getGuestPointHistory } from "@/lib/data/guest-queries";
 import { getProfile } from "@/lib/supabase/server";
@@ -9,7 +8,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveVenueId } from "@/lib/venue/active";
 import { mpToWon } from "@/lib/utils/mp";
-import { sendPointChangePush } from "@/lib/push/send-point-notification";
+import { schedulePointChangePush } from "@/lib/push/schedule-point-push";
 
 export type MemberPointHistoryRow = {
   id: string;
@@ -91,20 +90,12 @@ export async function adjustMemberPoints(params: {
   const transactionId =
     typeof result?.transaction_id === "string" ? result.transaction_id : undefined;
 
-  const pushParams = {
+  schedulePointChangePush({
     memberId,
     deltaMp,
     balanceWon: pointBalance,
     note: params.note?.trim(),
     transactionId,
-  };
-
-  after(async () => {
-    try {
-      await sendPointChangePush(pushParams);
-    } catch (err) {
-      console.error("[push] point change notification failed", err);
-    }
   });
 
   revalidatePath("/admin/guests");

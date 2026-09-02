@@ -71,7 +71,29 @@ export function GuestPushSettings() {
     setPending(false);
   }
 
-  async function testNotification() {
+  async function testServerPush() {
+    setError(null);
+    setPending(true);
+    try {
+      const res = await fetch("/api/push/test", { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(
+          data.error === "no_member"
+            ? "손님 정보가 없어 서버 푸시를 보낼 수 없습니다."
+            : "서버 푸시 전송에 실패했습니다. 알림을 다시 켜 주세요.",
+        );
+        return;
+      }
+      setError(null);
+    } catch {
+      setError("서버 푸시 요청에 실패했습니다.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function testLocalNotification() {
     setError(null);
     if (Notification.permission !== "granted") {
       setError("먼저 알림을 켜 주세요.");
@@ -80,8 +102,8 @@ export function GuestPushSettings() {
     await showPointNotification({
       txnType: "point_earn",
       amountWon: 10000,
-      note: "테스트",
-      txnId: `test-${Date.now()}`,
+      note: "로컬 테스트",
+      txnId: `test-local-${Date.now()}`,
     });
   }
 
@@ -152,10 +174,18 @@ export function GuestPushSettings() {
           <button
             type="button"
             disabled={pending}
-            onClick={() => void testNotification()}
+            onClick={() => void testServerPush()}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold border border-primary/30 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50"
+          >
+            서버 푸시 테스트 (백그라운드와 동일)
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => void testLocalNotification()}
             className="w-full py-2.5 rounded-xl text-sm font-semibold border border-white/15 text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-50"
           >
-            테스트 알림 (이 기기 표시 확인)
+            로컬 표시 테스트
           </button>
         </div>
       ) : status !== "blocked" ? (

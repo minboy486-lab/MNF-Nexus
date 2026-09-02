@@ -84,7 +84,6 @@ export async function sendPointChangePush(params: Params): Promise<void> {
         {
           TTL: 60 * 60,
           urgency: "high",
-          topic: "mnf-point",
         },
       );
       sent += 1;
