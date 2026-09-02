@@ -59,9 +59,10 @@ export async function sendPointChangePush(params: Params): Promise<void> {
 
   const absMp = Math.abs(params.deltaMp);
   const txnType = params.deltaMp > 0 ? "point_earn" : "point_spend";
+  const amountWon = mpToWon(absMp);
   const title = pointNotificationTitle(txnType);
   const body = [
-    pointNotificationBody({ txnType, amountWon: mpToWon(absMp), note: params.note }),
+    pointNotificationBody({ txnType, amountWon, note: params.note }),
     `잔액 ${formatMp(params.balanceWon)}`,
   ].join(" · ");
 
@@ -70,6 +71,10 @@ export async function sendPointChangePush(params: Params): Promise<void> {
     body,
     url: "/guest/points",
     tag: params.transactionId ? `mnf-point-${params.transactionId}` : `mnf-point-${Date.now()}`,
+    txnType,
+    amountWon,
+    note: params.note ?? "",
+    txnId: params.transactionId ?? "",
   });
 
   let sent = 0;

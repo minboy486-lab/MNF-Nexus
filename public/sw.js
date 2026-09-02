@@ -1,4 +1,4 @@
-/* v5 — point push */
+/* v6 — point push */
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });
@@ -61,7 +61,16 @@ self.addEventListener("pushsubscriptionchange", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  let payload = { title: "MNF HOLDEM", body: "", url: "/guest/points", tag: "" };
+  let payload = {
+    title: "MNF HOLDEM",
+    body: "",
+    url: "/guest/points",
+    tag: "",
+    txnType: "",
+    amountWon: 0,
+    note: "",
+    txnId: "",
+  };
   try {
     if (event.data) payload = { ...payload, ...event.data.json() };
   } catch {
@@ -72,8 +81,8 @@ self.addEventListener("push", (event) => {
   const targetUrl = new URL(payload.url || "/guest/points", self.location.origin).href;
 
   event.waitUntil(
-    self.registration
-      .showNotification(payload.title, {
+    (async () => {
+      await self.registration.showNotification(payload.title, {
         body: payload.body,
         icon: "/icons/icon-192.png",
         badge: "/icons/icon-192.png",
@@ -81,10 +90,26 @@ self.addEventListener("push", (event) => {
         renotify: true,
         data: { url: targetUrl },
         vibrate: [200, 100, 200],
-      })
-      .catch((err) => {
-        console.error("[sw] showNotification failed", err);
-      }),
+      });
+
+      const clients = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      for (const client of clients) {
+        client.postMessage({
+          type: "mnf-point-push",
+          payload: {
+            txnType: payload.txnType,
+            amountWon: String(payload.amountWon ?? 0),
+            note: payload.note,
+            txnId: payload.txnId || tag,
+          },
+        });
+      }
+    })().catch((err) => {
+      console.error("[sw] push handler failed", err);
+    }),
   );
 });
 

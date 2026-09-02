@@ -1,7 +1,5 @@
 "use client";
 
-import { useLayoutEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -23,13 +21,8 @@ function isActive(pathname: string, href: string, match: "exact" | "prefix") {
 
 export function GuestNav() {
   const pathname = usePathname();
-  const [mounted, setMounted] = useState(false);
 
-  useLayoutEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const nav = (
+  return (
     <nav className="guest-nav" aria-label="손님 메뉴">
       <div className="guest-nav__inner">
         {tabs.map((tab) => {
@@ -49,7 +42,4 @@ export function GuestNav() {
       </div>
     </nav>
   );
-
-  if (!mounted) return null;
-  return createPortal(nav, document.body);
 }

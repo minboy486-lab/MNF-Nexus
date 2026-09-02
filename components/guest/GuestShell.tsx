@@ -54,11 +54,11 @@ export function GuestShell({ venues, activeVenueId, memberId, children }: Props)
           >
             {children}
           </main>
+          {!hideNav && <GuestNav />}
           <GuestPushBootstrap memberId={memberId ?? null} />
           <GuestPermissionOnboarding />
         </div>
       </div>
-      {!hideNav && <GuestNav />}
     </>
   );
 }

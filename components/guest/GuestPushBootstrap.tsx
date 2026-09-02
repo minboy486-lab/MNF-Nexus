@@ -12,18 +12,30 @@ import {
 } from "@/lib/guest/push-client";
 
 const POINT_TXN_TYPES = new Set(["point_earn", "point_spend"]);
+const REFRESH_DELAY_MS = 1500;
 
 type Props = {
   memberId: string | null;
 };
 
-/** 손님 앱: SW 등록 + 포인트 거래 Realtime 알림 + Web Push 구독 유지. */
+/** 손님 앱: SW 등록 + 포인트 Realtime 갱신/알림 + Web Push 구독 유지. */
 export function GuestPushBootstrap({ memberId }: Props) {
   const router = useRouter();
   const routerRef = useRef(router);
   routerRef.current = router;
 
   const webPushActiveRef = useRef(false);
+  const refreshTimerRef = useRef<number | undefined>(undefined);
+
+  function scheduleGuestRefresh() {
+    if (refreshTimerRef.current !== undefined) {
+      window.clearTimeout(refreshTimerRef.current);
+    }
+    refreshTimerRef.current = window.setTimeout(() => {
+      refreshTimerRef.current = undefined;
+      routerRef.current.refresh();
+    }, REFRESH_DELAY_MS);
+  }
 
   async function refreshWebPushState() {
     webPushActiveRef.current = await isWebPushFullyEnabled();
@@ -35,6 +47,34 @@ export function GuestPushBootstrap({ memberId }: Props) {
       await syncExistingPushSubscriptionToServer();
       await refreshWebPushState();
     })();
+  }, []);
+
+  useEffect(() => {
+    function onServiceWorkerMessage(event: MessageEvent) {
+      const data = event.data as { type?: string; payload?: Record<string, string> } | null;
+      if (data?.type !== "mnf-point-push") return;
+
+      scheduleGuestRefresh();
+
+      if (Notification.permission !== "granted") return;
+      const payload = data.payload;
+      if (!payload?.txnType) return;
+
+      void showPointNotification({
+        txnType: payload.txnType,
+        amountWon: Number(payload.amountWon ?? 0),
+        note: payload.note,
+        txnId: payload.txnId,
+      });
+    }
+
+    navigator.serviceWorker?.addEventListener("message", onServiceWorkerMessage);
+    return () => {
+      navigator.serviceWorker?.removeEventListener("message", onServiceWorkerMessage);
+      if (refreshTimerRef.current !== undefined) {
+        window.clearTimeout(refreshTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -56,8 +96,8 @@ export function GuestPushBootstrap({ memberId }: Props) {
       if (row.member_id !== memberId) return;
       if (!row.txn_type || !POINT_TXN_TYPES.has(row.txn_type)) return;
 
-      // 앱이 열려 있으면 Realtime으로 즉시 표시 (테스트 알림과 동일 경로).
-      // 백그라운드는 서버 Web Push → SW.
+      scheduleGuestRefresh();
+
       const isForeground = document.visibilityState === "visible";
       if (
         Notification.permission === "granted" &&
@@ -70,7 +110,12 @@ export function GuestPushBootstrap({ memberId }: Props) {
           txnId: row.id,
         });
       }
-      routerRef.current.refresh();
+    }
+
+    function handleMemberUpdate(payload: { new: Record<string, unknown> }) {
+      const row = payload.new as { id?: string };
+      if (row.id !== memberId) return;
+      scheduleGuestRefresh();
     }
 
     function connect() {
@@ -91,6 +136,16 @@ export function GuestPushBootstrap({ memberId }: Props) {
           },
           handlePointInsert,
         )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "members",
+            filter: `id=eq.${memberId}`,
+          },
+          handleMemberUpdate,
+        )
         .subscribe((status) => {
           if (disposed) return;
           if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
@@ -103,7 +158,7 @@ export function GuestPushBootstrap({ memberId }: Props) {
       if (document.visibilityState !== "visible") return;
       await syncExistingPushSubscriptionToServer();
       await refreshWebPushState();
-      routerRef.current.refresh();
+      scheduleGuestRefresh();
       if (!channel || channel.state !== "joined") {
         connect();
       }
@@ -116,6 +171,7 @@ export function GuestPushBootstrap({ memberId }: Props) {
       disposed = true;
       document.removeEventListener("visibilitychange", onVisible);
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+      if (refreshTimerRef.current !== undefined) window.clearTimeout(refreshTimerRef.current);
       if (channel) void supabase.removeChannel(channel);
     };
   }, [memberId]);

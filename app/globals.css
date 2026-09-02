@@ -60,7 +60,9 @@ html.guest-route {
 
 html.guest-route body {
   margin: 0;
+  height: 100%;
   height: 100svh;
+  height: 100dvh;
   min-height: 0;
   width: 100%;
   overflow: hidden;
@@ -88,6 +90,9 @@ html.guest-route body {
   flex-direction: column;
   overflow: hidden;
   background: var(--background);
+  height: 100%;
+  height: 100svh;
+  height: 100dvh;
 }
 
 .guest-shell {
@@ -142,29 +147,20 @@ html.guest-route body {
   padding: 1rem 1rem 0.75rem;
 }
 .guest-shell__main--with-nav {
-  padding-bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: 0.75rem;
 }
 .guest-shell__main--no-nav {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
 }
 .guest-nav {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 200;
+  position: relative;
+  flex-shrink: 0;
+  z-index: 50;
   width: 100%;
   box-sizing: border-box;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   background: var(--surface-container-lowest);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-@media (display-mode: standalone), (display-mode: fullscreen) {
-  .guest-nav {
-    padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
-  }
 }
 .guest-nav__inner {
   display: grid;
