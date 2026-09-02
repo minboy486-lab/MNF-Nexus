@@ -18,9 +18,11 @@ export async function fetchServerVapidConfig(): Promise<ServerVapidConfig> {
       publicKey?: string;
       publicKeyHint?: string;
       pushConfigured?: boolean;
+      keysMatch?: boolean;
       adminConfigured?: boolean;
       missingPublic?: boolean;
       missingPrivate?: boolean;
+      derivedPublicKeyHint?: string | null;
       error?: string;
     };
 
