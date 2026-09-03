@@ -148,6 +148,7 @@ export async function sendPointChangePush(params: Params): Promise<PushSendResul
 
   if (sent === 0) {
     console.warn("[push] all deliveries failed for user", member.user_id);
+    await admin.from("push_subscriptions").delete().eq("user_id", member.user_id);
     return {
       ok: false,
       reason: "delivery_failed",

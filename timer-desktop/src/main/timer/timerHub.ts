@@ -12,6 +12,12 @@ import { normalizeGameSession, normalizeParticipant, syncCountersFromParticipant
 import { MONITOR_SLOTS } from "../../shared/types";
 import type { RemoteCounterOp } from "../../shared/remote";
 import { yeoksamOutputGameId } from "../../shared/floorPlan";
+import {
+  loadHubState,
+  saveHubState,
+  serializeHubState,
+  toHubMaps,
+} from "./sessionStore";
 
 export class TimerHub {
   /** gameId → 타이머 상태 */
@@ -28,6 +34,7 @@ export class TimerHub {
   private getControlWindow: () => BrowserWindow | null;
   private autoAdvanceInterval: ReturnType<typeof setInterval> | null = null;
   private remoteListeners = new Set<() => void>();
+  private persistTimer: ReturnType<typeof setTimeout> | null = null;
   /** 역삼 출력 PC: 컨트롤 PC 스냅샷. 있으면 UI·송출은 이 값을 쓴다. */
   private follow: { snapshot: AppSnapshot; timers: TableTimerState[] } | null = null;
 
@@ -38,6 +45,65 @@ export class TimerHub {
     this.getDisplayWindowsForSlot = deps.getDisplayWindowsForSlot;
     this.getControlWindow = deps.getControlWindow;
     this.startAutoAdvance();
+  }
+
+  /** 앱 시작 시 디스크에서 게임·타이머·배정을 복원한다. */
+  restoreFromDisk(): boolean {
+    if (this.follow) return false;
+    const saved = loadHubState();
+    if (!saved || (saved.sessions.length === 0 && saved.timers.length === 0)) {
+      return false;
+    }
+    const maps = toHubMaps(saved);
+    this.nextGameId = maps.nextGameId;
+    this.sessions = maps.sessions;
+    this.timers = maps.timers;
+    this.monitorAssignments = maps.monitorAssignments;
+    this.tableAssignments = maps.tableAssignments;
+    return this.sessions.size > 0;
+  }
+
+  /** 종료 직전 등 즉시 디스크에 기록 */
+  flushPersist(): void {
+    if (this.persistTimer !== null) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    this.writePersist();
+  }
+
+  private schedulePersist(): void {
+    if (this.follow) return;
+    if (this.persistTimer !== null) clearTimeout(this.persistTimer);
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = null;
+      this.writePersist();
+    }, 400);
+  }
+
+  private writePersist(): void {
+    if (this.follow) return;
+    try {
+      const monitorAssignments: Record<number, number | null> = {};
+      for (const slot of MONITOR_SLOTS) {
+        monitorAssignments[slot] = this.monitorAssignments.get(slot) ?? null;
+      }
+      const tableAssignments: Record<number, number | null> = {};
+      for (let t = 1; t <= 6; t++) {
+        tableAssignments[t] = this.tableAssignments.get(t as TableSlot) ?? null;
+      }
+      saveHubState(
+        serializeHubState({
+          nextGameId: this.nextGameId,
+          sessions: Array.from(this.sessions.values()),
+          timers: Array.from(this.timers.values()),
+          monitorAssignments,
+          tableAssignments,
+        }),
+      );
+    } catch (err) {
+      console.error("[hub-session] save failed", err);
+    }
   }
 
   private syncTotalPlayTime(
@@ -99,6 +165,10 @@ export class TimerHub {
     if (this.autoAdvanceInterval !== null) {
       clearInterval(this.autoAdvanceInterval);
       this.autoAdvanceInterval = null;
+    }
+    if (this.persistTimer !== null) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = null;
     }
   }
 
@@ -517,6 +587,7 @@ export class TimerHub {
       win.webContents.send("timer:snapshot", this.getAllTimers());
     }
     this.notifyRemote();
+    this.schedulePersist();
   }
 
   hydrateNewDisplay(slot: MonitorSlot): void {

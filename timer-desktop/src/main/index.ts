@@ -28,6 +28,7 @@ import { TimerHub } from "./timer/timerHub";
 import { WindowManager } from "./windows/windowManager";
 import { setupAutoUpdater } from "./updater";
 import { RemoteServer } from "./remote/server";
+import { getConfiguredYeoksamRole } from "./supabase/venue";
 import { shopTimerThemeEqual, shopTimerThemeFromConfig, withShopTimerTheme } from "../shared/timerLook";
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
@@ -88,6 +89,12 @@ app.whenReady().then(async () => {
   } else {
     await windowManager.syncWindows();
   }
+
+  if (getConfiguredYeoksamRole() !== "output" && timerHub.restoreFromDisk()) {
+    timerHub.pushSnapshotToControl();
+    timerHub.pushAllMonitors();
+  }
+
   remoteServer.broadcastShopTimerTheme();
 
   app.on("activate", async () => {
@@ -98,6 +105,7 @@ app.whenReady().then(async () => {
 });
 
 app.on("before-quit", () => {
+  timerHub.flushPersist();
   flushPendingSoundVolume(windowManager, remoteServer);
   stopLanView();
   windowManager.setQuitting(true);

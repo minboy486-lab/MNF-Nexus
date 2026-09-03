@@ -157,14 +157,6 @@ export function GuestPushSettings() {
         return;
       }
 
-      const refreshed = await forceRefreshGuestPushNotifications();
-      if ("error" in refreshed) {
-        setError(refreshed.error);
-        setStatus("off");
-        return;
-      }
-      setStatus("on");
-
       const res = await fetch("/api/push/test", { method: "POST" });
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;

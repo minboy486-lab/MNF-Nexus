@@ -22,6 +22,9 @@ async function persistSubscription(sub: PushSubscription): Promise<EnablePushRes
     return { error: "구독에 실패했습니다." };
   }
 
+  const cleared = await removeAllPushSubscriptions();
+  if ("error" in cleared) return { error: cleared.error };
+
   const result = await savePushSubscription({
     endpoint: json.endpoint,
     keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
@@ -119,6 +122,16 @@ export async function syncExistingPushSubscriptionToServer(): Promise<void> {
       /* ignore */
     }
     await removeAllPushSubscriptions();
+    return;
+  }
+
+  const onServer = await hasServerPushSubscription(existing.endpoint);
+  if (!onServer) {
+    try {
+      await existing.unsubscribe();
+    } catch {
+      /* ignore */
+    }
     return;
   }
 
