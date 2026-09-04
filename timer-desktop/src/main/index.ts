@@ -23,7 +23,7 @@ import { join, resolve } from "node:path";
 import { app, BrowserWindow, screen } from "electron";
 import { loadConfig, saveConfig } from "./config/configStore";
 import { enrichMappingsWithCurrentDisplays } from "./screen/displayMapper";
-import { flushPendingSoundVolume, registerIpcHandlers, stopLanView } from "./ipc/handlers";
+import { flushPendingSoundVolume, flushWindowManagerConfig, registerIpcHandlers, stopLanView } from "./ipc/handlers";
 import { TimerHub } from "./timer/timerHub";
 import { WindowManager } from "./windows/windowManager";
 import { setupAutoUpdater } from "./updater";
@@ -106,7 +106,7 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   timerHub.flushPersist();
-  flushPendingSoundVolume(windowManager, remoteServer);
+  flushWindowManagerConfig(windowManager, remoteServer);
   stopLanView();
   windowManager.setQuitting(true);
   remoteServer.stop();

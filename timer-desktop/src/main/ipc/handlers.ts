@@ -76,6 +76,16 @@ function saveLocalBlinds(data: BlindStructureOption[]): void {
   writeFileSync(localBlindsPath(), JSON.stringify(data, null, 2), "utf-8");
 }
 
+function mergeBlindStructures(
+  remote: BlindStructureOption[],
+  local: BlindStructureOption[],
+): BlindStructureOption[] {
+  const byId = new Map<string, BlindStructureOption>();
+  for (const item of local) byId.set(item.id, item);
+  for (const item of remote) byId.set(item.id, item);
+  return Array.from(byId.values());
+}
+
 function isMonitorSlot(v: unknown): v is MonitorSlot {
   return typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 6;
 }
@@ -110,17 +120,25 @@ function cancelLookSaveTimers(): void {
   }
 }
 
-/** 디스크에 방금 쓴 테마 목록이 메모리보다 최신일 수 있어, 저장 시 디스크를 우선 병합합니다. */
+/** 디스크·메모리 설정을 병합. 실행 중인 WindowManager(메모리)가 테마·프리셋의 기준. */
 function baseConfigForPersist(wm: WindowManager): AppConfig | null {
   const disk = loadConfig();
   const mem = wm.getConfig();
   if (!disk && !mem) return null;
-  if (!disk) return { ...mem!, soundVolume: wm.getSoundVolume() };
-  if (!mem) return { ...disk, soundVolume: wm.getSoundVolume() };
+  const soundVolume = wm.getSoundVolume();
+  if (!disk) return { ...mem!, soundVolume };
+  if (!mem) return { ...disk, soundVolume };
+
   return {
-    ...mem,
     ...disk,
-    soundVolume: wm.getSoundVolume(),
+    ...mem,
+    soundVolume,
+    timerLook: wm.getTimerLook(),
+    controlLook: wm.getControlLook(),
+    savedTimerThemes: mem.savedTimerThemes ?? disk.savedTimerThemes,
+    savedControlThemes: mem.savedControlThemes ?? disk.savedControlThemes,
+    activeTimerThemeId: mem.activeTimerThemeId ?? disk.activeTimerThemeId,
+    activeControlThemeId: mem.activeControlThemeId ?? disk.activeControlThemeId,
     mappings: mem.mappings,
     controlDisplayId: mem.controlDisplayId,
     controlOutputSlot: mem.controlOutputSlot,
@@ -162,6 +180,13 @@ export function flushPendingSoundVolume(wm: WindowManager, remote?: RemoteServer
     controlLookSaveTimer = null;
     persistControlLook(wm, remote);
   }
+}
+
+/** 종료 시 테마·프리셋·디자인을 config.json에 최종 반영 */
+export function flushWindowManagerConfig(wm: WindowManager, remote?: RemoteServer): void {
+  flushPendingSoundVolume(wm, remote);
+  const latest = baseConfigForPersist(wm);
+  if (latest) saveConfig(latest);
 }
 
 let lanView: LanViewClient | null = null;
@@ -456,8 +481,10 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     }
     if (remote && remote.length > 0) {
       console.log("[ipc] blinds:list 원격:", remote.length, "개");
-      try { saveLocalBlinds(remote); } catch {}
-      return remote;
+      const local = loadLocalBlinds();
+      const merged = mergeBlindStructures(remote, local);
+      try { saveLocalBlinds(merged); } catch {}
+      return merged;
     }
     // 원격 실패/타임아웃 → 로컬 캐시 반환
     const local = loadLocalBlinds();
