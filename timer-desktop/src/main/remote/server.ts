@@ -369,15 +369,20 @@ export class RemoteServer {
   }
 
   private applyIncomingShopTheme(raw: unknown): boolean {
-    if (!this.isYeoksamFollowerPc()) return false;
     const pack = normalizeShopTimerTheme(raw);
     if (!pack || !this.shopTheme) return false;
     this.applyingShopTheme = true;
+    let changed = false;
     try {
-      return this.shopTheme.apply(pack);
+      changed = this.shopTheme.apply(pack);
     } finally {
       this.applyingShopTheme = false;
     }
+    // 컨트롤이 출력 PC 테마를 병합했으면 매장 전체에 다시 전파
+    if (changed && !this.isYeoksamFollowerPc()) {
+      this.broadcastShopTimerTheme();
+    }
+    return changed;
   }
 
   broadcastShopTimerTheme(): void {
@@ -737,9 +742,7 @@ export class RemoteServer {
     if (msg.type === "peer_timer_theme") {
       const pack = normalizeShopTimerTheme(msg);
       if (!pack) return;
-      if (this.isYeoksamFollowerPc()) {
-        this.applyIncomingShopTheme(pack);
-      }
+      this.applyIncomingShopTheme(pack);
       return;
     }
 

@@ -312,6 +312,22 @@ export function normalizeSavedControlThemes(raw: unknown, fallbackTheme: UiTheme
   return out;
 }
 
+/** id 기준 병합. incoming이 같은 id면 덮어씀. incoming이 비면 local 유지. */
+export function mergeSavedControlThemes(
+  local: unknown,
+  incoming: unknown,
+  fallbackTheme: UiThemeId,
+): SavedControlTheme[] {
+  const a = normalizeSavedControlThemes(local, fallbackTheme);
+  const b = normalizeSavedControlThemes(incoming, fallbackTheme);
+  if (b.length === 0) return a;
+  if (a.length === 0) return b;
+  const byId = new Map<string, SavedControlTheme>();
+  for (const t of a) byId.set(t.id, t);
+  for (const t of b) byId.set(t.id, t);
+  return Array.from(byId.values()).slice(0, MAX_SAVED_CONTROL_THEMES);
+}
+
 export function resolveActiveControlThemeId(
   config:
     | Pick<AppConfig, "controlTheme" | "theme" | "savedControlThemes" | "activeControlThemeId" | "controlLook">

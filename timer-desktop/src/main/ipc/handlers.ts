@@ -129,14 +129,21 @@ function baseConfigForPersist(wm: WindowManager): AppConfig | null {
   if (!disk) return { ...mem!, soundVolume };
   if (!mem) return { ...disk, soundVolume };
 
+  const pickThemeList = <T>(memList: T[] | undefined, diskList: T[] | undefined): T[] | undefined => {
+    if (Array.isArray(memList) && memList.length > 0) return memList;
+    if (Array.isArray(diskList) && diskList.length > 0) return diskList;
+    if (Array.isArray(memList)) return memList;
+    return diskList;
+  };
+
   return {
     ...disk,
     ...mem,
     soundVolume,
     timerLook: wm.getTimerLook(),
     controlLook: wm.getControlLook(),
-    savedTimerThemes: mem.savedTimerThemes ?? disk.savedTimerThemes,
-    savedControlThemes: mem.savedControlThemes ?? disk.savedControlThemes,
+    savedTimerThemes: pickThemeList(mem.savedTimerThemes, disk.savedTimerThemes),
+    savedControlThemes: pickThemeList(mem.savedControlThemes, disk.savedControlThemes),
     activeTimerThemeId: mem.activeTimerThemeId ?? disk.activeTimerThemeId,
     activeControlThemeId: mem.activeControlThemeId ?? disk.activeControlThemeId,
     mappings: mem.mappings,

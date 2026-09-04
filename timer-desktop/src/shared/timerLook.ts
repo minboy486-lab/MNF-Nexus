@@ -1,5 +1,6 @@
 import type { TableTimerState } from "@mnf/timer/types";
 import {
+  mergeSavedControlThemes,
   normalizeControlLook,
   normalizeSavedControlThemes,
   resolveActiveControlThemeId,
@@ -390,6 +391,22 @@ export function normalizeSavedTimerThemes(raw: unknown, fallbackTheme: UiThemeId
   return out;
 }
 
+/** id 기준 병합. incoming이 같은 id면 덮어씀. incoming이 비면 local 유지. */
+export function mergeSavedTimerThemes(
+  local: unknown,
+  incoming: unknown,
+  fallbackTheme: UiThemeId,
+): SavedTimerTheme[] {
+  const a = normalizeSavedTimerThemes(local, fallbackTheme);
+  const b = normalizeSavedTimerThemes(incoming, fallbackTheme);
+  if (b.length === 0) return a;
+  if (a.length === 0) return b;
+  const byId = new Map<string, SavedTimerTheme>();
+  for (const t of a) byId.set(t.id, t);
+  for (const t of b) byId.set(t.id, t);
+  return Array.from(byId.values()).slice(0, MAX_SAVED_TIMER_THEMES);
+}
+
 export function resolveActiveTimerThemeId(
   config:
     | Pick<AppConfig, "timerTheme" | "theme" | "savedTimerThemes" | "activeTimerThemeId" | "timerLook">
@@ -571,14 +588,38 @@ export function shopTimerThemeEqual(a: ShopTimerThemePayload, b: ShopTimerThemeP
 }
 
 export function withShopTimerTheme(config: AppConfig, pack: ShopTimerThemePayload): AppConfig {
+  const savedTimerThemes = mergeSavedTimerThemes(
+    config.savedTimerThemes,
+    pack.savedTimerThemes,
+    pack.timerTheme,
+  );
+  const savedControlThemes = mergeSavedControlThemes(
+    config.savedControlThemes,
+    pack.savedControlThemes,
+    pack.controlTheme,
+  );
+
+  const activeTimerThemeId = resolveActiveTimerThemeId({
+    timerTheme: pack.timerTheme,
+    savedTimerThemes,
+    timerLook: pack.timerLook,
+    activeTimerThemeId: pack.activeTimerThemeId || config.activeTimerThemeId,
+  });
+  const activeControlThemeId = resolveActiveControlThemeId({
+    controlTheme: pack.controlTheme,
+    savedControlThemes,
+    controlLook: pack.controlLook,
+    activeControlThemeId: pack.activeControlThemeId || config.activeControlThemeId,
+  });
+
   return {
     ...withUiThemes(config, { timerTheme: pack.timerTheme, controlTheme: pack.controlTheme }),
     timerLook: pack.timerLook,
-    savedTimerThemes: pack.savedTimerThemes,
-    activeTimerThemeId: pack.activeTimerThemeId,
+    savedTimerThemes,
+    activeTimerThemeId,
     controlLook: pack.controlLook,
-    savedControlThemes: pack.savedControlThemes,
-    activeControlThemeId: pack.activeControlThemeId,
+    savedControlThemes,
+    activeControlThemeId,
   };
 }
 
