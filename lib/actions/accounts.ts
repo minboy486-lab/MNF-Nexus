@@ -1,7 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { canManageAccounts } from "@/lib/auth/roles";
+import {
+  ACCOUNT_MANAGE_ROLES,
+  assignableRolesFor,
+  canAssignAccountRole,
+  canManageAccounts,
+  canSeeAllVenueAccounts,
+  canViewAccountRole,
+  isScreenRole,
+  venuesIntersect,
+} from "@/lib/auth/roles";
 import { getProfileRole } from "@/lib/auth/profile";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -13,8 +22,8 @@ import {
   normalizeStaffLoginId,
 } from "@/lib/auth/staff-login";
 import type { UserRole } from "@/lib/types";
-import { PROFILE_ROLES } from "@/lib/auth/roles";
 import { syncStaffRowsForVenues } from "@/lib/staff/ensure-row";
+import { listAccessibleVenueIds } from "@/lib/venue/active";
 import {
   defaultVenuesForRole,
   isKnownVenueId,
@@ -30,19 +39,31 @@ export type AccountRow = {
   last_sign_in_at: string | null;
 };
 
-type AccountAdminGate =
-  | { error: string }
-  | { user: { id: string } };
+export type AccountViewerContext = {
+  role: UserRole;
+  venueIds: string[];
+  canSeeAllVenues: boolean;
+  assignableRoles: UserRole[];
+};
 
-async function requireAccountAdmin(): Promise<AccountAdminGate> {
+type AccountGate =
+  | { error: string }
+  | {
+      user: { id: string };
+      role: UserRole;
+      venueIds: string[];
+      canSeeAllVenues: boolean;
+    };
+
+async function requireAccountManager(): Promise<AccountGate> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "로그인이 필요합니다." };
-  const role = await getProfileRole(user.id);
+  const role = (await getProfileRole(user.id)) as UserRole | null;
   if (!canManageAccounts(role)) {
-    return { error: "관리자만 계정을 관리할 수 있습니다." };
+    return { error: "관리자 또는 매니저만 계정을 관리할 수 있습니다." };
   }
   if (!isSupabaseAdminConfigured()) {
     return {
@@ -50,17 +71,28 @@ async function requireAccountAdmin(): Promise<AccountAdminGate> {
         "SUPABASE_SERVICE_ROLE_KEY가 .env.local에 없습니다. Supabase 대시보드 → Settings → API에서 service_role 키를 추가하세요.",
     };
   }
-  return { user: { id: user.id } };
+  const venueIds = await listAccessibleVenueIds();
+  return {
+    user: { id: user.id },
+    role: (role ?? "staff") as UserRole,
+    venueIds,
+    canSeeAllVenues: canSeeAllVenueAccounts(role, venueIds),
+  };
 }
 
 function normalizeAccountVenues(
   role: UserRole,
   requested: string[] | undefined,
+  actorVenueIds: string[],
 ): { venueIds: string[] } | { error: string } {
   if (role === "guest") return { venueIds: [] };
   const venueIds = [...new Set((requested ?? []).filter(isKnownVenueId))];
   if (venueIds.length === 0) {
     return { error: "지점을 하나 이상 선택하세요." };
+  }
+  const allowed = new Set(actorVenueIds.filter(isKnownVenueId));
+  if (venueIds.some((id) => !allowed.has(id))) {
+    return { error: "본인에게 없는 지점 권한은 부여할 수 없습니다." };
   }
   return { venueIds };
 }
@@ -80,10 +112,49 @@ async function replaceProfileVenues(
   return {};
 }
 
+async function loadTargetVenues(
+  admin: ReturnType<typeof createAdminClient>,
+  profileId: string,
+  role: string | null | undefined,
+): Promise<string[]> {
+  const { data: memberships } = await admin
+    .from("profile_venues")
+    .select("venue_id")
+    .eq("profile_id", profileId);
+  const ids = (memberships ?? [])
+    .map((r) => r.venue_id as string)
+    .filter(isKnownVenueId);
+  if (ids.length) return ids;
+  return defaultVenuesForRole(role);
+}
+
+function canManageTargetAccount(
+  gate: Exclude<AccountGate, { error: string }>,
+  targetRole: string | null | undefined,
+  targetVenueIds: string[],
+): boolean {
+  if (!canViewAccountRole(gate.role, targetRole)) return false;
+  if (gate.canSeeAllVenues) return true;
+  return venuesIntersect(gate.venueIds, targetVenueIds);
+}
+
+export async function getAccountViewerContext(): Promise<
+  AccountViewerContext | { error: string }
+> {
+  const gate = await requireAccountManager();
+  if ("error" in gate) return { error: gate.error };
+  return {
+    role: gate.role,
+    venueIds: gate.venueIds,
+    canSeeAllVenues: gate.canSeeAllVenues,
+    assignableRoles: assignableRolesFor(gate.role),
+  };
+}
+
 export async function listAccounts(): Promise<
   { accounts: AccountRow[] } | { error: string }
 > {
-  const gate = await requireAccountAdmin();
+  const gate = await requireAccountManager();
   if ("error" in gate) return { error: gate.error };
 
   const admin = createAdminClient();
@@ -124,23 +195,32 @@ export async function listAccounts(): Promise<
       p?.login_id ??
       (typeof u.user_metadata?.login_id === "string" ? u.user_metadata.login_id : null) ??
       displayLoginFromAuthEmail(u.email);
+    const role = (p?.role ?? "guest") as UserRole;
+    const venue_ids =
+      venuesByProfile.get(u.id)?.length
+        ? (venuesByProfile.get(u.id) as string[])
+        : defaultVenuesForRole(role);
 
     return {
       id: u.id,
       login_id: loginId,
       display_name: p?.display_name ?? metaName,
-      role: (p?.role ?? "guest") as UserRole,
-      venue_ids:
-        venuesByProfile.get(u.id)?.length
-          ? (venuesByProfile.get(u.id) as string[])
-          : defaultVenuesForRole(p?.role ?? "guest"),
+      role,
+      venue_ids,
       created_at: p?.created_at ?? u.created_at,
       last_sign_in_at: u.last_sign_in_at ?? null,
     };
   });
 
-  accounts.sort((a, b) => a.login_id.localeCompare(b.login_id, "ko"));
-  return { accounts: accounts.filter((a) => a.role !== "guest") };
+  const filtered = accounts.filter((a) => {
+    if (a.role === "guest" || isScreenRole(a.role)) return false;
+    if (!canViewAccountRole(gate.role, a.role)) return false;
+    if (gate.canSeeAllVenues) return true;
+    return venuesIntersect(gate.venueIds, a.venue_ids);
+  });
+
+  filtered.sort((a, b) => a.login_id.localeCompare(b.login_id, "ko"));
+  return { accounts: filtered };
 }
 
 export async function createAccount(payload: {
@@ -150,7 +230,7 @@ export async function createAccount(payload: {
   role: UserRole;
   venue_ids?: string[];
 }): Promise<{ success: true } | { error: string }> {
-  const gate = await requireAccountAdmin();
+  const gate = await requireAccountManager();
   if ("error" in gate) return { error: gate.error };
 
   const loginId = normalizeStaffLoginId(payload.login_id);
@@ -164,13 +244,16 @@ export async function createAccount(payload: {
   if (!isValidStaffLoginId(loginId)) {
     return { error: "아이디는 영문 소문자·숫자·_(3~32자)만 사용할 수 있습니다." };
   }
-  if (!PROFILE_ROLES.includes(role)) {
-    return { error: "유효하지 않은 권한입니다." };
+  if (!ACCOUNT_MANAGE_ROLES.includes(role) || !canAssignAccountRole(gate.role, role)) {
+    return { error: "부여할 수 없는 권한입니다." };
+  }
+  if (isScreenRole(role)) {
+    return { error: "스크린 계정은 더 이상 사용할 수 없습니다." };
   }
   if (role === "guest") {
     return { error: "손님 계정은 손님 관리 → 계정 관리에서 생성하세요." };
   }
-  const venues = normalizeAccountVenues(role, payload.venue_ids);
+  const venues = normalizeAccountVenues(role, payload.venue_ids, gate.venueIds);
   if ("error" in venues) return { error: venues.error };
 
   const admin = createAdminClient();
@@ -228,12 +311,15 @@ export async function updateAccount(payload: {
   password?: string;
   venue_ids?: string[];
 }): Promise<{ success: true } | { error: string }> {
-  const gate = await requireAccountAdmin();
+  const gate = await requireAccountManager();
   if ("error" in gate) return { error: gate.error };
 
   const { userId, role, display_name, password } = payload;
-  if (!PROFILE_ROLES.includes(role)) {
-    return { error: "유효하지 않은 권한입니다." };
+  if (!ACCOUNT_MANAGE_ROLES.includes(role) || !canAssignAccountRole(gate.role, role)) {
+    return { error: "부여할 수 없는 권한입니다." };
+  }
+  if (isScreenRole(role)) {
+    return { error: "스크린 계정은 더 이상 사용할 수 없습니다." };
   }
 
   const admin = createAdminClient();
@@ -242,17 +328,27 @@ export async function updateAccount(payload: {
     .select("role")
     .eq("id", userId)
     .maybeSingle();
-  if (existingProfile?.role === "guest") {
+  if (!existingProfile) return { error: "계정을 찾을 수 없습니다." };
+  if (existingProfile.role === "guest") {
     return { error: "손님 계정은 손님 관리 → 계정 관리에서 수정하세요." };
+  }
+  if (isScreenRole(existingProfile.role)) {
+    return { error: "스크린 계정은 더 이상 수정할 수 없습니다." };
+  }
+
+  const targetVenues = await loadTargetVenues(admin, userId, existingProfile.role);
+  if (!canManageTargetAccount(gate, existingProfile.role, targetVenues)) {
+    return { error: "이 계정을 수정할 권한이 없습니다." };
   }
 
   if (role === "guest") {
     return { error: "손님 계정은 손님 관리 → 계정 관리에서 수정하세요." };
   }
-  const venues = normalizeAccountVenues(role, payload.venue_ids);
+  const venues = normalizeAccountVenues(role, payload.venue_ids, gate.venueIds);
   if ("error" in venues) return { error: venues.error };
-  if (userId === gate.user.id && role !== "admin") {
-    return { error: "본인 계정의 관리자 권한은 해제할 수 없습니다." };
+
+  if (userId === gate.user.id && role !== gate.role) {
+    return { error: "본인 계정의 권한은 변경할 수 없습니다." };
   }
 
   if (password && password.length >= 6) {
@@ -297,7 +393,7 @@ export async function updateAccount(payload: {
 export async function deleteAccount(userId: string): Promise<
   { success: true } | { error: string }
 > {
-  const gate = await requireAccountAdmin();
+  const gate = await requireAccountManager();
   if ("error" in gate) return { error: gate.error };
 
   if (userId === gate.user.id) {
@@ -305,6 +401,18 @@ export async function deleteAccount(userId: string): Promise<
   }
 
   const admin = createAdminClient();
+  const { data: existingProfile } = await admin
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+  if (!existingProfile) return { error: "계정을 찾을 수 없습니다." };
+
+  const targetVenues = await loadTargetVenues(admin, userId, existingProfile.role);
+  if (!canManageTargetAccount(gate, existingProfile.role, targetVenues)) {
+    return { error: "이 계정을 삭제할 권한이 없습니다." };
+  }
+
   const { error } = await admin.auth.admin.deleteUser(userId);
   if (error) return { error: error.message };
 

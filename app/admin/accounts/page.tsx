@@ -1,10 +1,16 @@
 import { redirect } from "next/navigation";
 import { AccountsClient } from "@/components/accounts/AccountsClient";
 import { AdminTopBar } from "@/components/admin/AdminTopBar";
-import { canManageAccounts } from "@/lib/auth/roles";
+import { assignableRolesFor, canManageAccounts } from "@/lib/auth/roles";
 import { getCurrentUserRole } from "@/lib/auth/session";
-import { listAccounts, type AccountRow } from "@/lib/actions/accounts";
+import {
+  getAccountViewerContext,
+  listAccounts,
+  type AccountRow,
+  type AccountViewerContext,
+} from "@/lib/actions/accounts";
 import { isSupabaseAdminConfigured } from "@/lib/supabase/env";
+import type { UserRole } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -15,11 +21,26 @@ export default async function AccountsPage() {
   }
 
   const configured = isSupabaseAdminConfigured();
-  const listResult = configured ? await listAccounts() : null;
-  const accounts: AccountRow[] =
-    listResult && "accounts" in listResult ? listResult.accounts : [];
-  const configError =
-    listResult && "error" in listResult ? listResult.error : undefined;
+  let viewer: AccountViewerContext = {
+    role: (role as UserRole) ?? "manager",
+    venueIds: [],
+    canSeeAllVenues: false,
+    assignableRoles: assignableRolesFor(role),
+  };
+  let accounts: AccountRow[] = [];
+  let configError: string | undefined;
+
+  if (configured) {
+    const viewerResult = await getAccountViewerContext();
+    if ("error" in viewerResult) {
+      configError = viewerResult.error;
+    } else {
+      viewer = viewerResult;
+      const listResult = await listAccounts();
+      if ("error" in listResult) configError = listResult.error;
+      else accounts = listResult.accounts;
+    }
+  }
 
   return (
     <>
@@ -31,6 +52,7 @@ export default async function AccountsPage() {
         accounts={accounts}
         configured={configured}
         configError={configError}
+        viewer={viewer}
       />
     </>
   );

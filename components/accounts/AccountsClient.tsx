@@ -8,17 +8,19 @@ import {
   deleteAccount,
   updateAccount,
   type AccountRow,
+  type AccountViewerContext,
 } from "@/lib/actions/accounts";
 import { updateVenueControlPin } from "@/lib/actions/venue-context";
-import { PROFILE_ROLE_LABELS, PROFILE_ROLES } from "@/lib/auth/roles";
+import { PROFILE_ROLE_LABELS } from "@/lib/auth/roles";
 import type { UserRole } from "@/lib/types";
 import { formatDateTimeKST } from "@/lib/utils/format";
-import { KNOWN_VENUES, YEOKSAM_VENUE_ID, venueById } from "@/lib/venue/constants";
+import { KNOWN_VENUES, venueById, type KnownVenue } from "@/lib/venue/constants";
 
 type Props = {
   accounts: AccountRow[];
   configured: boolean;
   configError?: string;
+  viewer: AccountViewerContext;
 };
 
 type FormState = {
@@ -29,16 +31,21 @@ type FormState = {
   venue_ids: string[];
 };
 
-const emptyForm: FormState = {
-  login_id: "",
-  password: "",
-  display_name: "",
-  role: "staff",
-  venue_ids: [YEOKSAM_VENUE_ID],
-};
-
 function roleNeedsVenues(role: UserRole): boolean {
-  return role === "admin" || role === "manager" || role === "staff" || role === "screen";
+  return role === "admin" || role === "manager" || role === "staff";
+}
+
+function defaultForm(viewer: AccountViewerContext): FormState {
+  const defaultRole = viewer.assignableRoles.includes("staff")
+    ? "staff"
+    : (viewer.assignableRoles[0] ?? "staff");
+  return {
+    login_id: "",
+    password: "",
+    display_name: "",
+    role: defaultRole,
+    venue_ids: viewer.venueIds[0] ? [viewer.venueIds[0]] : [],
+  };
 }
 
 function AccountFormModal({
@@ -48,6 +55,7 @@ function AccountFormModal({
   newPassword,
   pending,
   roleOptions,
+  venueOptions,
   onClose,
   onSubmit,
   onFormChange,
@@ -59,6 +67,7 @@ function AccountFormModal({
   newPassword: string;
   pending: boolean;
   roleOptions: { value: UserRole; label: string }[];
+  venueOptions: KnownVenue[];
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => void;
   onFormChange: (patch: Partial<FormState>) => void;
@@ -94,28 +103,28 @@ function AccountFormModal({
         autoComplete="off"
         className="space-y-5 pb-1"
       >
-          {mode === "create" && (
-            <label>
-              <span className="app-modal-label">아이디</span>
-              <input
-                type="text"
-                required
-                autoComplete="off"
-                placeholder="staff01"
-                className="app-modal-field"
-                minLength={3}
-                maxLength={32}
-                pattern="[a-zA-Z0-9_]+"
-                value={form.login_id}
-                onChange={(e) =>
-                  onFormChange({ login_id: e.target.value.toLowerCase() })
-                }
-              />
-              <p className="text-[10px] text-on-surface-variant/70 mt-1">
-                영문 소문자·숫자·_ (3~32자)
-              </p>
-            </label>
-          )}
+        {mode === "create" && (
+          <label>
+            <span className="app-modal-label">아이디</span>
+            <input
+              type="text"
+              required
+              autoComplete="off"
+              placeholder="staff01"
+              className="app-modal-field"
+              minLength={3}
+              maxLength={32}
+              pattern="[a-zA-Z0-9_]+"
+              value={form.login_id}
+              onChange={(e) =>
+                onFormChange({ login_id: e.target.value.toLowerCase() })
+              }
+            />
+            <p className="text-[10px] text-on-surface-variant/70 mt-1">
+              영문 소문자·숫자·_ (3~32자)
+            </p>
+          </label>
+        )}
 
         <label>
           <span className="app-modal-label">표시 이름</span>
@@ -150,7 +159,7 @@ function AccountFormModal({
           <fieldset className="space-y-2.5">
             <legend className="app-modal-label">지점</legend>
             <div className="flex flex-wrap gap-2">
-              {KNOWN_VENUES.map((v) => {
+              {venueOptions.map((v) => {
                 const checked = form.venue_ids.includes(v.id);
                 return (
                   <button
@@ -171,7 +180,9 @@ function AccountFormModal({
               })}
             </div>
             <p className="text-xs text-on-surface-variant">
-              복수 지점 권한이 있으면 관리 화면에서 지점을 전환할 수 있습니다.
+              {venueOptions.length > 1
+                ? "복수 지점 권한이 있으면 관리 화면에서 지점을 전환할 수 있습니다."
+                : "본인 지점 권한만 부여할 수 있습니다."}
             </p>
           </fieldset>
         )}
@@ -205,10 +216,18 @@ function AccountFormModal({
   );
 }
 
-function ControlPinCard({ disabled }: { disabled: boolean }) {
-  const [venueId, setVenueId] = useState(YEOKSAM_VENUE_ID);
+function ControlPinCard({
+  disabled,
+  venueOptions,
+}: {
+  disabled: boolean;
+  venueOptions: KnownVenue[];
+}) {
+  const [venueId, setVenueId] = useState(venueOptions[0]?.id ?? "");
   const [pin, setPin] = useState("");
   const [pending, setPending] = useState(false);
+
+  if (!venueOptions.length) return null;
 
   async function save() {
     setPending(true);
@@ -237,7 +256,7 @@ function ControlPinCard({ disabled }: { disabled: boolean }) {
             disabled={disabled || pending}
             onChange={(e) => setVenueId(e.target.value)}
           >
-            {KNOWN_VENUES.map((v) => (
+            {venueOptions.map((v) => (
               <option key={v.id} value={v.id}>
                 {v.name}
               </option>
@@ -271,35 +290,44 @@ function ControlPinCard({ disabled }: { disabled: boolean }) {
   );
 }
 
-export function AccountsClient({ accounts, configured, configError }: Props) {
+export function AccountsClient({ accounts, configured, configError, viewer }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [modal, setModal] = useState<"create" | { edit: AccountRow } | null>(null);
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const [form, setForm] = useState<FormState>(() => defaultForm(viewer));
   const [newPassword, setNewPassword] = useState("");
+
+  const venueOptions = useMemo(
+    () => KNOWN_VENUES.filter((v) => viewer.venueIds.includes(v.id)),
+    [viewer.venueIds],
+  );
 
   const roleOptions = useMemo(
     () =>
-      PROFILE_ROLES.filter((r) => r !== "guest").map((r) => ({
+      viewer.assignableRoles.map((r) => ({
         value: r,
         label: PROFILE_ROLE_LABELS[r],
       })),
-    [],
+    [viewer.assignableRoles],
   );
 
   function openCreate() {
-    setForm(emptyForm);
+    setForm(defaultForm(viewer));
     setNewPassword("");
     setModal("create");
   }
 
   function openEdit(row: AccountRow) {
+    const role = (
+      viewer.assignableRoles.includes(row.role) ? row.role : viewer.assignableRoles[0] ?? "staff"
+    ) as UserRole;
+    const venue_ids = (row.venue_ids ?? []).filter((id) => viewer.venueIds.includes(id));
     setForm({
       login_id: row.login_id,
       password: "",
       display_name: row.display_name ?? "",
-      role: row.role === "counter" ? "screen" : row.role,
-      venue_ids: row.venue_ids?.length ? row.venue_ids : [YEOKSAM_VENUE_ID],
+      role,
+      venue_ids: venue_ids.length ? venue_ids : viewer.venueIds[0] ? [viewer.venueIds[0]] : [],
     });
     setNewPassword("");
     setModal({ edit: row });
@@ -307,7 +335,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
 
   function closeModal() {
     setModal(null);
-    setForm(emptyForm);
+    setForm(defaultForm(viewer));
     setNewPassword("");
   }
 
@@ -401,12 +429,15 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
             로그인 계정 <span className="text-on-surface font-semibold">{accounts.length}</span>개
           </p>
           <p className="text-xs text-on-surface-variant/80 mt-0.5">
-            관리자 · 매니저 · 직원 · 스크린 (손님은 손님 관리 → 계정 관리)
+            {viewer.role === "admin"
+              ? "관리자 · 매니저 · 직원"
+              : "매니저 · 직원 (본인 지점)"}
+            {viewer.canSeeAllVenues ? " · 전체 지점" : ""}
           </p>
         </div>
         <button
           type="button"
-          disabled={!configured || pending}
+          disabled={!configured || pending || !viewer.assignableRoles.length}
           onClick={openCreate}
           className="btn-primary h-10 px-5 rounded-xl text-sm disabled:opacity-50 inline-flex items-center gap-2"
         >
@@ -415,7 +446,9 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
         </button>
       </div>
 
-      <ControlPinCard disabled={!configured || pending} />
+      {viewer.role === "admin" && (
+        <ControlPinCard disabled={!configured || pending} venueOptions={venueOptions} />
+      )}
 
       <div className="app-panel-solid rounded-2xl overflow-hidden flex-1 min-h-0 flex flex-col">
         <div className="overflow-auto flex-1 min-h-0">
@@ -446,7 +479,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
                   <td className="px-5 py-3.5">{row.display_name ?? "—"}</td>
                   <td className="px-5 py-3.5">
                     <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-primary/12 text-primary border border-primary/20">
-                      {PROFILE_ROLE_LABELS[row.role === "counter" ? "screen" : row.role]}
+                      {PROFILE_ROLE_LABELS[row.role] ?? row.role}
                     </span>
                   </td>
                   <td className="px-5 py-3.5 text-xs text-on-surface-variant hidden md:table-cell">
@@ -502,6 +535,7 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
           newPassword={newPassword}
           pending={pending}
           roleOptions={roleOptions}
+          venueOptions={venueOptions}
           onClose={closeModal}
           onSubmit={modal === "create" ? handleCreate : handleUpdate}
           onFormChange={(patch) =>
@@ -510,8 +544,9 @@ export function AccountsClient({ accounts, configured, configError }: Props) {
               if (patch.role === "guest") {
                 next.venue_ids = [];
               } else if (patch.role && roleNeedsVenues(patch.role) && next.venue_ids.length === 0) {
-                next.venue_ids = [YEOKSAM_VENUE_ID];
+                next.venue_ids = viewer.venueIds[0] ? [viewer.venueIds[0]] : [];
               }
+              next.venue_ids = next.venue_ids.filter((id) => viewer.venueIds.includes(id));
               return next;
             })
           }
