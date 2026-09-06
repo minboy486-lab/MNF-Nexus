@@ -275,6 +275,11 @@ export interface SavedControlTheme {
   name: string;
   baseTheme: UiThemeId;
   look: ControlLook;
+  updatedAt?: number;
+}
+
+function savedControlThemeUpdatedAt(theme: { updatedAt?: number }): number {
+  return typeof theme.updatedAt === "number" && Number.isFinite(theme.updatedAt) ? theme.updatedAt : 0;
 }
 
 export function newSavedControlThemeId(): string {
@@ -295,7 +300,8 @@ export function normalizeSavedControlTheme(raw: unknown, fallbackTheme: UiThemeI
   const baseTheme = isUiThemeId(o.baseTheme) ? o.baseTheme : fallbackTheme;
   const look = normalizeControlLook(o.look, baseTheme);
   if (!look) return null;
-  return { id, name, baseTheme, look };
+  const updatedAt = savedControlThemeUpdatedAt(o);
+  return updatedAt > 0 ? { id, name, baseTheme, look, updatedAt } : { id, name, baseTheme, look };
 }
 
 export function normalizeSavedControlThemes(raw: unknown, fallbackTheme: UiThemeId): SavedControlTheme[] {
@@ -312,7 +318,7 @@ export function normalizeSavedControlThemes(raw: unknown, fallbackTheme: UiTheme
   return out;
 }
 
-/** id 기준 병합. incoming이 같은 id면 덮어씀. incoming이 비면 local 유지. */
+/** id 기준 병합. 같은 id는 updatedAt이 더 큰 쪽. incoming이 비면 local 유지. */
 export function mergeSavedControlThemes(
   local: unknown,
   incoming: unknown,
@@ -324,7 +330,10 @@ export function mergeSavedControlThemes(
   if (a.length === 0) return b;
   const byId = new Map<string, SavedControlTheme>();
   for (const t of a) byId.set(t.id, t);
-  for (const t of b) byId.set(t.id, t);
+  for (const t of b) {
+    const prev = byId.get(t.id);
+    if (!prev || savedControlThemeUpdatedAt(t) >= savedControlThemeUpdatedAt(prev)) byId.set(t.id, t);
+  }
   return Array.from(byId.values()).slice(0, MAX_SAVED_CONTROL_THEMES);
 }
 
@@ -385,15 +394,16 @@ export function upsertSavedControlTheme(
   const byId = opts.id ? list.find((s) => s.id === opts.id) : undefined;
   const byName = !opts.id ? list.find((s) => s.name === name) : undefined;
   const existing = byId ?? byName;
+  const updatedAt = Date.now();
   let saved: SavedControlTheme;
   if (existing) {
-    saved = { ...existing, name, baseTheme, look };
+    saved = { ...existing, name, baseTheme, look, updatedAt };
     list = list.map((s) => (s.id === existing.id ? saved : s));
   } else {
     if (list.length >= MAX_SAVED_CONTROL_THEMES) {
       return { ok: false, error: `저장한 테마는 ${MAX_SAVED_CONTROL_THEMES}개까지입니다.` };
     }
-    saved = { id: newSavedControlThemeId(), name, baseTheme, look };
+    saved = { id: newSavedControlThemeId(), name, baseTheme, look, updatedAt };
     list = [...list, saved];
   }
   return {

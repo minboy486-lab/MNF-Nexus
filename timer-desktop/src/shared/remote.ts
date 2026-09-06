@@ -81,7 +81,7 @@ export type RemoteClientMsg =
       yeoksamRole?: YeoksamRole;
       timerTheme?: ShopTimerThemePayload;
     }
-  | ({ type: "peer_timer_theme" } & ShopTimerThemePayload);
+  | ({ type: "peer_timer_theme"; sync?: "full" | "library" } & ShopTimerThemePayload);
 
 export type RemoteStaffState = {
   name: string;

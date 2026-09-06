@@ -29,7 +29,15 @@ import { WindowManager } from "./windows/windowManager";
 import { setupAutoUpdater } from "./updater";
 import { RemoteServer } from "./remote/server";
 import { getConfiguredYeoksamRole } from "./supabase/venue";
-import { shopTimerThemeEqual, shopTimerThemeFromConfig, withShopTimerTheme } from "../shared/timerLook";
+import {
+  mergeSavedTimerThemes,
+  shopTimerThemeEqual,
+  shopTimerThemeFromConfig,
+  withShopTimerTheme,
+  type ShopThemeSyncMode,
+} from "../shared/timerLook";
+import { mergeSavedControlThemes } from "../shared/controlLook";
+import { resolveControlTheme, resolveTimerTheme } from "../shared/types";
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
@@ -63,31 +71,48 @@ app.whenReady().then(async () => {
   );
   remoteServer.setShopThemeSync({
     get: () => windowManager.getShopTimerTheme(),
-    apply: (pack) => {
-      const current = windowManager.getConfig() ?? loadConfig();
-      if (!current) return false;
-      const next = withShopTimerTheme(current, pack);
-      if (shopTimerThemeEqual(shopTimerThemeFromConfig(current), shopTimerThemeFromConfig(next))) return false;
+    apply: (pack, mode: ShopThemeSyncMode = "library") => {
+      const mem = windowManager.getConfig();
+      const disk = loadConfig();
+      if (!mem && !disk) return false;
+      const base = mem ?? disk!;
+      const timerTheme = resolveTimerTheme(base);
+      const controlTheme = resolveControlTheme(base);
+      // 메모리가 비어 있어도 디스크 테마 목록을 잃지 않게 시드
+      const seeded = {
+        ...base,
+        savedTimerThemes: mergeSavedTimerThemes(disk?.savedTimerThemes, mem?.savedTimerThemes, timerTheme),
+        savedControlThemes: mergeSavedControlThemes(
+          disk?.savedControlThemes,
+          mem?.savedControlThemes,
+          controlTheme,
+        ),
+      };
+      const next = withShopTimerTheme(seeded, pack, mode);
+      if (shopTimerThemeEqual(shopTimerThemeFromConfig(seeded), shopTimerThemeFromConfig(next))) {
+        return false;
+      }
       saveConfig(next);
-      windowManager.applyShopTimerTheme(pack);
+      if (mem) windowManager.applyShopThemeConfig(next);
       return true;
     },
   });
   registerIpcHandlers(windowManager, timerHub, remoteServer);
   setupAutoUpdater();
   registerScreenEvents();
+
+  // LAN 연결 전에 로컬 config를 먼저 올려, 빈 상태로 peer 테마를 받아 디스크가 덮이는 일을 막음
+  const saved = loadConfig();
+  if (saved) {
+    await windowManager.applyConfig(saved);
+  } else {
+    await windowManager.syncWindows();
+  }
+
   try {
     await remoteServer.start(timerHub);
   } catch (e) {
     console.error("[remote] 서버 시작 실패", e);
-  }
-
-  const saved = loadConfig();
-  if (saved) {
-    await windowManager.applyConfig(saved);
-    saveConfig(saved);
-  } else {
-    await windowManager.syncWindows();
   }
 
   if (getConfiguredYeoksamRole() !== "output" && timerHub.restoreFromDisk()) {
@@ -95,7 +120,8 @@ app.whenReady().then(async () => {
     timerHub.pushAllMonitors();
   }
 
-  remoteServer.broadcastShopTimerTheme();
+  // 시작 시에는 테마 목록만 공유 (현재 디자인으로 다른 PC를 덮지 않음)
+  remoteServer.broadcastShopTimerTheme("library");
 
   app.on("activate", async () => {
     if (BrowserWindow.getAllWindows().length === 0) {

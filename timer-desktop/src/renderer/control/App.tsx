@@ -187,8 +187,12 @@ export function App() {
       setControlTheme(nextControl);
       setTimerTheme(nextTimer);
       applyDocumentTheme(nextControl);
-      setSavedTimerThemes(nextSavedTimerThemes);
-      setSavedControlThemes(nextSavedControlThemes);
+      setSavedTimerThemes((prev) =>
+        nextSavedTimerThemes.length > 0 || prev.length === 0 ? nextSavedTimerThemes : prev,
+      );
+      setSavedControlThemes((prev) =>
+        nextSavedControlThemes.length > 0 || prev.length === 0 ? nextSavedControlThemes : prev,
+      );
       setActiveTimerThemeId((prev) => t.activeTimerThemeId ?? prev);
       setActiveControlThemeId((prev) => t.activeControlThemeId ?? prev);
       if (t.timerLook !== undefined) {
@@ -203,9 +207,15 @@ export function App() {
               ...prev,
               controlTheme: nextControl,
               timerTheme: nextTimer,
-              savedTimerThemes: nextSavedTimerThemes,
+              savedTimerThemes:
+                nextSavedTimerThemes.length > 0 || !(prev.savedTimerThemes?.length)
+                  ? nextSavedTimerThemes
+                  : prev.savedTimerThemes,
               activeTimerThemeId: t.activeTimerThemeId ?? prev.activeTimerThemeId,
-              savedControlThemes: nextSavedControlThemes,
+              savedControlThemes:
+                nextSavedControlThemes.length > 0 || !(prev.savedControlThemes?.length)
+                  ? nextSavedControlThemes
+                  : prev.savedControlThemes,
               activeControlThemeId: t.activeControlThemeId ?? prev.activeControlThemeId,
               timerLook: t.timerLook !== undefined ? normalizeTimerLook(t.timerLook, nextTimer) : prev.timerLook,
               controlLook:

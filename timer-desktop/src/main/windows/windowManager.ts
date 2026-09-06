@@ -7,7 +7,7 @@ import {
   resolveControlTheme,
   resolveTimerTheme,
 } from "../../shared/types";
-import { normalizeTimerLook, normalizeSavedTimerThemes, resolveActiveTimerThemeId, shopTimerThemeEqual, shopTimerThemeFromConfig, withShopTimerTheme, type ShopTimerThemePayload, type TimerLook } from "../../shared/timerLook";
+import { normalizeTimerLook, normalizeSavedTimerThemes, resolveActiveTimerThemeId, shopTimerThemeEqual, shopTimerThemeFromConfig, withShopTimerTheme, type ShopThemeSyncMode, type ShopTimerThemePayload, type TimerLook } from "../../shared/timerLook";
 import { normalizeControlLook, normalizeSavedControlThemes, resolveActiveControlThemeId, type ControlLook } from "../../shared/controlLook";
 import type { TableTimerState } from "@mnf/timer/types";
 import { configNeedsSetup, getDisplayMappings } from "../config/configStore";
@@ -205,13 +205,37 @@ export class WindowManager {
     return shopTimerThemeFromConfig(this.config);
   }
 
-  applyShopTimerTheme(pack: ShopTimerThemePayload): boolean {
+  applyShopTimerTheme(pack: ShopTimerThemePayload, mode: ShopThemeSyncMode = "full"): boolean {
     if (!this.config) return false;
-    const next = withShopTimerTheme(this.config, pack);
+    const next = withShopTimerTheme(this.config, pack, mode);
     if (shopTimerThemeEqual(shopTimerThemeFromConfig(this.config), shopTimerThemeFromConfig(next))) {
       return false;
     }
     this.config = next;
+    this.broadcastTheme();
+    this.broadcastTimerLook();
+    this.broadcastControlLook();
+    return true;
+  }
+
+  /** 이미 병합된 설정을 그대로 반영 (디스크 시드 후 LAN apply용) */
+  applyShopThemeConfig(next: AppConfig): boolean {
+    if (!this.config) return false;
+    if (shopTimerThemeEqual(shopTimerThemeFromConfig(this.config), shopTimerThemeFromConfig(next))) {
+      return false;
+    }
+    this.config = {
+      ...this.config,
+      timerTheme: next.timerTheme,
+      controlTheme: next.controlTheme,
+      theme: next.theme,
+      timerLook: next.timerLook,
+      controlLook: next.controlLook,
+      savedTimerThemes: next.savedTimerThemes,
+      savedControlThemes: next.savedControlThemes,
+      activeTimerThemeId: next.activeTimerThemeId,
+      activeControlThemeId: next.activeControlThemeId,
+    };
     this.broadcastTheme();
     this.broadcastTimerLook();
     this.broadcastControlLook();

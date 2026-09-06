@@ -32,7 +32,7 @@ import { rebaseLanSession, rebaseLanTimer } from "../../shared/lanView";
 import { LanCluster, normalizeRemoteIp } from "./lanCluster";
 import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 import { isYeoksamFloor } from "../../shared/floorPlan";
-import { normalizeShopTimerTheme, type ShopTimerThemePayload } from "../../shared/timerLook";
+import { normalizeShopThemeSyncMode, normalizeShopTimerTheme, type ShopThemeSyncMode, type ShopTimerThemePayload } from "../../shared/timerLook";
 import {
   MONITOR_SLOTS,
   TABLE_SLOTS,
@@ -164,7 +164,7 @@ export class RemoteServer {
   private presenceTimer: ReturnType<typeof setInterval> | null = null;
   private shopTheme: {
     get: () => ShopTimerThemePayload | null;
-    apply: (pack: ShopTimerThemePayload) => boolean;
+    apply: (pack: ShopTimerThemePayload, mode: ShopThemeSyncMode) => boolean;
   } | null = null;
 
   setAppearance(getTheme: () => string, getVolume: () => number): void {
@@ -174,7 +174,7 @@ export class RemoteServer {
 
   setShopThemeSync(sync: {
     get: () => ShopTimerThemePayload | null;
-    apply: (pack: ShopTimerThemePayload) => boolean;
+    apply: (pack: ShopTimerThemePayload, mode: ShopThemeSyncMode) => boolean;
   }): void {
     this.shopTheme = sync;
   }
@@ -365,33 +365,40 @@ export class RemoteServer {
     const timers = peer.timers.map((t) => rebaseLanTimer(t, peer.serverNow, localNow));
     const sessions = peer.snapshot.sessions.map((s) => rebaseLanSession(s, peer.serverNow, localNow));
     hub.setFollow({ ...peer.snapshot, sessions }, timers);
-    this.applyIncomingShopTheme(peer.timerTheme);
+    this.applyIncomingShopTheme(peer.timerTheme, "library");
   }
 
-  private applyIncomingShopTheme(raw: unknown): boolean {
+  private applyIncomingShopTheme(raw: unknown, forcedMode?: ShopThemeSyncMode): boolean {
     const pack = normalizeShopTimerTheme(raw);
     if (!pack || !this.shopTheme) return false;
+    let mode = forcedMode ?? normalizeShopThemeSyncMode(raw);
+    // 역삼 허브는 다른 PC 룩으로 덮이지 않음 — 테마 목록만 병합
+    if (isYeoksamFloor(getConfiguredVenueId()) && !this.isYeoksamFollowerPc()) {
+      mode = "library";
+    }
     this.applyingShopTheme = true;
     let changed = false;
     try {
-      changed = this.shopTheme.apply(pack);
+      changed = this.shopTheme.apply(pack, mode);
     } finally {
       this.applyingShopTheme = false;
     }
-    // 컨트롤이 출력 PC 테마를 병합했으면 매장 전체에 다시 전파
+    // 컨트롤이 출력 PC 테마 목록을 병합했으면 매장에 목록만 재전파
     if (changed && !this.isYeoksamFollowerPc()) {
-      this.broadcastShopTimerTheme();
+      this.broadcastShopTimerTheme("library");
     }
     return changed;
   }
 
-  broadcastShopTimerTheme(): void {
+  broadcastShopTimerTheme(mode: ShopThemeSyncMode = "full"): void {
     if (this.applyingShopTheme) return;
     const pack = this.shopTheme?.get();
     if (!pack) return;
-    const msg: RemoteClientMsg = { type: "peer_timer_theme", ...pack };
+    const msg: RemoteClientMsg = { type: "peer_timer_theme", sync: mode, ...pack };
     if (this.isYeoksamFollowerPc()) {
-      this.forwardToControl(msg);
+      // 출력 PC는 목록만 허브로 올림 (현재 디자인으로 허브를 덮지 않음)
+      const libraryMsg: RemoteClientMsg = { ...msg, sync: "library" };
+      this.forwardToControl(libraryMsg);
       return;
     }
     this.cluster?.broadcastToPeers(msg);
@@ -740,9 +747,7 @@ export class RemoteServer {
     }
 
     if (msg.type === "peer_timer_theme") {
-      const pack = normalizeShopTimerTheme(msg);
-      if (!pack) return;
-      this.applyIncomingShopTheme(pack);
+      this.applyIncomingShopTheme(msg);
       return;
     }
 

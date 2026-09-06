@@ -37,14 +37,21 @@ function reconcileLoadedThemes(config: AppConfig): AppConfig {
   });
   const savedControl = savedControlThemes.find((s) => s.id === activeControlThemeId);
 
+  // 디스크의 현재 look을 유지한다. active 테마 look으로 덮으면
+  // 테마 저장 후 추가 편집분이 재시작 때마다 되돌아간다.
+  const timerLook =
+    normalizeTimerLook(config.timerLook, timerTheme) ?? savedTimer?.look ?? null;
+  const controlLook =
+    normalizeControlLook(config.controlLook, controlTheme) ?? savedControl?.look ?? null;
+
   return {
     ...config,
     timerTheme: savedTimer?.baseTheme ?? timerTheme,
-    timerLook: savedTimer?.look ?? normalizeTimerLook(config.timerLook, timerTheme),
+    timerLook,
     activeTimerThemeId,
     savedTimerThemes,
     controlTheme: savedControl?.baseTheme ?? controlTheme,
-    controlLook: savedControl?.look ?? normalizeControlLook(config.controlLook, controlTheme),
+    controlLook,
     activeControlThemeId,
     savedControlThemes,
   };

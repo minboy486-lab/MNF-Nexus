@@ -354,6 +354,22 @@ export interface SavedTimerTheme {
   name: string;
   baseTheme: UiThemeId;
   look: TimerLook;
+  /** 병합 시 최신 저장본을 고르기 위한 시각(ms). 없으면 0으로 취급. */
+  updatedAt?: number;
+}
+
+export type ShopThemeSyncMode = "full" | "library";
+
+export function normalizeShopThemeSyncMode(raw: unknown): ShopThemeSyncMode {
+  if (raw && typeof raw === "object" && (raw as { sync?: unknown }).sync === "full") {
+    return "full";
+  }
+  // 기본은 목록만 병합 — 시작/스냅샷 thrash로 현재 디자인이 덮이지 않게
+  return "library";
+}
+
+function savedThemeUpdatedAt(theme: { updatedAt?: number }): number {
+  return typeof theme.updatedAt === "number" && Number.isFinite(theme.updatedAt) ? theme.updatedAt : 0;
 }
 
 export function newSavedTimerThemeId(): string {
@@ -374,7 +390,8 @@ export function normalizeSavedTimerTheme(raw: unknown, fallbackTheme: UiThemeId)
   const baseTheme = isUiThemeId(o.baseTheme) ? o.baseTheme : fallbackTheme;
   const look = normalizeTimerLook(o.look, baseTheme);
   if (!look) return null;
-  return { id, name, baseTheme, look };
+  const updatedAt = savedThemeUpdatedAt(o);
+  return updatedAt > 0 ? { id, name, baseTheme, look, updatedAt } : { id, name, baseTheme, look };
 }
 
 export function normalizeSavedTimerThemes(raw: unknown, fallbackTheme: UiThemeId): SavedTimerTheme[] {
@@ -391,7 +408,7 @@ export function normalizeSavedTimerThemes(raw: unknown, fallbackTheme: UiThemeId
   return out;
 }
 
-/** id 기준 병합. incoming이 같은 id면 덮어씀. incoming이 비면 local 유지. */
+/** id 기준 병합. 같은 id는 updatedAt이 더 큰 쪽. incoming이 비면 local 유지. */
 export function mergeSavedTimerThemes(
   local: unknown,
   incoming: unknown,
@@ -403,7 +420,10 @@ export function mergeSavedTimerThemes(
   if (a.length === 0) return b;
   const byId = new Map<string, SavedTimerTheme>();
   for (const t of a) byId.set(t.id, t);
-  for (const t of b) byId.set(t.id, t);
+  for (const t of b) {
+    const prev = byId.get(t.id);
+    if (!prev || savedThemeUpdatedAt(t) >= savedThemeUpdatedAt(prev)) byId.set(t.id, t);
+  }
   return Array.from(byId.values()).slice(0, MAX_SAVED_TIMER_THEMES);
 }
 
@@ -468,15 +488,16 @@ export function upsertSavedTimerTheme(
   const byId = opts.id ? list.find((s) => s.id === opts.id) : undefined;
   const byName = !opts.id ? list.find((s) => s.name === name) : undefined;
   const existing = byId ?? byName;
+  const updatedAt = Date.now();
   let saved: SavedTimerTheme;
   if (existing) {
-    saved = { ...existing, name, baseTheme, look };
+    saved = { ...existing, name, baseTheme, look, updatedAt };
     list = list.map((s) => (s.id === existing.id ? saved : s));
   } else {
     if (list.length >= MAX_SAVED_TIMER_THEMES) {
       return { ok: false, error: `저장한 테마는 ${MAX_SAVED_TIMER_THEMES}개까지입니다.` };
     }
-    saved = { id: newSavedTimerThemeId(), name, baseTheme, look };
+    saved = { id: newSavedTimerThemeId(), name, baseTheme, look, updatedAt };
     list = [...list, saved];
   }
   return {
@@ -587,7 +608,11 @@ export function shopTimerThemeEqual(a: ShopTimerThemePayload, b: ShopTimerThemeP
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-export function withShopTimerTheme(config: AppConfig, pack: ShopTimerThemePayload): AppConfig {
+export function withShopTimerTheme(
+  config: AppConfig,
+  pack: ShopTimerThemePayload,
+  mode: ShopThemeSyncMode = "full",
+): AppConfig {
   const savedTimerThemes = mergeSavedTimerThemes(
     config.savedTimerThemes,
     pack.savedTimerThemes,
@@ -598,6 +623,22 @@ export function withShopTimerTheme(config: AppConfig, pack: ShopTimerThemePayloa
     pack.savedControlThemes,
     pack.controlTheme,
   );
+
+  if (mode === "library") {
+    return {
+      ...config,
+      savedTimerThemes,
+      savedControlThemes,
+      activeTimerThemeId: resolveActiveTimerThemeId({
+        ...config,
+        savedTimerThemes,
+      }),
+      activeControlThemeId: resolveActiveControlThemeId({
+        ...config,
+        savedControlThemes,
+      }),
+    };
+  }
 
   const activeTimerThemeId = resolveActiveTimerThemeId({
     timerTheme: pack.timerTheme,
