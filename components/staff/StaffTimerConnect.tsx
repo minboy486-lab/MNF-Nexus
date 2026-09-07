@@ -35,12 +35,10 @@ export function StaffTimerConnect({ loginId, autoConnect = true }: Props) {
     void getStaffControllerLan().then((cloud) => {
       const mergedPin = cloud?.fresh && cloud.pin ? cloud.pin : pairing.pin;
       const nextPairing = { ...pairing, pin: mergedPin, loginId: pairing.loginId || loginId };
-      if (cloud?.fresh && cloud.ips.length) {
-        saveTimerPairing({
-          ...nextPairing,
-          url: `http://${cloud.ips[0]}:${cloud.port}/remote/`,
-          urls: cloud.ips,
-        });
+      // 클라우드 presence IP로 QR 스캔 주소를 덮지 않음.
+      // (다른 매장/옛 PC가 서버에 올린 IP로 바뀌던 문제)
+      if (nextPairing.pin !== pairing.pin || nextPairing.loginId !== pairing.loginId) {
+        saveTimerPairing(nextPairing);
       }
       const urls = resolveControllerConnectUrls(nextPairing, cloud);
       if (!urls.length) {

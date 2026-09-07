@@ -208,12 +208,18 @@ export function resolveControllerConnectUrls(
     out.push(base);
   };
 
-  if (cloud?.fresh) {
-    for (const ip of cloud.ips) pushBase(baseUrlFromIp(ip, cloud.port));
-    if (cloud.pin) pairing = { ...pairing, pin: cloud.pin };
+  // PIN만 클라우드에서 갱신. 주소는 QR 스캔본이 우선.
+  if (cloud?.fresh && cloud.pin) {
+    pairing = { ...pairing, pin: cloud.pin };
   }
 
   for (const base of baseUrlsFromPairing(pairing)) pushBase(base);
+
+  // 같은 지점에서 PC IP만 바뀐 경우를 위한 폴백 (QR보다 뒤)
+  if (cloud?.fresh) {
+    for (const ip of cloud.ips) pushBase(baseUrlFromIp(ip, cloud.port));
+  }
+
   return out.map((base) => timerRemoteHref(pairing, { baseUrl: `${base}/remote/` }));
 }
 
