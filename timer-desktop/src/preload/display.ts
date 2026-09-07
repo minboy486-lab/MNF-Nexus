@@ -56,6 +56,12 @@ contextBridge.exposeInMainWorld("displayApi", {
     ipcRenderer.on("soundVolume:update", h);
     return () => ipcRenderer.removeListener("soundVolume:update", h);
   },
+  getVenueId: () => ipcRenderer.invoke("venue:get") as Promise<string>,
+  onVenueUpdate: (cb: (venueId: string) => void) => {
+    const h = (_e: Electron.IpcRendererEvent, venueId: string) => cb(venueId);
+    ipcRenderer.on("venue:update", h);
+    return () => ipcRenderer.removeListener("venue:update", h);
+  },
   onTimerUpdate: (cb: (state: TableTimerState) => void) => {
     const h = (_e: Electron.IpcRendererEvent, state: TableTimerState) => cb(state);
     ipcRenderer.on("timer:update", h);
@@ -79,6 +85,8 @@ declare global {
       onTimerLookUpdate: (cb: (look: TimerLook | null) => void) => () => void;
       getSoundVolume: () => Promise<number>;
       onSoundVolumeUpdate: (cb: (volume: number) => void) => () => void;
+      getVenueId: () => Promise<string>;
+      onVenueUpdate: (cb: (venueId: string) => void) => () => void;
       onTimerUpdate: (cb: (state: TableTimerState) => void) => () => void;
       onSessionUpdate: (cb: (session: GameSession | null) => void) => () => void;
     };

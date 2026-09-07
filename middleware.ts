@@ -2,7 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   canAccessAdminArea,
-  canManageAccounts,
+  canAccessAdminPath,
+  getAdminHomePath,
   isManagerOrAdmin,
   isScreenRole,
 } from "@/lib/auth/roles";
@@ -155,22 +156,15 @@ export async function middleware(request: NextRequest) {
     }
 
     if (pathname.startsWith(ADMIN_PREFIX)) {
-      const staffAllowedAdmin =
-        role === "staff" &&
-        (pathname.startsWith("/admin/games") || pathname.startsWith("/admin/tables"));
-
-      const accountsOnlyAdmin =
-        pathname.startsWith("/admin/accounts") && !canManageAccounts(role);
-
-      if (accountsOnlyAdmin) {
+      if (!canAccessAdminArea(role)) {
         const url = request.nextUrl.clone();
-        url.pathname = "/admin/dashboard";
+        url.pathname = getHomePath(role);
         return NextResponse.redirect(url);
       }
 
-      if (!canAccessAdminArea(role) && !staffAllowedAdmin) {
+      if (!canAccessAdminPath(role, pathname)) {
         const url = request.nextUrl.clone();
-        url.pathname = role === "staff" ? "/staff" : getHomePath(role);
+        url.pathname = getAdminHomePath(role);
         return NextResponse.redirect(url);
       }
     }
@@ -183,7 +177,7 @@ export async function middleware(request: NextRequest) {
       }
       if (isManagerOrAdmin(role) || role === "admin") {
         const url = request.nextUrl.clone();
-        url.pathname = "/admin/dashboard";
+        url.pathname = getAdminHomePath(role);
         return NextResponse.redirect(url);
       }
     }

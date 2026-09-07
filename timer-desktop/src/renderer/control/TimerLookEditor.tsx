@@ -76,6 +76,7 @@ type Props = {
   savedName?: string | null;
   activeSavedId?: string | null;
   savedThemes?: SavedTimerTheme[];
+  venueId?: string | null;
   onChange: (look: TimerLook) => void;
   onClear: (id?: string) => void | Promise<unknown>;
   onSaveAsTheme: (
@@ -93,6 +94,7 @@ export function TimerLookEditor({
   savedName = null,
   activeSavedId = null,
   savedThemes = [],
+  venueId = null,
   onChange,
   onClear,
   onSaveAsTheme,
@@ -443,6 +445,7 @@ export function TimerLookEditor({
               session={sampleLookSession()}
               state={sampleLookTimer()}
               logoUrl={logoDisplayUrl}
+              venueId={venueId}
               edit={{
                 selected,
                 onSelect: setSelected,

@@ -8,6 +8,7 @@ import {
   isBreakBlind,
   resolveTimerPauseKind,
 } from "@mnf/timer/levels";
+import { timerBrandName } from "@mnf/venue";
 import type { GameSession, UiThemeId } from "../../shared/types";
 import {
   formatTotalElapsedMs,
@@ -43,6 +44,8 @@ type Props = {
   edit?: BroadcastEdit;
   className?: string;
   style?: CSSProperties;
+  /** 지점 ID — 타이머 상단 브랜드(역삼 MNF / 미사 미드나잇) */
+  venueId?: string | null;
 };
 
 export function BroadcastStage({
@@ -59,7 +62,9 @@ export function BroadcastStage({
   edit,
   className = "",
   style,
+  venueId,
 }: Props) {
+  const brandName = timerBrandName(venueId);
   const isRunning = state?.status === "running";
   const isPaused = state?.status === "paused";
   const hasGame = !!state?.blindStructureId;
@@ -187,7 +192,7 @@ export function BroadcastStage({
           <>
             <div className="ds-title-bar">
               <OverlayWrap id="title" look={activeLook} edit={edit}>
-                <p className="ds-game-name">{state?.blindStructureName ?? session?.structureName ?? "MNF HOLDEM"}</p>
+                <p className="ds-game-name">{brandName}</p>
               </OverlayWrap>
             </div>
             <div className="ds-layout">

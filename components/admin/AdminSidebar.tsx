@@ -4,8 +4,17 @@ import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
 import { AdminNavContent } from "@/components/admin/AdminNavContent";
 import { useAdminNav } from "@/components/admin/AdminNavContext";
+import type { AdminNavAccess } from "@/lib/auth/roles";
 
-export function AdminSidebar({ showAccountLink }: { showAccountLink?: boolean }) {
+export function AdminSidebar({
+  showAccountLink,
+  navAccess,
+  homeHref,
+}: {
+  showAccountLink?: boolean;
+  navAccess?: AdminNavAccess;
+  homeHref?: string;
+}) {
   const { navOpen, closeNav } = useAdminNav();
   const [mounted, setMounted] = useState(false);
 
@@ -25,7 +34,12 @@ export function AdminSidebar({ showAccountLink }: { showAccountLink?: boolean })
             />
             <aside className="glass-sidebar absolute left-0 top-0 bottom-0 w-[min(18rem,88vw)] flex flex-col py-4 shadow-2xl">
               <div className="flex flex-col flex-1 min-h-0">
-                <AdminNavContent onNavigate={closeNav} showAccountLink={showAccountLink} />
+                <AdminNavContent
+                  onNavigate={closeNav}
+                  showAccountLink={showAccountLink}
+                  navAccess={navAccess}
+                  homeHref={homeHref}
+                />
               </div>
             </aside>
           </div>,
@@ -38,7 +52,11 @@ export function AdminSidebar({ showAccountLink }: { showAccountLink?: boolean })
       {navOpen && (
         <aside className="glass-sidebar hidden md:flex w-64 flex-col py-4 relative z-10 shrink-0">
           <div className="flex flex-col flex-1 min-h-0">
-            <AdminNavContent showAccountLink={showAccountLink} />
+            <AdminNavContent
+              showAccountLink={showAccountLink}
+              navAccess={navAccess}
+              homeHref={homeHref}
+            />
           </div>
         </aside>
       )}

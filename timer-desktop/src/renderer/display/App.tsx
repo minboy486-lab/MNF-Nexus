@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { TableTimerState } from "@mnf/timer/types";
 import { getDisplayRemainingMs } from "@mnf/timer/engine";
+import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 import type { GameSession, UiThemeId } from "../../shared/types";
 import { applyDocumentTheme, DEFAULT_UI_THEME, normalizeUiTheme } from "../../shared/types";
 import type { TimerLook } from "../../shared/timerLook";
@@ -15,6 +16,7 @@ export function App() {
   const [look, setLook] = useState<TimerLook | null>(null);
   const [state, setState] = useState<TableTimerState | null>(null);
   const [session, setSession] = useState<GameSession | null>(null);
+  const [venueId, setVenueId] = useState(YEOKSAM_VENUE_ID);
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -32,6 +34,9 @@ export function App() {
     const unsubVolume = window.displayApi.onSoundVolumeUpdate((v) => {
       setTimerSoundVolume(v);
     });
+    const unsubVenue = window.displayApi.onVenueUpdate((id) => {
+      setVenueId(isKnownVenueId(id) ? id : YEOKSAM_VENUE_ID);
+    });
     void window.displayApi.getTheme().then((t) => {
       const next = normalizeUiTheme(t);
       setTheme(next);
@@ -41,12 +46,16 @@ export function App() {
       setLook(normalizeTimerLook(next, theme));
     });
     void window.displayApi.getSoundVolume().then(setTimerSoundVolume);
+    void window.displayApi.getVenueId().then((id) => {
+      setVenueId(isKnownVenueId(id) ? id : YEOKSAM_VENUE_ID);
+    });
     return () => {
       unsubTimer();
       unsubSession();
       unsubTheme();
       unsubLook();
       unsubVolume();
+      unsubVenue();
     };
   }, []);
 
@@ -68,6 +77,7 @@ export function App() {
         state={state}
         logoUrl={logoUrl}
         idleSlot={monitorSlot}
+        venueId={venueId}
       />
     </div>
   );

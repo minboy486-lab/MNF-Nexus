@@ -19,6 +19,7 @@ import {
 } from "../screen/displayMapper";
 import { createControlWindow, createDisplayWindow } from "./controlWindow";
 import type { TimerHub } from "../timer/timerHub";
+import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 
 const isDev = () =>
   process.env.NODE_ENV === "development" || Boolean(process.env.ELECTRON_RENDERER_URL);
@@ -147,6 +148,7 @@ export class WindowManager {
     this.broadcastTimerLook();
     this.broadcastControlLook();
     this.broadcastSoundVolume();
+    this.broadcastVenue();
     this.timerHub?.pushAllMonitors();
     this.timerHub?.pushSnapshotToControl();
   }
@@ -313,6 +315,20 @@ export class WindowManager {
     }
   }
 
+  getVenueId(): string {
+    const id = this.config?.venueId;
+    return isKnownVenueId(id) ? id : YEOKSAM_VENUE_ID;
+  }
+
+  broadcastVenue(): void {
+    const venueId = this.getVenueId();
+    for (const entry of this.displayWindows.values()) {
+      if (!entry.win.isDestroyed()) {
+        entry.win.webContents.send("venue:update", venueId);
+      }
+    }
+  }
+
   async syncWindows(): Promise<void> {
     if (!this.config || configNeedsSetup(this.config)) {
       await this.ensureControlWindow();
@@ -421,6 +437,7 @@ export class WindowManager {
         win.webContents.send("theme:update", this.getTimerTheme());
         win.webContents.send("timerLook:update", this.getTimerLook());
         win.webContents.send("soundVolume:update", this.getSoundVolume());
+        win.webContents.send("venue:update", this.getVenueId());
       }
     });
 

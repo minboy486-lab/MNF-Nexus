@@ -22,6 +22,7 @@ type Props = {
   error: string | null;
   timerTheme: UiThemeId;
   timerLook?: TimerLook | null;
+  venueId?: string | null;
   onBack: () => void;
   onCommand: (action: TimerAction, options?: { minutes?: number; ms?: number; sec?: number }) => void;
   onRequestEndGame: () => void;
@@ -140,6 +141,7 @@ export function GameControlView({
   error,
   timerTheme,
   timerLook = null,
+  venueId = null,
   onBack,
   onCommand,
   onRequestEndGame,
@@ -510,6 +512,7 @@ export function GameControlView({
                 entries={entries}
                 noticeHtml={previewNoticeHtml}
                 onTimerClick={openTimerPopup}
+                venueId={venueId}
                 style={{
                   width: BROADCAST_W,
                   height: BROADCAST_H,

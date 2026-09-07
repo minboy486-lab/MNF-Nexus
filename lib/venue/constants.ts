@@ -37,6 +37,12 @@ export function venueName(id: string | null | undefined): string {
   return venueById(id)?.name ?? "지점";
 }
 
+/** 타이머 송출 화면 상단 브랜드 (지점별) */
+export function timerBrandName(venueId: string | null | undefined): string {
+  if (venueId === MISA_VENUE_ID) return "미드나잇 HOLDEM";
+  return "MNF HOLDEM";
+}
+
 export function defaultVenuesForRole(role: string | null | undefined): string[] {
   if (role === "manager" || role === "staff" || role === "screen" || role === "counter") {
     return [YEOKSAM_VENUE_ID];

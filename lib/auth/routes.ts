@@ -21,6 +21,7 @@ export function getHomePath(role: UserRole | string | undefined | null): string 
     case "staff":
       return "/staff";
     case "manager":
+      return "/admin/scores";
     case "admin":
       return "/admin/dashboard";
     default:

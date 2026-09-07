@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { AccountsClient } from "@/components/accounts/AccountsClient";
 import { AdminTopBar } from "@/components/admin/AdminTopBar";
-import { assignableRolesFor, canManageAccounts } from "@/lib/auth/roles";
+import { assignableRolesFor, canManageAccounts, getAdminHomePath } from "@/lib/auth/roles";
 import { getCurrentUserRole } from "@/lib/auth/session";
 import {
   getAccountViewerContext,
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function AccountsPage() {
   const role = await getCurrentUserRole();
   if (!canManageAccounts(role)) {
-    redirect("/admin/dashboard");
+    redirect(getAdminHomePath(role));
   }
 
   const configured = isSupabaseAdminConfigured();

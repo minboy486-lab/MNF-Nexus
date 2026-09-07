@@ -7,7 +7,7 @@ import {
   getMemberVisitCounts,
 } from "@/lib/data/queries";
 import { getProfile } from "@/lib/supabase/server";
-import { isAdminRole } from "@/lib/auth/roles";
+import { canManageGuests, getAdminHomePath } from "@/lib/auth/roles";
 import { getActiveVenueId } from "@/lib/venue/active";
 import { redirect } from "next/navigation";
 
@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
 
 export default async function GuestPointsPage() {
   const { profile } = await getProfile();
-  if (!isAdminRole(profile?.role)) {
-    redirect("/admin/guests/visits");
+  if (!canManageGuests(profile?.role)) {
+    redirect(getAdminHomePath(profile?.role));
   }
 
   const [members, visits, visitCounts, venueId] = await Promise.all([

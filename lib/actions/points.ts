@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { isAdminRole } from "@/lib/auth/roles";
+import { canManageGuests } from "@/lib/auth/roles";
 import { getGuestPointHistory } from "@/lib/data/guest-queries";
 import { getProfile } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -24,7 +24,7 @@ export async function fetchMemberPointHistory(
   if (!isSupabaseConfigured()) return { rows: [] };
 
   const { profile } = await getProfile();
-  if (!isAdminRole(profile?.role)) return { error: "권한이 없습니다." };
+  if (!canManageGuests(profile?.role)) return { error: "권한이 없습니다." };
 
   const id = memberId?.trim();
   if (!id) return { error: "손님을 선택하세요." };
@@ -54,7 +54,7 @@ export async function adjustMemberPoints(params: {
 
   const { user, profile } = await getProfile();
   if (!user) return { error: "로그인이 필요합니다." };
-  if (!isAdminRole(profile?.role)) return { error: "관리자만 포인트를 조정할 수 있습니다." };
+  if (!canManageGuests(profile?.role)) return { error: "포인트 조정 권한이 없습니다." };
 
   const memberId = params.memberId?.trim();
   if (!memberId) return { error: "손님을 선택하세요." };

@@ -58,32 +58,27 @@ async function forwardToHubOrLocal(
   return { ok: false, error: CONTROL_UNREACHABLE };
 }
 
-function localBlindsPath() {
+function localBlindsPath(venueId: string) {
   const dir = app.getPath("userData");
   mkdirSync(dir, { recursive: true });
-  return resolve(dir, "local-blinds.json");
+  const safe = venueId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return resolve(dir, `local-blinds-${safe}.json`);
 }
 
-function loadLocalBlinds(): BlindStructureOption[] {
+function loadLocalBlinds(venueId?: string): BlindStructureOption[] {
+  const id = venueId ?? getConfiguredVenueId();
   try {
-    const p = localBlindsPath();
+    const p = localBlindsPath(id);
     if (!existsSync(p)) return [];
     return JSON.parse(readFileSync(p, "utf-8")) as BlindStructureOption[];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
-function saveLocalBlinds(data: BlindStructureOption[]): void {
-  writeFileSync(localBlindsPath(), JSON.stringify(data, null, 2), "utf-8");
-}
-
-function mergeBlindStructures(
-  remote: BlindStructureOption[],
-  local: BlindStructureOption[],
-): BlindStructureOption[] {
-  const byId = new Map<string, BlindStructureOption>();
-  for (const item of local) byId.set(item.id, item);
-  for (const item of remote) byId.set(item.id, item);
-  return Array.from(byId.values());
+function saveLocalBlinds(data: BlindStructureOption[], venueId?: string): void {
+  const id = venueId ?? getConfiguredVenueId();
+  writeFileSync(localBlindsPath(id), JSON.stringify(data, null, 2), "utf-8");
 }
 
 function isMonitorSlot(v: unknown): v is MonitorSlot {
@@ -475,6 +470,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
 
   // ── 블라인드 ──────────────────────────────────────────────
   ipcMain.handle("blinds:list", async () => {
+    const venueId = getConfiguredVenueId();
     // 5초 타임아웃: 네트워크 지연으로 IPC가 무한 대기하는 현상 방지
     const timeout = new Promise<BlindStructureOption[] | null>((resolve) =>
       setTimeout(() => resolve(null), 5000),
@@ -486,23 +482,25 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
       console.error("[ipc] blinds:list 에러:", e);
     }
     if (remote && remote.length > 0) {
-      console.log("[ipc] blinds:list 원격:", remote.length, "개");
-      const local = loadLocalBlinds();
-      const merged = mergeBlindStructures(remote, local);
-      try { saveLocalBlinds(merged); } catch {}
-      return merged;
+      console.log("[ipc] blinds:list 원격:", remote.length, "개 · venue", venueId);
+      // Nexus(해당 지점) 프리셋을 기준으로 저장. 타 지점 캐시와 섞지 않음.
+      try {
+        saveLocalBlinds(remote, venueId);
+      } catch {}
+      return remote;
     }
-    // 원격 실패/타임아웃 → 로컬 캐시 반환
-    const local = loadLocalBlinds();
-    console.log("[ipc] blinds:list 로컬 fallback:", local.length, "개");
+    // 원격 실패/타임아웃 → 현재 지점 로컬 캐시만
+    const local = loadLocalBlinds(venueId);
+    console.log("[ipc] blinds:list 로컬 fallback:", local.length, "개 · venue", venueId);
     return local;
   });
-  ipcMain.handle("blinds:local:list", () => loadLocalBlinds());
+  ipcMain.handle("blinds:local:list", () => loadLocalBlinds(getConfiguredVenueId()));
   ipcMain.handle("blinds:local:save", (_e, data: unknown) => {
     if (!Array.isArray(data)) return { ok: false as const };
-    saveLocalBlinds(data as BlindStructureOption[]);
+    saveLocalBlinds(data as BlindStructureOption[], getConfiguredVenueId());
     return { ok: true as const };
   });
+  ipcMain.handle("venue:get", () => getConfiguredVenueId());
 
   // ── 스냅샷 ────────────────────────────────────────────────
   ipcMain.handle("app:snapshot", () => hub.getSnapshot());

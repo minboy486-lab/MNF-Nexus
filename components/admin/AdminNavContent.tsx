@@ -7,6 +7,7 @@ import { signOut } from "@/lib/actions/auth";
 import { AdminNavAccountLink } from "@/components/admin/AdminNavAccountLink";
 import { AdminNavCloseButton } from "@/components/admin/AdminNavCloseButton";
 import { VenueSwitcher } from "@/components/venue/VenueSwitcher";
+import { getAdminNavAccess, type AdminNavAccess } from "@/lib/auth/roles";
 
 type NavChild = {
   href: string;
@@ -66,6 +67,8 @@ const topLinks: NavLink[] = [
 type Props = {
   onNavigate?: () => void;
   showAccountLink?: boolean;
+  navAccess?: AdminNavAccess;
+  homeHref?: string;
 };
 
 function isChildActive(pathname: string, child: NavChild): boolean {
@@ -172,8 +175,22 @@ function NavGroupBlock({
   );
 }
 
-export function AdminNavContent({ onNavigate, showAccountLink = false }: Props) {
+function visibleTopLinks(access: AdminNavAccess): NavLink[] {
+  return topLinks.filter((link) => {
+    if (link.href === "/admin/presets") return access.presets;
+    return access.fullAdmin;
+  });
+}
+
+export function AdminNavContent({
+  onNavigate,
+  showAccountLink = false,
+  navAccess,
+  homeHref = "/admin/dashboard",
+}: Props) {
   const pathname = usePathname();
+  const access = navAccess ?? getAdminNavAccess("admin");
+  const links = visibleTopLinks(access);
   const [scoresOpen, setScoresOpen] = useState(() => isGroupActive(pathname, scoresGroup));
   const [guestsOpen, setGuestsOpen] = useState(() => isGroupActive(pathname, guestsGroup));
 
@@ -190,10 +207,10 @@ export function AdminNavContent({ onNavigate, showAccountLink = false }: Props) 
     <>
       <div className="admin-sidebar-head">
         <Link
-          href="/admin/dashboard"
+          href={homeHref}
           onClick={onNavigate}
           className="admin-sidebar-brand rounded-xl hover:bg-white/5 transition-colors"
-          aria-label="대시보드로 이동"
+          aria-label="홈으로 이동"
         >
           <p className="text-xl font-bold tracking-tight bg-gradient-to-br from-primary to-secondary bg-clip-text text-transparent">
             MNF HOLDEM
@@ -208,21 +225,25 @@ export function AdminNavContent({ onNavigate, showAccountLink = false }: Props) 
         <VenueSwitcher />
       </div>
       <nav className="flex-1 px-3 space-y-1 overflow-y-auto min-h-0">
-        <NavGroupBlock
-          group={scoresGroup}
-          pathname={pathname}
-          open={scoresOpen}
-          onToggle={() => setScoresOpen((v) => !v)}
-          onNavigate={onNavigate}
-        />
-        <NavGroupBlock
-          group={guestsGroup}
-          pathname={pathname}
-          open={guestsOpen}
-          onToggle={() => setGuestsOpen((v) => !v)}
-          onNavigate={onNavigate}
-        />
-        {topLinks.map((link) => {
+        {access.scores && (
+          <NavGroupBlock
+            group={scoresGroup}
+            pathname={pathname}
+            open={scoresOpen}
+            onToggle={() => setScoresOpen((v) => !v)}
+            onNavigate={onNavigate}
+          />
+        )}
+        {access.guests && (
+          <NavGroupBlock
+            group={guestsGroup}
+            pathname={pathname}
+            open={guestsOpen}
+            onToggle={() => setGuestsOpen((v) => !v)}
+            onNavigate={onNavigate}
+          />
+        )}
+        {links.map((link) => {
           const active =
             pathname === link.href ||
             (link.href !== "/admin/dashboard" && pathname.startsWith(link.href));
@@ -240,7 +261,7 @@ export function AdminNavContent({ onNavigate, showAccountLink = false }: Props) 
         })}
       </nav>
       <div className="px-3 pt-4 mt-auto border-t border-white/10 shrink-0 space-y-1">
-        <AdminNavAccountLink show={showAccountLink} onNavigate={onNavigate} />
+        <AdminNavAccountLink show={showAccountLink && access.accounts} onNavigate={onNavigate} />
         <form action={signOut}>
           <button
             type="submit"

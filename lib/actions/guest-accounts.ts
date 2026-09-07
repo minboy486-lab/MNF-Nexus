@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { isAdminRole } from "@/lib/auth/roles";
+import { canManageGuests } from "@/lib/auth/roles";
 import { getProfileRole } from "@/lib/auth/profile";
 import { hashPassword } from "@/lib/auth/password";
 import {
@@ -25,8 +25,8 @@ async function requireGuestAccountAdmin(): Promise<AdminGate> {
   } = await supabase.auth.getUser();
   if (!user) return { error: "로그인이 필요합니다." };
   const role = await getProfileRole(user.id);
-  if (!isAdminRole(role)) {
-    return { error: "관리자만 손님 계정을 관리할 수 있습니다." };
+  if (!canManageGuests(role)) {
+    return { error: "손님 계정 관리 권한이 없습니다." };
   }
   if (!isSupabaseAdminConfigured()) {
     return { error: "SUPABASE_SERVICE_ROLE_KEY가 필요합니다." };

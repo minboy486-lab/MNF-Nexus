@@ -50,6 +50,82 @@ export function canManageAccounts(role: string | null | undefined): boolean {
   return isManagerOrAdmin(role);
 }
 
+/** 손님 관리(포인트·방문·손님계정): 관리자·매니저 */
+export function canManageGuests(role: string | null | undefined): boolean {
+  return isManagerOrAdmin(role);
+}
+
+/** 역할별 관리자 사이드바·경로 접근 */
+export type AdminNavAccess = {
+  scores: boolean;
+  guests: boolean;
+  presets: boolean;
+  accounts: boolean;
+  /** 대시보드·테이블·정산·직원 등 나머지 전체 */
+  fullAdmin: boolean;
+};
+
+export function getAdminNavAccess(role: string | null | undefined): AdminNavAccess {
+  if (isAdminRole(role)) {
+    return {
+      scores: true,
+      guests: true,
+      presets: true,
+      accounts: true,
+      fullAdmin: true,
+    };
+  }
+  if (role === "manager") {
+    return {
+      scores: true,
+      guests: true,
+      presets: true,
+      accounts: true,
+      fullAdmin: false,
+    };
+  }
+  if (role === "staff") {
+    return {
+      scores: true,
+      guests: false,
+      presets: false,
+      accounts: false,
+      fullAdmin: false,
+    };
+  }
+  return {
+    scores: false,
+    guests: false,
+    presets: false,
+    accounts: false,
+    fullAdmin: false,
+  };
+}
+
+/** 역할별 관리자 홈 (메뉴에 있는 첫 화면) */
+export function getAdminHomePath(role: string | null | undefined): string {
+  if (isAdminRole(role)) return "/admin/dashboard";
+  if (role === "manager" || role === "staff") return "/admin/scores";
+  return "/login";
+}
+
+/** /admin 하위 경로 접근 가능 여부 */
+export function canAccessAdminPath(
+  role: string | null | undefined,
+  pathname: string,
+): boolean {
+  if (!canAccessAdminArea(role)) return false;
+  if (isAdminRole(role)) return true;
+
+  const access = getAdminNavAccess(role);
+  if (pathname === "/admin" || pathname === "/admin/") return access.scores;
+  if (pathname.startsWith("/admin/scores")) return access.scores;
+  if (pathname.startsWith("/admin/guests")) return access.guests;
+  if (pathname.startsWith("/admin/presets")) return access.presets;
+  if (pathname.startsWith("/admin/accounts")) return access.accounts;
+  return false;
+}
+
 /** 높을수록 상위. guest/screen 등은 0 */
 export function accountRoleRank(role: string | null | undefined): number {
   if (role === "admin") return 3;

@@ -12,9 +12,17 @@ type Props = {
   timerState: TableTimerState | null;
   timerTheme: UiThemeId;
   timerLook?: TimerLook | null;
+  venueId?: string | null;
 };
 
-export function MonitorPreviewView({ slot, session, timerState, timerTheme, timerLook = null }: Props) {
+export function MonitorPreviewView({
+  slot,
+  session,
+  timerState,
+  timerTheme,
+  timerLook = null,
+  venueId = null,
+}: Props) {
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => setTick((t) => t + 1), 250);
@@ -38,6 +46,7 @@ export function MonitorPreviewView({ slot, session, timerState, timerTheme, time
         state={timerState}
         logoUrl={logoDisplayUrl}
         idleSlot={slot}
+        venueId={venueId}
       />
       <p className="mpreview-hint">ESC — 돌아가기</p>
     </div>

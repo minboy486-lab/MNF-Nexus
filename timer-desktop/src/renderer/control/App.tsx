@@ -528,6 +528,7 @@ export function App() {
           }
         : prev,
     );
+    setBlinds([]);
     closeSettings();
     setView({ kind: "main" });
   }, [venuePinFor, venuePinPending, lanViewState, closeSettings]);
@@ -1076,6 +1077,7 @@ export function App() {
           error={error}
           timerTheme={timerTheme}
           timerLook={timerLook}
+          venueId={currentVenueId}
           onBack={() => setView({ kind: "main" })}
           onCommand={(action, options) => void handleCommand(currentSession.gameId, action, options)}
           onRequestEndGame={() => void handleRequestEndGame(currentSession.gameId)}
@@ -1113,6 +1115,7 @@ export function App() {
             timerState={lanViewState?.timer ?? null}
             timerTheme={normalizeUiTheme(lanViewState?.theme ?? timerTheme)}
             timerLook={timerLook}
+            venueId={currentVenueId}
           />
         </section>
       )}
@@ -1124,6 +1127,7 @@ export function App() {
           timerState={previewTimer}
           timerTheme={timerTheme}
           timerLook={timerLook}
+          venueId={currentVenueId}
         />
       )}
 
@@ -1135,6 +1139,7 @@ export function App() {
           savedName={savedTimerThemes.find((s) => s.id === activeTimerThemeId)?.name ?? null}
           activeSavedId={activeTimerThemeId.startsWith("saved-") ? activeTimerThemeId : null}
           savedThemes={savedTimerThemes}
+          venueId={currentVenueId}
           onChange={handleSetTimerLook}
           onClear={(id) => handleSelectTimerTheme(id ?? timerTheme)}
           onSaveAsTheme={handleSaveTimerTheme}
