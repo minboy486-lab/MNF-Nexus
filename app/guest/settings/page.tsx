@@ -1,7 +1,5 @@
 import Link from "next/link";
 import { GuestPasswordForm } from "@/components/guest/GuestPasswordForm";
-import { GuestPushSettings } from "@/components/guest/GuestPushSettings";
-import { GuestSiteDataReset } from "@/components/guest/GuestSiteDataReset";
 import { signOut } from "@/lib/actions/auth";
 
 export default function GuestSettingsPage() {
@@ -17,15 +15,11 @@ export default function GuestSettingsPage() {
         </Link>
         <div>
           <h1 className="text-xl font-bold">계정 설정</h1>
-          <p className="text-sm text-on-surface-variant">비밀번호 · 알림 · 로그아웃</p>
+          <p className="text-sm text-on-surface-variant">비밀번호 · 로그아웃</p>
         </div>
       </div>
 
-      <GuestPushSettings />
-
       <GuestPasswordForm />
-
-      <GuestSiteDataReset />
 
       <form action={signOut} className="flex justify-center">
         <button
