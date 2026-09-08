@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { GameSession } from "../../shared/types";
-import { tableLetter } from "../../shared/types";
+import { floorTableLetter } from "../../shared/floorPlan";
 import {
   PARTICIPATION_BUY_IN_POINTS,
   RANK_MONEY_IN_POINTS,
@@ -18,6 +18,7 @@ type RankRow = {
 
 type Props = {
   session: GameSession;
+  venueId?: string | null;
   pending: boolean;
   onCancel: () => void;
   onConfirm: (rankings: RankingEntry[]) => void;
@@ -44,7 +45,7 @@ function suggestMoneyIn(rank: number): string {
   return "";
 }
 
-export function GameRankingModal({ session, pending, onCancel, onConfirm }: Props) {
+export function GameRankingModal({ session, venueId, pending, onCancel, onConfirm }: Props) {
   const [rows, setRows] = useState<RankRow[]>(() => initRows(session));
 
   function patchRow(memberId: string, patch: Partial<RankRow>) {
@@ -121,7 +122,7 @@ export function GameRankingModal({ session, pending, onCancel, onConfirm }: Prop
               {preview.map((r) => (
                 <tr key={r.memberId}>
                   <td className="ranking-table__name">{r.nickname}</td>
-                  <td className="ranking-table__table">{r.tableSlot ? tableLetter(r.tableSlot) : "—"}</td>
+                  <td className="ranking-table__table">{r.tableSlot ? floorTableLetter(venueId, r.tableSlot) : "—"}</td>
                   <td>
                     <input
                       className="ranking-table__input ranking-table__input--rank"

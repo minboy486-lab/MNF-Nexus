@@ -32,6 +32,8 @@ export type MemberSummary = {
 export type ControlApi = {
   // 디스플레이/설정
   getDisplays: () => Promise<DisplayInfo[]>;
+  identifyDisplays: () => Promise<{ ok: true }>;
+  clearDisplayIdentify: () => Promise<{ ok: true }>;
   getConfig: () => Promise<AppConfig | null>;
   saveConfig: (config: AppConfig) => Promise<{ ok: true } | { ok: false; error: string }>;
   setVenue: (opts: { venueId: string; pin: string }) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -232,6 +234,8 @@ export type ControlApi = {
 
 const api: ControlApi = {
   getDisplays: () => ipcRenderer.invoke("displays:get"),
+  identifyDisplays: () => ipcRenderer.invoke("displays:identify"),
+  clearDisplayIdentify: () => ipcRenderer.invoke("displays:identify-clear"),
   getConfig: () => ipcRenderer.invoke("config:get"),
   saveConfig: (config) => ipcRenderer.invoke("config:save", config),
   setVenue: (opts) => ipcRenderer.invoke("venue:set", opts),

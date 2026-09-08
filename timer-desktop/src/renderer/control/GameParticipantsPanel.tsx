@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { GameSession, TableSlot } from "../../shared/types";
-import { tableLetter } from "../../shared/types";
+import { floorTableLetter } from "../../shared/floorPlan";
 import type { OnFloorGuest } from "../../preload/control";
 import type { GameParticipant } from "../../shared/participants";
 
@@ -10,7 +10,7 @@ type Props = {
   onError?: (msg: string) => void;
 };
 
-export function GameParticipantsPanel({ session, onError }: Props) {
+export function GameParticipantsPanel({ session, venueId, onError }: Props) {
   const [guests, setGuests] = useState<OnFloorGuest[]>([]);
   const [activeTable, setActiveTable] = useState<TableSlot | "all">("all");
   const [pending, setPending] = useState(false);
@@ -82,7 +82,7 @@ export function GameParticipantsPanel({ session, onError }: Props) {
             className={`participants-tabs__btn${activeTable === tab ? " participants-tabs__btn--active" : ""}`}
             onClick={() => setActiveTable(tab === "all" ? "all" : tab)}
           >
-            {tab === "all" ? "전체" : `${tableLetter(tab)} 테이블`}
+            {tab === "all" ? "전체" : `${floorTableLetter(venueId, tab)} 테이블`}
           </button>
         ))}
       </div>
@@ -95,7 +95,13 @@ export function GameParticipantsPanel({ session, onError }: Props) {
           ) : (
             <ul className="participants-list">
               {visibleParticipants.map((p) => (
-                <ParticipantRow key={p.memberId} p={p} onRemove={() => void removeGuest(p.memberId)} pending={pending} />
+                <ParticipantRow
+                  key={p.memberId}
+                  p={p}
+                  venueId={venueId}
+                  onRemove={() => void removeGuest(p.memberId)}
+                  pending={pending}
+                />
               ))}
             </ul>
           )}
@@ -124,10 +130,12 @@ export function GameParticipantsPanel({ session, onError }: Props) {
 
 function ParticipantRow({
   p,
+  venueId,
   onRemove,
   pending,
 }: {
   p: GameParticipant;
+  venueId?: string | null;
   onRemove: () => void;
   pending: boolean;
 }) {
@@ -135,7 +143,7 @@ function ParticipantRow({
     <li className="participants-list__item">
       <span>
         {p.nickname}
-        {p.tableSlot ? <span className="muted"> · {tableLetter(p.tableSlot)}</span> : null}
+        {p.tableSlot ? <span className="muted"> · {floorTableLetter(venueId, p.tableSlot)}</span> : null}
       </span>
       <button type="button" className="participants-list__remove" disabled={pending} onClick={onRemove}>
         제거

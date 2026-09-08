@@ -53,6 +53,42 @@ function initialAssignments(
   return draft;
 }
 
+function DisplayArrangeMap({ displays }: { displays: DisplayInfo[] }) {
+  const layout = useMemo(() => {
+    if (displays.length === 0) return null;
+    const minX = Math.min(...displays.map((d) => d.bounds.x));
+    const minY = Math.min(...displays.map((d) => d.bounds.y));
+    const maxX = Math.max(...displays.map((d) => d.bounds.x + d.bounds.width));
+    const maxY = Math.max(...displays.map((d) => d.bounds.y + d.bounds.height));
+    const w = Math.max(1, maxX - minX);
+    const h = Math.max(1, maxY - minY);
+    return { minX, minY, w, h };
+  }, [displays]);
+
+  if (!layout) return null;
+
+  return (
+    <div className="setup-map" aria-label="디스플레이 배치">
+      {displays.map((d) => {
+        const left = ((d.bounds.x - layout.minX) / layout.w) * 100;
+        const top = ((d.bounds.y - layout.minY) / layout.h) * 100;
+        const width = (d.bounds.width / layout.w) * 100;
+        const height = (d.bounds.height / layout.h) * 100;
+        return (
+          <div
+            key={d.id}
+            className={`setup-map__cell${d.isPrimary ? " setup-map__cell--primary" : ""}`}
+            style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
+            title={`디스플레이 ${d.osNumber}`}
+          >
+            <span className="setup-map__num">{d.osNumber}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SetupScreen({ displays, initialConfig, onSaved, onOpenControl }: Props) {
   const defaultControl =
     initialConfig?.controlDisplayId ??
@@ -70,6 +106,7 @@ export function SetupScreen({ displays, initialConfig, onSaved, onOpenControl }:
     initialAssignments(displays, initialConfig, defaultControl, yeoksam),
   );
   const [pending, setPending] = useState(false);
+  const [identifying, setIdentifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const displayCount = useMemo(
@@ -89,6 +126,18 @@ export function SetupScreen({ displays, initialConfig, onSaved, onOpenControl }:
       }
       return next;
     });
+  }
+
+  async function handleIdentify(): Promise<void> {
+    setIdentifying(true);
+    setError(null);
+    try {
+      await window.controlApi.identifyDisplays();
+    } catch {
+      setError("디스플레이 번호 표시에 실패했습니다.");
+    } finally {
+      window.setTimeout(() => setIdentifying(false), 3000);
+    }
   }
 
   async function handleSave(): Promise<void> {
@@ -163,19 +212,34 @@ export function SetupScreen({ displays, initialConfig, onSaved, onOpenControl }:
       <p className="muted">
         {yeoksam
           ? "화면은 Bm/Bt/Ct/Dt 아무거나 지정하세요. 같은 슬롯은 어느 PC에 꽂아도 같은 게임이 나옵니다. Control(관리자)은 이 PC를 매장 허브로 둘 때 쓰면 되고, 허브 화면을 Ct로 바꿔도 허브는 유지됩니다."
-          : "Control 모니터와 Display(At~Et)를 지정하세요."}
+          : "Control 모니터와 Display(At~Et)를 지정하세요. 번호는 Windows 디스플레이 설정과 같습니다."}
       </p>
+
+      <div className="setup-identify-row">
+        <button type="button" disabled={identifying || displays.length === 0} onClick={() => void handleIdentify()}>
+          {identifying ? "번호 표시 중…" : "각 화면에 번호 띄우기"}
+        </button>
+        <span className="muted">Windows 디스플레이 설정의 1·2·3…과 같은 번호입니다.</span>
+      </div>
+
+      <DisplayArrangeMap displays={displays} />
 
       <ul className="setup-list">
         {displays.map((d) => {
           const current = assignments[d.id] ?? "unused";
           return (
             <li key={d.id} className="setup-row">
-              <div className="setup-meta">
-                <strong>{d.label}</strong>
-                <span className="muted">
-                  ID {d.id}{d.isPrimary ? " · Primary" : ""} · {d.bounds.width}×{d.bounds.height}
+              <div className="setup-meta setup-meta--numbered">
+                <span className="setup-os-num" aria-hidden>
+                  {d.osNumber}
                 </span>
+                <div className="setup-meta__text">
+                  <strong>디스플레이 {d.osNumber}</strong>
+                  <span className="muted">
+                    {d.label}
+                    {d.isPrimary ? " · Primary" : ""} · {d.bounds.width}×{d.bounds.height}
+                  </span>
+                </div>
               </div>
               <select
                 value={current}

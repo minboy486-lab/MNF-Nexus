@@ -2,6 +2,7 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from
 import {
   type ControlLook,
   type ControlWidgetId,
+  CONTROL_OFFSET_MAX,
 } from "../../shared/controlLook";
 
 export type ControlLookEdit = {
@@ -13,6 +14,10 @@ export type ControlLookEdit = {
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
+}
+
+function clampOffset(n: number): number {
+  return clamp(n, -CONTROL_OFFSET_MAX, CONTROL_OFFSET_MAX);
 }
 
 type Props = {
@@ -61,8 +66,8 @@ export function ControlLookWrap({ id, look, edit, className, children }: Props) 
           const move = (ev: PointerEvent) => {
             edit.onMove(
               id,
-              clamp(startOx + ((ev.clientX - startX) / rect.width) * 100, -80, 80),
-              clamp(startOy + ((ev.clientY - startY) / rect.height) * 100, -80, 80),
+              clampOffset(startOx + ((ev.clientX - startX) / rect.width) * 100),
+              clampOffset(startOy + ((ev.clientY - startY) / rect.height) * 100),
             );
           };
           const up = () => {
@@ -138,8 +143,8 @@ export function FloorSlotLook({ id, look, edit, className, children }: SlotProps
           const move = (ev: PointerEvent) => {
             edit.onMove(
               id,
-              clamp(startOx + ((ev.clientX - startX) / rect.width) * 100, -80, 80),
-              clamp(startOy + ((ev.clientY - startY) / rect.height) * 100, -80, 80),
+              clampOffset(startOx + ((ev.clientX - startX) / rect.width) * 100),
+              clampOffset(startOy + ((ev.clientY - startY) / rect.height) * 100),
             );
           };
           const up = () => {

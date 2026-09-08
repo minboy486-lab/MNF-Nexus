@@ -350,6 +350,7 @@ export class WindowManager {
         const pd = screen.getPrimaryDisplay();
         return {
           id: pd.id,
+          osNumber: 1,
           label: pd.label || `Display ${pd.id}`,
           bounds: pd.bounds,
           workArea: pd.workArea,

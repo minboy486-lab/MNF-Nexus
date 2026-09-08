@@ -160,6 +160,8 @@ export interface AppConfig {
 
 export interface DisplayInfo {
   id: number;
+  /** Windows 디스플레이 설정 Identify 번호에 가까운 OS 번호 (1, 2, 3…) */
+  osNumber: number;
   label: string;
   bounds: DisplayBounds;
   workArea: DisplayBounds;

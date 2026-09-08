@@ -1,7 +1,7 @@
 import type { TableTimerState } from "@mnf/timer/types";
 import { hasReachedRegClose, resolveTimerPauseKind } from "@mnf/timer/levels";
 import type { AppSnapshot, GameSession } from "../../shared/types";
-import { tableLetter } from "../../shared/types";
+import { floorTableLetter } from "../../shared/floorPlan";
 
 const SHARE_FOOTER = `3MP 데일리
 Start : 4만 chips
@@ -27,8 +27,8 @@ function tablesForGame(snapshot: AppSnapshot, session: GameSession): number[] {
   return [...slots].filter((n) => Number.isInteger(n) && n >= 1).sort((a, b) => a - b);
 }
 
-function tableLabel(slots: number[]): string {
-  const letters = slots.map((s) => tableLetter(s));
+function tableLabel(venueId: string | null | undefined, slots: number[]): string {
+  const letters = slots.map((s) => floorTableLetter(venueId, s));
   if (letters.length === 0) return "";
   if (letters.length === 1) return `${letters[0]} 테이블`;
   return `${letters.join(",")} 테이블`;
@@ -47,12 +47,17 @@ function isMttShare(session: GameSession, slots: number[]): boolean {
   return session.isMtt === true || slots.length >= 2;
 }
 
-function gameBlock(session: GameSession, snapshot: AppSnapshot, timers: TableTimerState[]): string {
+function gameBlock(
+  session: GameSession,
+  snapshot: AppSnapshot,
+  timers: TableTimerState[],
+  venueId?: string | null,
+): string {
   const slots = tablesForGame(snapshot, session);
   const mtt = isMttShare(session, slots);
   const name = gameNameForShare(session.structureName || "게임");
   const gameTitle = mtt ? "MTT게임" : `${name} 게임`;
-  const tables = tableLabel(slots);
+  const tables = tableLabel(venueId, slots);
   const title = tables ? `🤩 ${tables} ${gameTitle} 🤩` : `🤩 ${gameTitle} 🤩`;
   const timer = timers.find((t) => t.tableId === session.gameId);
   const level = Math.floor(timer?.blindLevel ?? 1);
@@ -64,6 +69,7 @@ function gameBlock(session: GameSession, snapshot: AppSnapshot, timers: TableTim
 export type KakaoOrigin = {
   snapshot: AppSnapshot;
   timers: TableTimerState[];
+  venueId?: string | null;
 };
 
 export function formatKakaoGameStatusFromOrigins(origins: KakaoOrigin[]): string {
@@ -75,7 +81,7 @@ export function formatKakaoGameStatusFromOrigins(origins: KakaoOrigin[]): string
     const tb = tablesForGame(b.origin.snapshot, b.session)[0] ?? 99;
     return ta - tb || a.session.gameId - b.session.gameId;
   });
-  const blocks = games.map((g) => gameBlock(g.session, g.origin.snapshot, g.origin.timers)).join("\n\n");
+  const blocks = games.map((g) => gameBlock(g.session, g.origin.snapshot, g.origin.timers, g.origin.venueId)).join("\n\n");
   const body = blocks ? `${blocks}\n\n` : "";
   return `☪️ MNF HOLDEM ☪️
 
@@ -84,8 +90,12 @@ export function formatKakaoGameStatusFromOrigins(origins: KakaoOrigin[]): string
 ${body}${SHARE_FOOTER}`;
 }
 
-export function formatKakaoGameStatus(snapshot: AppSnapshot, timers: TableTimerState[]): string {
-  return formatKakaoGameStatusFromOrigins([{ snapshot, timers }]);
+export function formatKakaoGameStatus(
+  snapshot: AppSnapshot,
+  timers: TableTimerState[],
+  venueId?: string | null,
+): string {
+  return formatKakaoGameStatusFromOrigins([{ snapshot, timers, venueId }]);
 }
 
 export type ShareStatusResult = "shared" | "cancelled" | "sheet";

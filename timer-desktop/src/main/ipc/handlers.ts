@@ -5,6 +5,7 @@ import { loadConfig, parseConfigInput, saveConfig } from "../config/configStore"
 import { getConfiguredVenueId, verifyVenueControlPin } from "../supabase/venue";
 import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 import { getAllDisplaysInfo } from "../screen/displayMapper";
+import { clearDisplayIdentify, flashDisplayIdentify } from "../screen/displayIdentify";
 import { listBlindStructures } from "../supabase/blinds";
 import type { TimerHub } from "../timer/timerHub";
 import type { GameSession, MonitorSlot, TableSlot, AppConfig } from "../../shared/types";
@@ -204,6 +205,14 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
   });
   // ── 디스플레이 & 설정 ──────────────────────────────────────
   ipcMain.handle("displays:get", () => getAllDisplaysInfo());
+  ipcMain.handle("displays:identify", () => {
+    flashDisplayIdentify(getAllDisplaysInfo());
+    return { ok: true as const };
+  });
+  ipcMain.handle("displays:identify-clear", () => {
+    clearDisplayIdentify();
+    return { ok: true as const };
+  });
   ipcMain.handle("config:get", () => wm.getConfig() ?? loadConfig());
   ipcMain.handle("config:save", async (_e, raw: unknown) => {
     const parsed = parseConfigInput(raw);

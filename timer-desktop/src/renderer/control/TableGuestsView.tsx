@@ -3,7 +3,7 @@ import type { TableTimerState } from "@mnf/timer/types";
 import { formatRemainingMs, getDisplayRemainingMs } from "@mnf/timer/engine";
 import { formatTimerLevelShort } from "@mnf/timer/levels";
 import type { AppSnapshot, GameSession, TableSlot } from "../../shared/types";
-import { tableName } from "../../shared/types";
+import { floorTableName } from "../../shared/floorPlan";
 import type { OnFloorGuest } from "../../preload/control";
 import type { GameParticipant } from "../../shared/participants";
 import { sortParticipants } from "../../shared/participants";
@@ -23,6 +23,7 @@ type DragState = {
 type Props = {
   snapshot: AppSnapshot;
   timers: TableTimerState[];
+  venueId?: string | null;
   openedFromSlot?: number | null;
   onError?: (msg: string) => void;
   onBack: () => void;
@@ -45,7 +46,7 @@ function participantsAtTable(session: GameSession, tableSlot: TableSlot): GamePa
   return sortParticipants((session.participants ?? []).filter((p) => p.tableSlot === tableSlot));
 }
 
-export function TableGuestsView({ snapshot, timers, openedFromSlot, onError, onBack, onRequestEndGame }: Props) {
+export function TableGuestsView({ snapshot, timers, venueId, openedFromSlot, onError, onBack, onRequestEndGame }: Props) {
   const tables = useMemo(() => collectAssignedTables(snapshot), [snapshot]);
   const uniqueSessions = useMemo(() => {
     const seen = new Map<number, GameSession>();
@@ -198,6 +199,7 @@ export function TableGuestsView({ snapshot, timers, openedFromSlot, onError, onB
             key={t.slot}
             tableSlot={t.slot}
             session={t.session}
+            venueId={venueId}
             highlighted={openedFromSlot === t.slot}
             pending={pending}
             drag={drag}
@@ -283,6 +285,7 @@ function GameStatsBar({
 type PanelProps = {
   tableSlot: TableSlot;
   session: GameSession;
+  venueId?: string | null;
   highlighted?: boolean;
   pending: boolean;
   drag: DragState | null;
@@ -302,6 +305,7 @@ type PanelProps = {
 function TableGuestPanel({
   tableSlot,
   session,
+  venueId,
   highlighted,
   pending,
   drag,
@@ -378,7 +382,7 @@ function TableGuestPanel({
     >
       <header className="table-guests__head">
         <h2 className="table-guests__title">
-          {tableName(tableSlot)} · G{session.gameId} {session.structureName}
+          {floorTableName(venueId, tableSlot)} · G{session.gameId} {session.structureName}
         </h2>
         <span className="table-guests__count">{tableParticipants.length}명</span>
       </header>

@@ -8,6 +8,7 @@ import {
   MISA_TABLE_HOTKEY,
   YEOKSAM_MONITOR_HOTKEY,
   YEOKSAM_TABLE_HOTKEY,
+  floorTableLetter,
   isYeoksamFloor,
   monitorLabel,
 } from "../../shared/floorPlan";
@@ -139,12 +140,12 @@ function YeoksamFloorPlan({ snapshot, venueId, controlLook, edit, onTableClick, 
 }
 
 /**
- * 미사점 레이아웃:
+ * 미사점 레이아웃 (표시 라벨):
  *
- * [Et][E]
- *            [D][Dt]
  * [Ct][C]
- *            [B][Bt]
+ *            [D][Dt]
+ * [Bt][B]
+ *            [E][Et]
  * [At][A]
  */
 function DefaultFloorPlan({ snapshot, venueId, controlLook, edit, onTableClick, onMonitorClick }: Props) {
@@ -162,7 +163,7 @@ function DefaultFloorPlan({ snapshot, venueId, controlLook, edit, onTableClick, 
     const on = slotActive(edit, id, s);
     return (
       <SlotBtn
-        label={tableLetter(slot)}
+        label={floorTableLetter(venueId, slot)}
         hotkey={edit ? undefined : MISA_TABLE_HOTKEY[slot]}
         sub={on ? `G${s?.gameId ?? 1}` : undefined}
         active={on}

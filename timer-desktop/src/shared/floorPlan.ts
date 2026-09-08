@@ -16,12 +16,21 @@ export const MISA_MONITOR_HOTKEY: Record<number, string> = {
   1: "Z", 2: "V", 3: "A", 4: "F", 5: "Q",
 };
 
+/** 미사 표시 문자: 내부 슬롯 2/3/5 = B/C/E → 화면 E/B/C (B↔E↔C 순환) */
+export const MISA_TABLE_LETTERS: Record<number, string> = {
+  1: "A",
+  2: "E",
+  3: "B",
+  4: "D",
+  5: "C",
+};
+
 export const MISA_MONITOR_LABELS: Record<number, string> = {
   1: "At",
-  2: "Bt",
-  3: "Ct",
+  2: "Et",
+  3: "Bt",
   4: "Dt",
-  5: "Et",
+  5: "Ct",
 };
 
 /** D=a, B=s, C=d */
@@ -82,6 +91,21 @@ export function floorHotkeys(venueId: string | null | undefined): {
 export function monitorLabel(venueId: string | null | undefined, slot: number): string {
   if (isYeoksamFloor(venueId)) return YEOKSAM_MONITOR_LABELS[slot] ?? `M${slot}`;
   return MISA_MONITOR_LABELS[slot] ?? `M${slot}`;
+}
+
+/** 배치도·팝업용 테이블 문자 (미사 B/C/E 표시 순환 반영) */
+export function floorTableLetter(venueId: string | null | undefined, slot: number): string {
+  if (!isYeoksamFloor(venueId)) {
+    return MISA_TABLE_LETTERS[slot] ?? String(slot);
+  }
+  if (slot >= 1 && slot <= 6) {
+    return String.fromCharCode(64 + slot); // A..F
+  }
+  return String(slot);
+}
+
+export function floorTableName(venueId: string | null | undefined, slot: number): string {
+  return `${floorTableLetter(venueId, slot)} 테이블`;
 }
 
 export function controlOutputSlotOf(config: { venueId?: string; controlOutputSlot?: number | null } | null): number | null {

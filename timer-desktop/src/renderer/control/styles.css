@@ -220,11 +220,11 @@ h2 { font-size: 1rem; font-weight: 700; }
   flex: 0 0 auto;
 }
 
-.floor-cell { display: flex; align-items: stretch; }
+.floor-cell { display: flex; align-items: stretch; overflow: visible; position: relative; }
 .floor-cell--center { justify-content: center; align-items: center; }
 .floor-cell--table { flex: 1; padding: 0 5px; }
 
-/* 미사: D는 E·C 중간, B는 A·C 중간 */
+/* 미사: D는 C·B 중간, E는 A·B 중간 (표시 라벨 기준) */
 .floor-plan--misa {
   display: grid;
   grid-template-columns: 68px 1fr 40px 1fr 68px;
@@ -232,6 +232,7 @@ h2 { font-size: 1rem; font-weight: 700; }
   gap: 8px;
   align-items: stretch;
   container-type: size;
+  overflow: visible;
 }
 .misa-e-m { grid-column: 1; grid-row: 1 / 3; }
 .misa-e-t { grid-column: 2; grid-row: 1 / 3; }
@@ -2344,6 +2345,51 @@ h2 { font-size: 1rem; font-weight: 700; }
   margin-top: 14px;
 }
 
+.setup-identify-row {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.setup-map {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 200px;
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-mid);
+  overflow: hidden;
+}
+
+.setup-map__cell {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 22px;
+}
+
+.setup-map__cell--primary {
+  border-color: var(--primary, #ffb6c9);
+  background: color-mix(in srgb, var(--primary, #ffb6c9) 18%, transparent);
+}
+
+.setup-map__num {
+  font-size: clamp(14px, 3.5vw, 28px);
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+}
+
 .setup-row {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -2355,7 +2401,32 @@ h2 { font-size: 1rem; font-weight: 700; }
 }
 
 .setup-meta { display: flex; flex-direction: column; gap: 3px; }
-.setup-meta strong { font-size: 0.9rem; }
+.setup-meta--numbered {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+.setup-meta__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.setup-meta strong { font-size: 0.95rem; }
+.setup-os-num {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 800;
+  background: color-mix(in srgb, var(--primary, #ffb6c9) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary, #ffb6c9) 45%, transparent);
+  color: var(--text);
+}
 
 .setup-footer {
   margin-top: 14px;
@@ -2819,6 +2890,12 @@ h2 { font-size: 1rem; font-weight: 700; }
     rotate(var(--slot-rot, 0deg))
     scale(var(--slot-scale, 1));
   transform-origin: center center;
+}
+.floor-slot-look--misa.ctrl-item--editing {
+  z-index: 6;
+}
+.floor-slot-look--misa.ctrl-item--selected {
+  z-index: 7;
 }
 .floor-slot-look--misa .slot-btn {
   width: 100%;

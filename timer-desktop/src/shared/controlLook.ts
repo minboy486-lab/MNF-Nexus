@@ -2,12 +2,14 @@ import {
   isUiThemeId,
   normalizeUiTheme,
   resolveControlTheme,
-  tableLetter,
   withUiThemes,
   type AppConfig,
   type UiThemeId,
 } from "./types";
-import { isYeoksamFloor, monitorLabel } from "./floorPlan";
+import { floorTableLetter, isYeoksamFloor, monitorLabel } from "./floorPlan";
+
+/** 컨트롤 look 위젯 위치 오프셋 (%). 플로어 슬롯이 반대쪽 끝까지 갈 수 있게 넉넉히. */
+export const CONTROL_OFFSET_MAX = 200;
 
 export const CONTROL_WIDGET_IDS = [
   "header",
@@ -102,7 +104,7 @@ export function storeSlotWidgets(venueId: string | null | undefined): {
 export function storeSlotLabel(id: ControlWidgetId, venueId: string | null | undefined): string {
   if (id.startsWith("table")) {
     const slot = Number(id.slice(5));
-    return `테이블 ${tableLetter(slot)}`;
+    return `테이블 ${floorTableLetter(venueId, slot)}`;
   }
   if (id.startsWith("monitor")) {
     const slot = Number(id.slice(7));
@@ -215,8 +217,8 @@ function parseWidget(raw: unknown, fallback: ControlWidgetLook): ControlWidgetLo
   if (!raw || typeof raw !== "object") return { ...fallback };
   const o = raw as Record<string, unknown>;
   return {
-    ox: typeof o.ox === "number" ? clamp(o.ox, -80, 80) : fallback.ox,
-    oy: typeof o.oy === "number" ? clamp(o.oy, -80, 80) : fallback.oy,
+    ox: typeof o.ox === "number" ? clamp(o.ox, -CONTROL_OFFSET_MAX, CONTROL_OFFSET_MAX) : fallback.ox,
+    oy: typeof o.oy === "number" ? clamp(o.oy, -CONTROL_OFFSET_MAX, CONTROL_OFFSET_MAX) : fallback.oy,
     visible: o.visible !== false,
     color: asColor(o.color, fallback.color),
     colorSet: o.colorSet === true,

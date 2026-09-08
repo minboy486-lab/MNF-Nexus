@@ -11,7 +11,6 @@ import {
   normalizeUiTheme,
   resolveControlTheme,
   resolveTimerTheme,
-  tableName,
   UI_THEME_OPTIONS,
   UI_THEME_SWATCHES,
   isUiThemeId,
@@ -41,7 +40,7 @@ import { AssignPopup } from "./AssignPopup";
 import headerLogoUrl from "./mnf-logo.png";
 import { BlindSelectView } from "./BlindSelectView";
 import { FloorPlanView } from "./FloorPlanView";
-import { controlOutputSlotOf, floorHotkeys, isYeoksamFloor, monitorLabel, yeoksamOutputGameId } from "../../shared/floorPlan";
+import { controlOutputSlotOf, floorHotkeys, floorTableName, isYeoksamFloor, monitorLabel, yeoksamOutputGameId } from "../../shared/floorPlan";
 import { GameControlView } from "./GameControlView";
 import { GameListView } from "./GameListView";
 import { MonitorPreviewView } from "./MonitorPreviewView";
@@ -1095,6 +1094,7 @@ export function App() {
         <TableGuestsView
           snapshot={snapshot}
           timers={timers}
+          venueId={currentVenueId}
           openedFromSlot={view.openedFromSlot}
           onError={setError}
           onBack={() => setView({ kind: "main" })}
@@ -1182,7 +1182,7 @@ export function App() {
 
       {popup?.kind === "table" && (
         <AssignPopup
-          title={`${tableName(popup.slot)} 게임 연결`}
+          title={`${floorTableName(currentVenueId, popup.slot)} 게임 연결`}
           mousePos={popup.pos}
           currentGameId={snapshot.tableAssignments[popup.slot] ?? null}
           sessions={snapshot.sessions}
@@ -1652,6 +1652,7 @@ export function App() {
         return (
           <GameRankingModal
             session={rankingSession}
+            venueId={currentVenueId}
             pending={pending}
             onCancel={() => setRankingGameId(null)}
             onConfirm={(rankings) => void handleFinalizeScores(rankingGameId, rankings)}

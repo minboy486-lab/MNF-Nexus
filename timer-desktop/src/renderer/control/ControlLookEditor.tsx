@@ -5,6 +5,7 @@ import { venueName } from "@mnf/venue";
 import { APP_VERSION, APP_VERSION_LABEL } from "../../shared/appVersion";
 import {
   CONTROL_FLOOR_WIDGETS,
+  CONTROL_OFFSET_MAX,
   CONTROL_WIDGET_LABELS,
   isFloorSlotWidget,
   overlayFromControlTheme,
@@ -249,7 +250,7 @@ export function ControlLookEditor({
       const w = look.widgets[selected];
       const ox = (w.ox ?? 0) + (e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0);
       const oy = (w.oy ?? 0) + (e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0);
-      commitLook(patchControlWidget(look, selected, { ox: clamp(ox, -80, 80), oy: clamp(oy, -80, 80) }), `move-${selected}`);
+      commitLook(patchControlWidget(look, selected, { ox: clamp(ox, -CONTROL_OFFSET_MAX, CONTROL_OFFSET_MAX), oy: clamp(oy, -CONTROL_OFFSET_MAX, CONTROL_OFFSET_MAX) }), `move-${selected}`);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
