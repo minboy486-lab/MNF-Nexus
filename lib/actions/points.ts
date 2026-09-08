@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { canManageGuests } from "@/lib/auth/roles";
 import { getGuestPointHistory } from "@/lib/data/guest-queries";
 import { getProfile } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { isSupabaseAdminConfigured, isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveVenueId } from "@/lib/venue/active";
 import { mpToWon } from "@/lib/utils/mp";
 import { schedulePointChangePush } from "@/lib/push/schedule-point-push";
@@ -51,6 +52,9 @@ export async function adjustMemberPoints(params: {
   note?: string;
 }): Promise<{ ok: true; pointBalance: number } | { error: string }> {
   if (!isSupabaseConfigured()) return { error: "데모 모드" };
+  if (!isSupabaseAdminConfigured()) {
+    return { error: "SUPABASE_SERVICE_ROLE_KEY가 필요합니다." };
+  }
 
   const { user, profile } = await getProfile();
   if (!user) return { error: "로그인이 필요합니다." };
@@ -63,12 +67,12 @@ export async function adjustMemberPoints(params: {
   if (!Number.isFinite(deltaMp) || deltaMp === 0) return { error: "조정할 MP를 입력하세요." };
 
   const deltaWon = mpToWon(deltaMp);
-  const supabase = await createClient();
   const venueId = await getActiveVenueId();
+  const admin = createAdminClient();
 
-  const { data: member, error: memberError } = await supabase
+  const { data: member, error: memberError } = await admin
     .from("members")
-    .select("id, venue_id")
+    .select("id, venue_id, point_balance, credit_balance")
     .eq("id", memberId)
     .maybeSingle();
 
@@ -76,26 +80,47 @@ export async function adjustMemberPoints(params: {
   if (!member) return { error: "손님을 찾을 수 없습니다." };
   if (member.venue_id !== venueId) return { error: "현재 지점의 손님이 아닙니다." };
 
-  const { data, error } = await supabase.rpc("adjust_member_points", {
-    p_member_id: memberId,
-    p_delta: deltaWon,
-    p_note: params.note?.trim() || null,
-    p_created_by: user.id,
-  });
+  let newPoint = Number(member.point_balance ?? 0) + deltaWon;
+  let newCredit = Number(member.credit_balance ?? 0);
+  if (newPoint < 0) {
+    const overflow = Math.abs(newPoint);
+    newPoint = 0;
+    newCredit -= overflow;
+  }
 
-  if (error) return { error: error.message };
+  const txnType = deltaWon > 0 ? "point_earn" : "point_spend";
+  const amount = Math.abs(deltaWon);
+  const note = params.note?.trim() || null;
 
-  const result = data as { point_balance?: number; transaction_id?: string } | null;
-  const pointBalance = typeof result?.point_balance === "number" ? result.point_balance : 0;
-  const transactionId =
-    typeof result?.transaction_id === "string" ? result.transaction_id : undefined;
+  const { error: updateError } = await admin
+    .from("members")
+    .update({ point_balance: newPoint, credit_balance: newCredit })
+    .eq("id", memberId);
+
+  if (updateError) return { error: updateError.message };
+
+  const { data: txn, error: txnError } = await admin
+    .from("money_transactions")
+    .insert({
+      venue_id: member.venue_id,
+      member_id: memberId,
+      txn_type: txnType,
+      amount,
+      payment_method: "points",
+      note,
+      created_by: user.id,
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (txnError) return { error: txnError.message };
 
   schedulePointChangePush({
     memberId,
     deltaMp,
-    balanceWon: pointBalance,
-    note: params.note?.trim(),
-    transactionId,
+    balanceWon: newPoint,
+    note: note ?? undefined,
+    transactionId: typeof txn?.id === "string" ? txn.id : undefined,
   });
 
   revalidatePath("/admin/guests");
@@ -104,6 +129,6 @@ export async function adjustMemberPoints(params: {
 
   return {
     ok: true,
-    pointBalance,
+    pointBalance: newPoint,
   };
 }
