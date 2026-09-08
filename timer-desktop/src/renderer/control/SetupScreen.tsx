@@ -219,7 +219,7 @@ export function SetupScreen({ displays, initialConfig, onSaved, onOpenControl }:
         <button type="button" disabled={identifying || displays.length === 0} onClick={() => void handleIdentify()}>
           {identifying ? "번호 표시 중…" : "각 화면에 번호 띄우기"}
         </button>
-        <span className="muted">Windows 디스플레이 설정의 1·2·3…과 같은 번호입니다.</span>
+        <span className="muted">Windows 디스플레이 설정의 「식별」번호와 같게 맞춥니다.</span>
       </div>
 
       <DisplayArrangeMap displays={displays} />

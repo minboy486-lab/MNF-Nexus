@@ -1,6 +1,6 @@
 import { screen } from "electron";
 import type { AppConfig, DisplayBounds, DisplayInfo, MonitorMapping } from "../../shared/types";
-import { matchOsNumber, readWindowsMonitorHintsSync } from "./windowsDisplayNumbers";
+import { assignOsNumbersByLayout, readWindowsMonitorHintsSync } from "./windowsDisplayNumbers";
 
 function toBounds(rect: Electron.Rectangle): DisplayBounds {
   return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -32,12 +32,15 @@ export function getAllDisplaysInfo(): DisplayInfo[] {
   }));
 
   const hints = readWindowsMonitorHintsSync();
+  const byLayout = assignOsNumbersByLayout(
+    raw.map((d) => ({ id: d.id, bounds: d.bounds, isPrimary: d.isPrimary })),
+    hints,
+  );
   const fallback = fallbackOsNumbers(raw);
   const used = new Set<number>();
 
   const withOs = raw.map((d) => {
-    const matched = matchOsNumber(d.bounds, hints);
-    let osNumber = matched ?? fallback.get(d.id) ?? 1;
+    let osNumber = byLayout.get(d.id) ?? fallback.get(d.id) ?? 1;
     if (used.has(osNumber)) {
       for (let n = 1; n <= raw.length + 8; n++) {
         if (!used.has(n)) {
