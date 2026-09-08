@@ -37,9 +37,8 @@ export function venueName(id: string | null | undefined): string {
   return venueById(id)?.name ?? "지점";
 }
 
-/** 타이머 송출 화면 상단 브랜드 (지점별) */
-export function timerBrandName(venueId: string | null | undefined): string {
-  if (venueId === MISA_VENUE_ID) return "미드나잇 HOLDEM";
+/** 타이머 송출 상단 제목 fallback (게임 이름이 없을 때) */
+export function timerBrandName(_venueId?: string | null): string {
   return "MNF HOLDEM";
 }
 

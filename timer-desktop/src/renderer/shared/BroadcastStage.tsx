@@ -44,7 +44,7 @@ type Props = {
   edit?: BroadcastEdit;
   className?: string;
   style?: CSSProperties;
-  /** 지점 ID — 타이머 상단 브랜드(역삼 MNF / 미사 미드나잇) */
+  /** 지점 ID — 대기 화면 등에서 브랜드 fallback 에 사용 */
   venueId?: string | null;
 };
 
@@ -64,7 +64,10 @@ export function BroadcastStage({
   style,
   venueId,
 }: Props) {
-  const brandName = timerBrandName(venueId);
+  const gameTitle =
+    session?.structureName?.trim() ||
+    state?.blindStructureName?.trim() ||
+    timerBrandName(venueId);
   const isRunning = state?.status === "running";
   const isPaused = state?.status === "paused";
   const hasGame = !!state?.blindStructureId;
@@ -192,7 +195,7 @@ export function BroadcastStage({
           <>
             <div className="ds-title-bar">
               <OverlayWrap id="title" look={activeLook} edit={edit}>
-                <p className="ds-game-name">{brandName}</p>
+                <p className="ds-game-name">{gameTitle}</p>
               </OverlayWrap>
             </div>
             <div className="ds-layout">
