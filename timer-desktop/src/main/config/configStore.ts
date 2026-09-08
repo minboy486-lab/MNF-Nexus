@@ -103,6 +103,10 @@ function normalizeMapping(raw: unknown, index: number): MonitorMapping | null {
     gameId: null, // 게임 연결은 메모리에서만 관리
     label: typeof item.label === "string" ? item.label : undefined,
     bounds,
+    osNumber:
+      typeof item.osNumber === "number" && Number.isInteger(item.osNumber) && item.osNumber >= 1
+        ? item.osNumber
+        : undefined,
   };
 }
 

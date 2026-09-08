@@ -23,6 +23,7 @@ import { join, resolve } from "node:path";
 import { app, BrowserWindow, screen } from "electron";
 import { loadConfig, saveConfig } from "./config/configStore";
 import { enrichMappingsWithCurrentDisplays } from "./screen/displayMapper";
+import { monitorConfigIdsChanged } from "../shared/displayRemap";
 import { flushPendingSoundVolume, flushWindowManagerConfig, registerIpcHandlers, stopLanView } from "./ipc/handlers";
 import { TimerHub } from "./timer/timerHub";
 import { WindowManager } from "./windows/windowManager";
@@ -37,7 +38,7 @@ import {
   type ShopThemeSyncMode,
 } from "../shared/timerLook";
 import { mergeSavedControlThemes } from "../shared/controlLook";
-import { resolveControlTheme, resolveTimerTheme } from "../shared/types";
+import { resolveControlTheme, resolveTimerTheme, type AppConfig } from "../shared/types";
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
@@ -50,6 +51,15 @@ const timerHub = new TimerHub({
 windowManager.setTimerHub(timerHub);
 const remoteServer = new RemoteServer();
 
+function applyAndPersistMappings(config: AppConfig): void {
+  const enriched = enrichMappingsWithCurrentDisplays(config);
+  void windowManager.applyConfig(enriched).then(() => {
+    if (monitorConfigIdsChanged(config, enriched)) {
+      saveConfig(enriched);
+    }
+  });
+}
+
 function registerScreenEvents(): void {
   const refresh = (): void => {
     const config = windowManager.getConfig() ?? loadConfig();
@@ -57,7 +67,7 @@ function registerScreenEvents(): void {
       void windowManager.syncWindows();
       return;
     }
-    void windowManager.applyConfig(enrichMappingsWithCurrentDisplays(config));
+    applyAndPersistMappings(config);
   };
   screen.on("display-added", refresh);
   screen.on("display-removed", refresh);
@@ -104,7 +114,12 @@ app.whenReady().then(async () => {
   // LAN 연결 전에 로컬 config를 먼저 올려, 빈 상태로 peer 테마를 받아 디스크가 덮이는 일을 막음
   const saved = loadConfig();
   if (saved) {
-    await windowManager.applyConfig(saved);
+    const enriched = enrichMappingsWithCurrentDisplays(saved);
+    await windowManager.applyConfig(enriched);
+    // 재부팅 후 displayId가 바뀌면 새 ID로 다시 저장해 다음에도 유지
+    if (monitorConfigIdsChanged(saved, enriched)) {
+      saveConfig(enriched);
+    }
   } else {
     await windowManager.syncWindows();
   }

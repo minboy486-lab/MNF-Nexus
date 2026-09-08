@@ -121,6 +121,8 @@ export interface MonitorMapping {
   gameId: number | null;
   label?: string;
   bounds?: DisplayBounds;
+  /** Windows 디스플레이 식별 번호. 재부팅 후 displayId 복구용 */
+  osNumber?: number;
   // legacy
   monitorIndex?: number;
   gameNumber?: number | null;

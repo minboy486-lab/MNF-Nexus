@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { AppConfig, DisplayInfo, MonitorSlot } from "../../shared/types";
 import { CONFIG_VERSION, MONITOR_SLOTS } from "../../shared/types";
+import { rematchMonitorConfig } from "../../shared/displayRemap";
 import { YEOKSAM_VENUE_ID, isKnownVenueId, venueName } from "@mnf/venue";
 import { YEOKSAM_SHOP_OUTPUTS, controlOutputSlotOf, isYeoksamFloor, monitorLabel, yeoksamRoleAfterSetup } from "../../shared/floorPlan";
 
@@ -29,10 +30,14 @@ function initialAssignments(
   yeoksam: boolean,
 ): Record<number, AssignValue> {
   const draft: Record<number, AssignValue> = {};
-  const controlId = config?.controlDisplayId ?? defaultControl;
-  const outputSlot = yeoksam ? controlOutputSlotOf(config) : null;
+  const rematched =
+    config && displays.length > 0
+      ? rematchMonitorConfig(config, displays)
+      : config;
+  const controlId = rematched?.controlDisplayId ?? defaultControl;
+  const outputSlot = yeoksam ? controlOutputSlotOf(rematched) : null;
   for (const d of displays) {
-    const m = config?.mappings.find((row) => row.displayId === d.id);
+    const m = rematched?.mappings.find((row) => row.displayId === d.id);
     const slot = m?.monitorSlot ?? null;
     if (yeoksam) {
       if (d.id === controlId && outputSlot) {
@@ -180,6 +185,7 @@ export function SetupScreen({ displays, initialConfig, onSaved, onOpenControl }:
                 gameId: null,
                 label: d.label,
                 bounds: d.bounds,
+                osNumber: d.osNumber,
               },
             ];
           })
@@ -192,6 +198,7 @@ export function SetupScreen({ displays, initialConfig, onSaved, onOpenControl }:
               gameId: null,
               label: d.label,
               bounds: d.bounds,
+              osNumber: d.osNumber,
             };
           }),
     };

@@ -1,5 +1,7 @@
 import { screen } from "electron";
 import type { AppConfig, DisplayBounds, DisplayInfo, MonitorMapping } from "../../shared/types";
+import { CONFIG_VERSION } from "../../shared/types";
+import { rematchMonitorConfig } from "../../shared/displayRemap";
 import { assignOsNumbersByLayout, readWindowsMonitorHintsSync } from "./windowsDisplayNumbers";
 
 function toBounds(rect: Electron.Rectangle): DisplayBounds {
@@ -62,15 +64,16 @@ export function findDisplayById(id: number): DisplayInfo | undefined {
 
 export function resolveDisplayForMapping(mapping: MonitorMapping): DisplayInfo | undefined {
   const displays = getAllDisplaysInfo();
-  const byId = displays.find((d) => d.id === mapping.displayId);
-  if (byId) return byId;
-
-  if (!mapping.bounds || !mapping.label) return undefined;
-  const targetFp = `${mapping.label.trim().toLowerCase()}|${mapping.bounds.width}x${mapping.bounds.height}`;
-  return displays.find((d) => {
-    const fp = `${d.label.trim().toLowerCase()}|${d.bounds.width}x${d.bounds.height}`;
-    return fp === targetFp;
-  });
+  const remapped = rematchMonitorConfig(
+    {
+      version: CONFIG_VERSION,
+      controlDisplayId: mapping.displayId,
+      mappings: [mapping],
+    },
+    displays,
+  );
+  const id = remapped.mappings[0]?.displayId ?? mapping.displayId;
+  return displays.find((d) => d.id === id);
 }
 
 export function configNeedsSetup(config: AppConfig | null): boolean {
@@ -79,20 +82,5 @@ export function configNeedsSetup(config: AppConfig | null): boolean {
 }
 
 export function enrichMappingsWithCurrentDisplays(config: AppConfig): AppConfig {
-  const displays = getAllDisplaysInfo();
-  const byId = new Map(displays.map((d) => [d.id, d]));
-
-  const mappings = config.mappings.map((m) => {
-    const d = byId.get(m.displayId) ?? resolveDisplayForMapping(m);
-    if (!d) return m;
-    return { ...m, displayId: d.id, label: d.label, bounds: d.bounds };
-  });
-
-  return {
-    ...config,
-    controlDisplayId: byId.has(config.controlDisplayId)
-      ? config.controlDisplayId
-      : (displays.find((d) => d.isPrimary)?.id ?? config.controlDisplayId),
-    mappings,
-  };
+  return rematchMonitorConfig(config, getAllDisplaysInfo());
 }
