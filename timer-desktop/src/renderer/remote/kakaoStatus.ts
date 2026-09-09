@@ -4,16 +4,28 @@ import { kakaoShareBrandName } from "@mnf/venue";
 import type { AppSnapshot, GameSession } from "../../shared/types";
 import { floorTableLetter } from "../../shared/floorPlan";
 
-const SHARE_FOOTER = `3MP 데일리
-Start : 4만 chips
-1st rebuyin : 6만 chips
-
+const SHARE_FOOTER = `Start : 3만 chips
+1st rebuyin : 5만 chips
 5MP 데일리
 Start : 4만 chips
 1st rebuyin : 6만 chips
 2nd rebuyin : 8만 chips
-
     🔥핫하게 진행중입니다🔥`;
+
+/** Kakao monospace-ish visual width (Hangul/emoji ≈ 2). */
+function visualWidth(text: string): number {
+  let w = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0;
+    w += code <= 0x7f ? 1 : 2;
+  }
+  return w;
+}
+
+function centerLine(text: string, width: number): string {
+  const pad = Math.max(0, Math.floor((width - visualWidth(text)) / 2));
+  return `${" ".repeat(pad)}${text}`;
+}
 
 function gameNameForShare(name: string): string {
   return name.replace(/\s*게임\s*$/u, "").replace(/\s*MTT\s*$/u, "").trim();
@@ -31,8 +43,8 @@ function tablesForGame(snapshot: AppSnapshot, session: GameSession): number[] {
 function tableLabel(venueId: string | null | undefined, slots: number[]): string {
   const letters = slots.map((s) => floorTableLetter(venueId, s));
   if (letters.length === 0) return "";
-  if (letters.length === 1) return `${letters[0]} 테이블`;
-  return `${letters.join(",")} 테이블`;
+  if (letters.length === 1) return `${letters[0]}테이블`;
+  return `${letters.join(",")}테이블`;
 }
 
 function blindParen(timer: TableTimerState | undefined): string {
@@ -62,9 +74,8 @@ function gameBlock(
   const title = tables ? `🤩 ${tables} ${gameTitle} 🤩` : `🤩 ${gameTitle} 🤩`;
   const timer = timers.find((t) => t.tableId === session.gameId);
   const level = Math.floor(timer?.blindLevel ?? 1);
-  const levelLine = `🌜Lv.${level} (${blindParen(timer)})🌛`;
-  const indent = "         ";
-  return `${title}\n${indent}${levelLine}`;
+  const levelLine = `🌜Lv.${level} ${blindParen(timer)}🌛`;
+  return `${title}\n${centerLine(levelLine, visualWidth(title))}`;
 }
 
 export type KakaoOrigin = {
@@ -83,13 +94,13 @@ export function formatKakaoGameStatusFromOrigins(origins: KakaoOrigin[]): string
     return ta - tb || a.session.gameId - b.session.gameId;
   });
   const brand = kakaoShareBrandName(origins.find((o) => o.venueId)?.venueId ?? origins[0]?.venueId);
-  const blocks = games.map((g) => gameBlock(g.session, g.origin.snapshot, g.origin.timers, g.origin.venueId)).join("\n\n");
-  const body = blocks ? `${blocks}\n\n` : "";
-  return `☪️ ${brand} ☪️
-
- ✨ ${brand} 진행현황 ✨
-
-${body}${SHARE_FOOTER}`;
+  const brandLine = `☪️ ${brand} ☪️`;
+  const statusLine = `✨ ${brand} 진행현황 ✨`;
+  const headerWidth = Math.max(visualWidth(brandLine), visualWidth(statusLine));
+  const header = `${centerLine(brandLine, headerWidth)}\n${centerLine(statusLine, headerWidth)}`;
+  const blocks = games.map((g) => gameBlock(g.session, g.origin.snapshot, g.origin.timers, g.origin.venueId)).join("\n");
+  const body = blocks ? `${blocks}\n` : "";
+  return `${header}\n${body}${SHARE_FOOTER}`;
 }
 
 export function formatKakaoGameStatus(
