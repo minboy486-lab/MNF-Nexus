@@ -14,7 +14,7 @@ import {
 } from "@/lib/actions/guest-accounts";
 import { GUEST_DEFAULT_PASSWORD, type GuestAccountRow } from "@/lib/guest/accounts";
 import { formatDateTimeKST } from "@/lib/utils/format";
-import { formatMp } from "@/lib/utils/mp";
+import { formatDisplayPointBalance, formatPaymentDue } from "@/lib/utils/payment-due";
 
 type Props = {
   accounts: GuestAccountRow[];
@@ -263,7 +263,9 @@ export function GuestAccountsClient({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row) => (
+              {filtered.map((row) => {
+                const paymentDue = formatPaymentDue(row.credit_balance, row.point_balance);
+                return (
                 <tr
                   key={row.member_id}
                   className="border-b border-white/[0.06] hover:bg-white/[0.04] transition-colors"
@@ -276,7 +278,10 @@ export function GuestAccountsClient({
                     )}
                   </td>
                   <td className="px-5 py-3.5 hidden sm:table-cell tabular-nums text-primary font-semibold">
-                    {formatMp(row.point_balance)}
+                    <div>{formatDisplayPointBalance(row.point_balance, row.credit_balance)}</div>
+                    {paymentDue && (
+                      <div className="text-[11px] font-medium text-error mt-0.5">{paymentDue}</div>
+                    )}
                   </td>
                   <td className="px-5 py-3.5 text-on-surface-variant text-xs hidden md:table-cell">
                     {row.last_sign_in_at ? formatDateTimeKST(row.last_sign_in_at) : "—"}
@@ -312,7 +317,8 @@ export function GuestAccountsClient({
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-5 py-16 text-center text-on-surface-variant">
