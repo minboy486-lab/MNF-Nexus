@@ -167,6 +167,7 @@ export function App() {
   const [snapshot, setSnapshot] = useState<AppSnapshot>(EMPTY_SNAP);
   const [timers, setTimers] = useState<TableTimerState[]>([]);
   const [hostname, setHostname] = useState("");
+  const [venueId, setVenueId] = useState<string | null>(null);
   const [peers, setPeers] = useState<RemotePeerSnapshot[]>([]);
   const [sel, setSel] = useState<GameSel | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -219,6 +220,7 @@ export function App() {
         pinOkRef.current = true;
         setPinOk(true);
         setStaffAuth(msg.staffAuth);
+        if (typeof msg.venueId === "string") setVenueId(msg.venueId);
         setError(null);
         if (typeof msg.serverNow === "number") applyServerNow(msg.serverNow);
         localStorage.setItem(LS_PIN, nextPin);
@@ -253,6 +255,7 @@ export function App() {
         setSnapshot(msg.snapshot);
         setTimers(msg.timers);
         setHostname(msg.hostname ?? "");
+        if (typeof msg.venueId === "string") setVenueId(msg.venueId);
         setPeers(msg.peers ?? []);
         return;
       }
@@ -358,8 +361,8 @@ export function App() {
 
   async function shareKakaoStatus() {
     const text = formatKakaoGameStatusFromOrigins([
-      { snapshot, timers },
-      ...peers.map((p) => ({ snapshot: p.snapshot, timers: p.timers })),
+      { snapshot, timers, venueId },
+      ...peers.map((p) => ({ snapshot: p.snapshot, timers: p.timers, venueId })),
     ]);
     const result = await shareGameStatus(text);
     if (result === "cancelled") return;

@@ -445,6 +445,7 @@ export class RemoteServer {
       timers: local.timers,
       serverNow: local.serverNow,
       hostname: local.hostname,
+      venueId: getConfiguredVenueId(),
       yeoksamRole: local.yeoksamRole,
       timerTheme: this.shopTheme?.get() ?? undefined,
     };
@@ -459,6 +460,7 @@ export class RemoteServer {
       timers: local.timers,
       serverNow: local.serverNow,
       hostname: local.hostname,
+      venueId: getConfiguredVenueId(),
       yeoksamRole: getConfiguredYeoksamRole(),
       timerTheme: this.shopTheme?.get() ?? undefined,
     };
@@ -499,7 +501,12 @@ export class RemoteServer {
   }
 
   private helloOk(): RemoteServerMsg {
-    return { type: "hello_ok", staffAuth: this.staffAuthEnabled, serverNow: Date.now() };
+    return {
+      type: "hello_ok",
+      staffAuth: this.staffAuthEnabled,
+      serverNow: Date.now(),
+      venueId: getConfiguredVenueId(),
+    };
   }
 
   private afterPin(ws: WebSocket, state: SockState): void {

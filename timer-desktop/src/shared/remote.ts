@@ -102,7 +102,7 @@ export type RemotePeerSnapshot = {
 };
 
 export type RemoteServerMsg =
-  | { type: "hello_ok"; staffAuth: boolean; serverNow: number }
+  | { type: "hello_ok"; staffAuth: boolean; serverNow: number; venueId?: string }
   | { type: "hello_fail"; error: string }
   | { type: "staff"; staff: RemoteStaffState; sessionToken: string }
   | {
@@ -111,6 +111,7 @@ export type RemoteServerMsg =
       timers: TableTimerState[];
       serverNow: number;
       hostname?: string;
+      venueId?: string;
       yeoksamRole?: YeoksamRole;
       peers?: RemotePeerSnapshot[];
       timerTheme?: ShopTimerThemePayload;

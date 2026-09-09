@@ -1,5 +1,6 @@
 import type { TableTimerState } from "@mnf/timer/types";
 import { hasReachedRegClose, resolveTimerPauseKind } from "@mnf/timer/levels";
+import { kakaoShareBrandName } from "@mnf/venue";
 import type { AppSnapshot, GameSession } from "../../shared/types";
 import { floorTableLetter } from "../../shared/floorPlan";
 
@@ -81,11 +82,12 @@ export function formatKakaoGameStatusFromOrigins(origins: KakaoOrigin[]): string
     const tb = tablesForGame(b.origin.snapshot, b.session)[0] ?? 99;
     return ta - tb || a.session.gameId - b.session.gameId;
   });
+  const brand = kakaoShareBrandName(origins.find((o) => o.venueId)?.venueId ?? origins[0]?.venueId);
   const blocks = games.map((g) => gameBlock(g.session, g.origin.snapshot, g.origin.timers, g.origin.venueId)).join("\n\n");
   const body = blocks ? `${blocks}\n\n` : "";
-  return `☪️ MNF HOLDEM ☪️
+  return `☪️ ${brand} ☪️
 
- ✨ MNF HOLDEM 진행현황 ✨
+ ✨ ${brand} 진행현황 ✨
 
 ${body}${SHARE_FOOTER}`;
 }

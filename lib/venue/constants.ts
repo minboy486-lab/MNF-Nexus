@@ -42,6 +42,12 @@ export function timerBrandName(_venueId?: string | null): string {
   return "MNF HOLDEM";
 }
 
+/** 직원 리모컨 카톡 공유 상단 브랜드 */
+export function kakaoShareBrandName(venueId: string | null | undefined): string {
+  if (venueId === MISA_VENUE_ID) return "미드나잇 HOLDEM";
+  return "MNF HOLDEM";
+}
+
 export function defaultVenuesForRole(role: string | null | undefined): string[] {
   if (role === "manager" || role === "staff" || role === "screen" || role === "counter") {
     return [YEOKSAM_VENUE_ID];
