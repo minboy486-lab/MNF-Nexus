@@ -55,6 +55,11 @@ export function canManageGuests(role: string | null | undefined): boolean {
   return isManagerOrAdmin(role);
 }
 
+/** 블라인드(프리셋) 생성·수정·삭제: 관리자·매니저 */
+export function canManagePresets(role: string | null | undefined): boolean {
+  return isManagerOrAdmin(role);
+}
+
 /** 역할별 관리자 사이드바·경로 접근 */
 export type AdminNavAccess = {
   scores: boolean;

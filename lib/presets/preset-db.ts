@@ -4,7 +4,7 @@ const MISSING_COL_RE = /Could not find the '([^']+)' column/;
 
 export function friendlyPresetDbError(message: string): string {
   if (message.includes("row-level security")) {
-    return "저장 권한이 없습니다. 관리자 계정으로 로그인했는지 확인하세요.";
+    return "저장 권한이 없습니다. 관리자 또는 매니저 계정으로 로그인했는지 확인하세요.";
   }
   const missing = MISSING_COL_RE.exec(message);
   if (missing) {

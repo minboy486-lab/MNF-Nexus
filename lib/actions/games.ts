@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { createClient } from "@/lib/supabase/server";
+import { canManagePresets } from "@/lib/auth/roles";
+import { isSupabaseAdminConfigured, isSupabaseConfigured } from "@/lib/supabase/env";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient, getProfile } from "@/lib/supabase/server";
 import { getActiveVenueId } from "@/lib/venue/active";
 import { requireOpenSession } from "@/lib/venue/session";
 import { recordBuyIn, recordRebuy, type PaymentMethod } from "@/lib/actions/ledger";
@@ -56,12 +58,26 @@ export type PresetMutationResult =
   | { success: true; id?: string }
   | { error: string };
 
+async function requirePresetManager(): Promise<PresetMutationResult | null> {
+  if (!isSupabaseAdminConfigured()) {
+    return { error: "SUPABASE_SERVICE_ROLE_KEY가 필요합니다." };
+  }
+  const { profile } = await getProfile();
+  if (!canManagePresets(profile?.role)) {
+    return { error: "블라인드 권한이 없습니다. 관리자 또는 매니저만 가능합니다." };
+  }
+  return null;
+}
+
 export async function createPresetFromPayload(
   payload: CreatePresetPayload,
 ): Promise<PresetMutationResult> {
   if (!isSupabaseConfigured()) {
     return { error: "Supabase가 연결되지 않았습니다." };
   }
+
+  const denied = await requirePresetManager();
+  if (denied) return denied;
 
   if (!payload.name.trim()) {
     return { error: "이름을 입력하세요." };
@@ -70,8 +86,8 @@ export async function createPresetFromPayload(
   const structureError = validatePresetPayload(payload);
   if (structureError) return { error: structureError };
 
-  const supabase = await createClient();
-  const result = await insertGamePresetRow(supabase, {
+  const admin = createAdminClient();
+  const result = await insertGamePresetRow(admin, {
     ...buildPresetRow(payload),
     venue_id: await getActiveVenueId(),
   });
@@ -132,6 +148,8 @@ export async function updatePresetFromPayload(
   if (!isSupabaseConfigured()) {
     return { error: "Supabase가 연결되지 않았습니다." };
   }
+  const denied = await requirePresetManager();
+  if (denied) return denied;
   if (!isUuid(id)) {
     return { error: "저장된 블라인드만 수정할 수 있습니다. (데모 데이터)" };
   }
@@ -141,9 +159,9 @@ export async function updatePresetFromPayload(
   const structureError = validatePresetPayload(payload);
   if (structureError) return { error: structureError };
 
-  const supabase = await createClient();
+  const admin = createAdminClient();
   const venueId = await getActiveVenueId();
-  const { data: owned } = await supabase
+  const { data: owned } = await admin
     .from("game_presets")
     .select("id")
     .eq("id", id)
@@ -151,24 +169,26 @@ export async function updatePresetFromPayload(
     .maybeSingle();
   if (!owned) return { error: "다른 지점의 블라인드는 수정할 수 없습니다." };
 
-  const result = await updateGamePresetRow(supabase, id, buildPresetRow(payload));
+  const result = await updateGamePresetRow(admin, id, buildPresetRow(payload));
 
   if ("error" in result) return { error: result.error };
   revalidatePath("/admin/presets");
   return { success: true };
 }
 
-export async function deletePreset(id: string) {
+export async function deletePreset(id: string): Promise<PresetMutationResult> {
   if (!isSupabaseConfigured()) {
     return { error: "Supabase가 연결되지 않았습니다." };
   }
+  const denied = await requirePresetManager();
+  if (denied) return denied;
   if (!isUuid(id)) {
     return { error: "저장된 블라인드만 삭제할 수 있습니다. (데모 데이터)" };
   }
 
-  const supabase = await createClient();
+  const admin = createAdminClient();
   const venueId = await getActiveVenueId();
-  const { data: owned } = await supabase
+  const { data: owned } = await admin
     .from("game_presets")
     .select("id")
     .eq("id", id)
@@ -176,7 +196,7 @@ export async function deletePreset(id: string) {
     .maybeSingle();
   if (!owned) return { error: "다른 지점의 블라인드는 삭제할 수 없습니다." };
 
-  const { error } = await supabase.from("game_presets").delete().eq("id", id).eq("venue_id", venueId);
+  const { error } = await admin.from("game_presets").delete().eq("id", id).eq("venue_id", venueId);
 
   if (error) return { error: error.message };
   revalidatePath("/admin/presets");

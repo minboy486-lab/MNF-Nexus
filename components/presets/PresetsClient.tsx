@@ -43,7 +43,7 @@ export function PresetsClient({ presets }: Props) {
     setDeletePending(true);
     const res = await deletePreset(selected.id);
     setDeletePending(false);
-    if (res.error) {
+    if ("error" in res) {
       alert(res.error);
       return;
     }
