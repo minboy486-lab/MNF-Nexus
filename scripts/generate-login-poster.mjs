@@ -54,12 +54,12 @@ async function makePoster({ file, qrSize, qrTop, qrLeft, overlays, svg }) {
 }
 
 const printW = 2480;
-const printH = 3508;
+const printH = 2980;
 const printPath = await makePoster({
   file: "chrome-webapp-poster.png",
-  qrSize: 700,
-  qrTop: 400,
-  qrLeft: 890,
+  qrSize: 680,
+  qrTop: 380,
+  qrLeft: 900,
   overlays: [],
   svg: `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${printW}" height="${printH}" xmlns="http://www.w3.org/2000/svg">
@@ -79,84 +79,84 @@ const printPath = await makePoster({
     </linearGradient>
   </defs>
   <rect width="${printW}" height="${printH}" fill="url(#bg)"/>
-  <circle cx="360" cy="260" r="420" fill="#9b6dff" opacity="0.10"/>
-  <circle cx="2140" cy="3100" r="520" fill="#ff9ec4" opacity="0.10"/>
+  <circle cx="360" cy="240" r="400" fill="#9b6dff" opacity="0.10"/>
+  <circle cx="2140" cy="2800" r="480" fill="#ff9ec4" opacity="0.10"/>
 
-  <text x="1240" y="120" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="54" fill="#c4b0c4" letter-spacing="8">${BRAND}</text>
-  <text x="1240" y="235" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="112" font-weight="700" fill="#f4eef6">홈페이지 로그인</text>
-  <text x="1240" y="320" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="50" fill="#ffb6c9">QR을 스캔하세요</text>
+  <text x="1240" y="110" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="52" fill="#c4b0c4" letter-spacing="8">${BRAND}</text>
+  <text x="1240" y="220" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="108" font-weight="700" fill="#f4eef6">홈페이지 로그인</text>
+  <text x="1240" y="300" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="48" fill="#ffb6c9">QR을 스캔하세요</text>
 
-  <rect x="860" y="370" width="760" height="760" rx="40" fill="#ffffff"/>
-  <rect x="860" y="370" width="760" height="760" rx="40" fill="none" stroke="url(#accent)" stroke-width="8"/>
-  <text x="1240" y="1190" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="34" fill="#c4b0c4">${LOGIN_URL}</text>
+  <rect x="870" y="350" width="740" height="740" rx="36" fill="#ffffff"/>
+  <rect x="870" y="350" width="740" height="740" rx="36" fill="none" stroke="url(#accent)" stroke-width="8"/>
+  <text x="1240" y="1145" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="32" fill="#c4b0c4">${LOGIN_URL}</text>
 
-  <!-- Android: shorter card -->
-  <rect x="90" y="1280" width="1110" height="1680" rx="48" fill="url(#card)" stroke="#4a3848" stroke-width="4"/>
-  <text x="180" y="1430" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="78" font-weight="700" fill="#ffe4f0">Android</text>
-  <text x="180" y="1510" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" fill="#c4b0c4">Chrome 기준</text>
+  <!-- Android -->
+  <rect x="90" y="1220" width="1110" height="1480" rx="44" fill="url(#card)" stroke="#4a3848" stroke-width="4"/>
+  <text x="180" y="1360" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="76" font-weight="700" fill="#ffe4f0">Android</text>
+  <text x="180" y="1435" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" fill="#c4b0c4">Chrome 기준</text>
 
-  <circle cx="250" cy="1700" r="58" fill="url(#accent)"/>
-  <text x="250" y="1720" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="44" font-weight="700" fill="#1a1020">1</text>
-  <text x="360" y="1675" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="58" font-weight="700" fill="#f4eef6">Chrome으로 열기</text>
-  <text x="360" y="1760" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="46" fill="#c4b0c4">QR 스캔 후 Chrome 선택</text>
+  <circle cx="250" cy="1620" r="56" fill="url(#accent)"/>
+  <text x="250" y="1640" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" font-weight="700" fill="#1a1020">1</text>
+  <text x="360" y="1595" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="56" font-weight="700" fill="#f4eef6">Chrome으로 열기</text>
+  <text x="360" y="1680" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="48" fill="#c4b0c4">QR 스캔 후 Chrome 선택</text>
 
-  <circle cx="250" cy="2020" r="58" fill="url(#accent)"/>
-  <text x="250" y="2040" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="44" font-weight="700" fill="#1a1020">2</text>
-  <text x="360" y="1995" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="58" font-weight="700" fill="#f4eef6">오른쪽 위 ⋮ 메뉴</text>
-  <text x="360" y="2080" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="46" fill="#c4b0c4">점 3개 버튼을 누름</text>
+  <circle cx="250" cy="1910" r="56" fill="url(#accent)"/>
+  <text x="250" y="1930" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" font-weight="700" fill="#1a1020">2</text>
+  <text x="360" y="1885" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="56" font-weight="700" fill="#f4eef6">오른쪽 위 ⋮ 메뉴</text>
+  <text x="360" y="1970" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="48" fill="#c4b0c4">점 3개 버튼을 누름</text>
 
-  <circle cx="250" cy="2340" r="58" fill="url(#accent)"/>
-  <text x="250" y="2360" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="44" font-weight="700" fill="#1a1020">3</text>
-  <text x="360" y="2315" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="58" font-weight="700" fill="#f4eef6">앱 설치</text>
-  <text x="360" y="2400" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="46" fill="#c4b0c4">또는 「홈 화면에 추가」</text>
+  <circle cx="250" cy="2200" r="56" fill="url(#accent)"/>
+  <text x="250" y="2220" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" font-weight="700" fill="#1a1020">3</text>
+  <text x="360" y="2175" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="56" font-weight="700" fill="#f4eef6">앱 설치</text>
+  <text x="360" y="2260" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="48" fill="#c4b0c4">또는 「홈 화면에 추가」</text>
 
-  <circle cx="250" cy="2660" r="58" fill="url(#accent)"/>
-  <text x="250" y="2680" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="44" font-weight="700" fill="#1a1020">4</text>
-  <text x="360" y="2635" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="58" font-weight="700" fill="#f4eef6">아이콘으로 실행</text>
-  <text x="360" y="2720" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="46" fill="#c4b0c4">홈 화면에서 바로 접속</text>
+  <circle cx="250" cy="2490" r="56" fill="url(#accent)"/>
+  <text x="250" y="2510" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" font-weight="700" fill="#1a1020">4</text>
+  <text x="360" y="2465" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="56" font-weight="700" fill="#f4eef6">아이콘으로 실행</text>
+  <text x="360" y="2550" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="48" fill="#c4b0c4">홈 화면에서 바로 접속</text>
 
-  <!-- iPhone: shorter card -->
-  <rect x="1280" y="1280" width="1110" height="1680" rx="48" fill="url(#card)" stroke="#4a3848" stroke-width="4"/>
-  <text x="1370" y="1430" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="78" font-weight="700" fill="#ffe4f0">iPhone</text>
-  <text x="1370" y="1510" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" fill="#c4b0c4">Safari 기준</text>
+  <!-- iPhone -->
+  <rect x="1280" y="1220" width="1110" height="1480" rx="44" fill="url(#card)" stroke="#4a3848" stroke-width="4"/>
+  <text x="1370" y="1360" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="76" font-weight="700" fill="#ffe4f0">iPhone</text>
+  <text x="1370" y="1435" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" fill="#c4b0c4">Safari 기준</text>
 
-  <circle cx="1450" cy="1700" r="58" fill="url(#accent)"/>
-  <text x="1450" y="1720" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="44" font-weight="700" fill="#1a1020">1</text>
-  <text x="1560" y="1675" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="58" font-weight="700" fill="#f4eef6">Safari로 열기</text>
-  <text x="1560" y="1760" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="46" fill="#c4b0c4">QR 스캔 후 Safari 선택</text>
+  <circle cx="1450" cy="1620" r="56" fill="url(#accent)"/>
+  <text x="1450" y="1640" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" font-weight="700" fill="#1a1020">1</text>
+  <text x="1560" y="1595" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="56" font-weight="700" fill="#f4eef6">Safari로 열기</text>
+  <text x="1560" y="1680" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="48" fill="#c4b0c4">QR 스캔 후 Safari 선택</text>
 
-  <circle cx="1450" cy="2020" r="58" fill="url(#accent)"/>
-  <text x="1450" y="2040" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="44" font-weight="700" fill="#1a1020">2</text>
-  <!-- share icon vertically centered with title line -->
-  <g transform="translate(1560 1978)" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M44 8 L44 58"/>
-    <path d="M24 28 L44 8 L64 28"/>
-    <path d="M16 48 L16 84 Q16 92 24 92 L64 92 Q72 92 72 84 L72 48"/>
+  <circle cx="1450" cy="1910" r="56" fill="url(#accent)"/>
+  <text x="1450" y="1930" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" font-weight="700" fill="#1a1020">2</text>
+  <!-- title + share icon on one line, subtitle below aligned with title -->
+  <text x="1560" y="1885" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="54" font-weight="700" fill="#f4eef6">공유 아이콘 누르기</text>
+  <g transform="translate(2140 1836)" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 6 L32 42"/>
+    <path d="M16 22 L32 6 L48 22"/>
+    <path d="M12 36 L12 62 Q12 68 18 68 L46 68 Q52 68 52 62 L52 36"/>
   </g>
-  <text x="1660" y="1995" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="54" font-weight="700" fill="#f4eef6">공유 아이콘 누르기</text>
-  <text x="1560" y="2080" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="46" fill="#c4b0c4">주소창 오른쪽 공유 버튼</text>
+  <text x="1560" y="1970" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="48" fill="#c4b0c4">주소창 오른쪽 공유 버튼</text>
 
-  <circle cx="1450" cy="2340" r="58" fill="url(#accent)"/>
-  <text x="1450" y="2360" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="44" font-weight="700" fill="#1a1020">3</text>
-  <text x="1560" y="2315" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="58" font-weight="700" fill="#f4eef6">더보기</text>
-  <text x="1560" y="2400" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="46" fill="#c4b0c4">목록에서 「더보기」 선택</text>
+  <circle cx="1450" cy="2200" r="56" fill="url(#accent)"/>
+  <text x="1450" y="2220" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" font-weight="700" fill="#1a1020">3</text>
+  <text x="1560" y="2175" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="56" font-weight="700" fill="#f4eef6">더보기</text>
+  <text x="1560" y="2260" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="48" fill="#c4b0c4">목록에서 「더보기」 선택</text>
 
-  <circle cx="1450" cy="2660" r="58" fill="url(#accent)"/>
-  <text x="1450" y="2680" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="44" font-weight="700" fill="#1a1020">4</text>
-  <text x="1560" y="2635" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="58" font-weight="700" fill="#f4eef6">홈 화면에 추가</text>
-  <text x="1560" y="2720" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="46" fill="#c4b0c4">추가 후 아이콘으로 실행</text>
+  <circle cx="1450" cy="2490" r="56" fill="url(#accent)"/>
+  <text x="1450" y="2510" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" font-weight="700" fill="#1a1020">4</text>
+  <text x="1560" y="2465" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="56" font-weight="700" fill="#f4eef6">홈 화면에 추가</text>
+  <text x="1560" y="2550" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="48" fill="#c4b0c4">추가 후 아이콘으로 실행</text>
 
-  <text x="1240" y="3180" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="44" fill="#9a8898">${BRAND}</text>
+  <text x="1240" y="2880" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" fill="#9a8898">${BRAND}</text>
 </svg>`,
 });
 
 const phoneW = 1080;
-const phoneH = 1920;
+const phoneH = 1680;
 const phonePath = await makePoster({
   file: "chrome-webapp-poster-phone.png",
-  qrSize: 320,
-  qrTop: 190,
-  qrLeft: 380,
+  qrSize: 300,
+  qrTop: 175,
+  qrLeft: 390,
   overlays: [],
   svg: `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${phoneW}" height="${phoneH}" xmlns="http://www.w3.org/2000/svg">
@@ -171,70 +171,70 @@ const phonePath = await makePoster({
     </linearGradient>
   </defs>
   <rect width="${phoneW}" height="${phoneH}" fill="url(#bg)"/>
-  <circle cx="140" cy="140" r="180" fill="#9b6dff" opacity="0.12"/>
-  <circle cx="960" cy="1680" r="220" fill="#ff9ec4" opacity="0.12"/>
+  <circle cx="140" cy="120" r="160" fill="#9b6dff" opacity="0.12"/>
+  <circle cx="960" cy="1560" r="200" fill="#ff9ec4" opacity="0.12"/>
 
-  <text x="540" y="65" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="28" fill="#c4b0c4" letter-spacing="3">${BRAND}</text>
-  <text x="540" y="125" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="54" font-weight="700" fill="#f4eef6">홈페이지 로그인</text>
-  <text x="540" y="172" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="28" fill="#ffb6c9">QR 스캔 → 로그인</text>
+  <text x="540" y="58" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="26" fill="#c4b0c4" letter-spacing="3">${BRAND}</text>
+  <text x="540" y="115" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="50" font-weight="700" fill="#f4eef6">홈페이지 로그인</text>
+  <text x="540" y="158" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="26" fill="#ffb6c9">QR 스캔 → 로그인</text>
 
-  <rect x="360" y="170" width="360" height="360" rx="20" fill="#ffffff"/>
-  <text x="540" y="565" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="16" fill="#c4b0c4">${LOGIN_URL}</text>
+  <rect x="370" y="155" width="340" height="340" rx="18" fill="#ffffff"/>
+  <text x="540" y="525" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="15" fill="#c4b0c4">${LOGIN_URL}</text>
 
-  <rect x="28" y="600" width="500" height="1040" rx="26" fill="#16121e" stroke="#4a3848" stroke-width="2"/>
-  <text x="62" y="690" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="44" font-weight="700" fill="#ffe4f0">Android</text>
-  <text x="62" y="740" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">Chrome</text>
+  <rect x="28" y="555" width="500" height="1040" rx="24" fill="#16121e" stroke="#4a3848" stroke-width="2"/>
+  <text x="62" y="640" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" font-weight="700" fill="#ffe4f0">Android</text>
+  <text x="62" y="688" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">Chrome</text>
 
-  <circle cx="98" cy="860" r="32" fill="url(#accent)"/>
-  <text x="98" y="872" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" font-weight="700" fill="#1a1020">1</text>
-  <text x="155" y="850" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="30" font-weight="700" fill="#f4eef6">Chrome으로 열기</text>
-  <text x="155" y="895" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">QR 후 Chrome 선택</text>
+  <circle cx="98" cy="800" r="30" fill="url(#accent)"/>
+  <text x="98" y="811" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="22" font-weight="700" fill="#1a1020">1</text>
+  <text x="155" y="790" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="28" font-weight="700" fill="#f4eef6">Chrome으로 열기</text>
+  <text x="155" y="835" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">QR 후 Chrome 선택</text>
 
-  <circle cx="98" cy="1030" r="32" fill="url(#accent)"/>
-  <text x="98" y="1042" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" font-weight="700" fill="#1a1020">2</text>
-  <text x="155" y="1020" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="30" font-weight="700" fill="#f4eef6">우측 상단 ⋮</text>
-  <text x="155" y="1065" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">Chrome 메뉴</text>
+  <circle cx="98" cy="960" r="30" fill="url(#accent)"/>
+  <text x="98" y="971" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="22" font-weight="700" fill="#1a1020">2</text>
+  <text x="155" y="950" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="28" font-weight="700" fill="#f4eef6">우측 상단 ⋮</text>
+  <text x="155" y="995" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">Chrome 메뉴</text>
 
-  <circle cx="98" cy="1200" r="32" fill="url(#accent)"/>
-  <text x="98" y="1212" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" font-weight="700" fill="#1a1020">3</text>
-  <text x="155" y="1190" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="30" font-weight="700" fill="#f4eef6">앱 설치</text>
-  <text x="155" y="1235" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">또는 홈 화면에 추가</text>
+  <circle cx="98" cy="1120" r="30" fill="url(#accent)"/>
+  <text x="98" y="1131" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="22" font-weight="700" fill="#1a1020">3</text>
+  <text x="155" y="1110" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="28" font-weight="700" fill="#f4eef6">앱 설치</text>
+  <text x="155" y="1155" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">또는 홈 화면에 추가</text>
 
-  <circle cx="98" cy="1370" r="32" fill="url(#accent)"/>
-  <text x="98" y="1382" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" font-weight="700" fill="#1a1020">4</text>
-  <text x="155" y="1360" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="30" font-weight="700" fill="#f4eef6">아이콘으로 실행</text>
-  <text x="155" y="1405" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">앱처럼 바로 접속</text>
+  <circle cx="98" cy="1280" r="30" fill="url(#accent)"/>
+  <text x="98" y="1291" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="22" font-weight="700" fill="#1a1020">4</text>
+  <text x="155" y="1270" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="28" font-weight="700" fill="#f4eef6">아이콘으로 실행</text>
+  <text x="155" y="1315" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">앱처럼 바로 접속</text>
 
-  <rect x="552" y="600" width="500" height="1040" rx="26" fill="#16121e" stroke="#4a3848" stroke-width="2"/>
-  <text x="586" y="690" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="44" font-weight="700" fill="#ffe4f0">iPhone</text>
-  <text x="586" y="740" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">Safari</text>
+  <rect x="552" y="555" width="500" height="1040" rx="24" fill="#16121e" stroke="#4a3848" stroke-width="2"/>
+  <text x="586" y="640" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" font-weight="700" fill="#ffe4f0">iPhone</text>
+  <text x="586" y="688" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">Safari</text>
 
-  <circle cx="622" cy="860" r="32" fill="url(#accent)"/>
-  <text x="622" y="872" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" font-weight="700" fill="#1a1020">1</text>
-  <text x="679" y="850" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="30" font-weight="700" fill="#f4eef6">Safari로 열기</text>
-  <text x="679" y="895" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">QR 후 Safari 선택</text>
+  <circle cx="622" cy="800" r="30" fill="url(#accent)"/>
+  <text x="622" y="811" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="22" font-weight="700" fill="#1a1020">1</text>
+  <text x="679" y="790" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="28" font-weight="700" fill="#f4eef6">Safari로 열기</text>
+  <text x="679" y="835" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">QR 후 Safari 선택</text>
 
-  <circle cx="622" cy="1030" r="32" fill="url(#accent)"/>
-  <text x="622" y="1042" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" font-weight="700" fill="#1a1020">2</text>
-  <g transform="translate(678 1000)" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M22 4 L22 30"/>
-    <path d="M12 14 L22 4 L32 14"/>
-    <path d="M8 24 L8 42 Q8 46 12 46 L32 46 Q36 46 36 42 L36 24"/>
+  <circle cx="622" cy="960" r="30" fill="url(#accent)"/>
+  <text x="622" y="971" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="22" font-weight="700" fill="#1a1020">2</text>
+  <text x="679" y="950" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="26" font-weight="700" fill="#f4eef6">공유 아이콘</text>
+  <g transform="translate(900 918)" fill="none" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 3 L18 24"/>
+    <path d="M9 12 L18 3 L27 12"/>
+    <path d="M6 20 L6 34 Q6 38 10 38 L26 38 Q30 38 30 34 L30 20"/>
   </g>
-  <text x="730" y="1020" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="28" font-weight="700" fill="#f4eef6">공유 아이콘</text>
-  <text x="679" y="1065" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">주소창 공유 버튼</text>
+  <text x="679" y="995" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">주소창 공유 버튼</text>
 
-  <circle cx="622" cy="1200" r="32" fill="url(#accent)"/>
-  <text x="622" y="1212" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" font-weight="700" fill="#1a1020">3</text>
-  <text x="679" y="1190" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="30" font-weight="700" fill="#f4eef6">더보기</text>
-  <text x="679" y="1235" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">목록에서 더보기</text>
+  <circle cx="622" cy="1120" r="30" fill="url(#accent)"/>
+  <text x="622" y="1131" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="22" font-weight="700" fill="#1a1020">3</text>
+  <text x="679" y="1110" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="28" font-weight="700" fill="#f4eef6">더보기</text>
+  <text x="679" y="1155" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">목록에서 더보기</text>
 
-  <circle cx="622" cy="1370" r="32" fill="url(#accent)"/>
-  <text x="622" y="1382" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" font-weight="700" fill="#1a1020">4</text>
-  <text x="679" y="1360" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="30" font-weight="700" fill="#f4eef6">홈 화면에 추가</text>
-  <text x="679" y="1405" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">아이콘으로 실행</text>
+  <circle cx="622" cy="1280" r="30" fill="url(#accent)"/>
+  <text x="622" y="1291" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="22" font-weight="700" fill="#1a1020">4</text>
+  <text x="679" y="1270" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="28" font-weight="700" fill="#f4eef6">홈 화면에 추가</text>
+  <text x="679" y="1315" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#c4b0c4">아이콘으로 실행</text>
 
-  <text x="540" y="1760" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="24" fill="#9a8898">${BRAND}</text>
+  <text x="540" y="1680" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="22" fill="#9a8898">${BRAND}</text>
 </svg>`,
 });
 
