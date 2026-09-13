@@ -54,7 +54,7 @@ async function makePoster({ file, qrSize, qrTop, qrLeft, overlays, svg }) {
 }
 
 const printW = 2480;
-const printH = 2980;
+const printH = 2820;
 const printPath = await makePoster({
   file: "chrome-webapp-poster.png",
   qrSize: 680,
@@ -91,7 +91,7 @@ const printPath = await makePoster({
   <text x="1240" y="1145" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="32" fill="#c4b0c4">${LOGIN_URL}</text>
 
   <!-- Android -->
-  <rect x="90" y="1220" width="1110" height="1480" rx="44" fill="url(#card)" stroke="#4a3848" stroke-width="4"/>
+  <rect x="90" y="1220" width="1110" height="1400" rx="44" fill="url(#card)" stroke="#4a3848" stroke-width="4"/>
   <text x="180" y="1360" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="76" font-weight="700" fill="#ffe4f0">Android</text>
   <text x="180" y="1435" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" fill="#c4b0c4">Chrome 기준</text>
 
@@ -116,7 +116,7 @@ const printPath = await makePoster({
   <text x="360" y="2550" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="48" fill="#c4b0c4">홈 화면에서 바로 접속</text>
 
   <!-- iPhone -->
-  <rect x="1280" y="1220" width="1110" height="1480" rx="44" fill="url(#card)" stroke="#4a3848" stroke-width="4"/>
+  <rect x="1280" y="1220" width="1110" height="1400" rx="44" fill="url(#card)" stroke="#4a3848" stroke-width="4"/>
   <text x="1370" y="1360" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="76" font-weight="700" fill="#ffe4f0">iPhone</text>
   <text x="1370" y="1435" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" fill="#c4b0c4">Safari 기준</text>
 
@@ -129,7 +129,7 @@ const printPath = await makePoster({
   <text x="1450" y="1930" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" font-weight="700" fill="#1a1020">2</text>
   <!-- title + share icon on one line, subtitle below aligned with title -->
   <text x="1560" y="1885" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="54" font-weight="700" fill="#f4eef6">공유 아이콘 누르기</text>
-  <g transform="translate(2140 1836)" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+  <g transform="translate(2140 1848)" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M32 6 L32 42"/>
     <path d="M16 22 L32 6 L48 22"/>
     <path d="M12 36 L12 62 Q12 68 18 68 L46 68 Q52 68 52 62 L52 36"/>
@@ -146,7 +146,7 @@ const printPath = await makePoster({
   <text x="1560" y="2465" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="56" font-weight="700" fill="#f4eef6">홈 화면에 추가</text>
   <text x="1560" y="2550" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="48" fill="#c4b0c4">추가 후 아이콘으로 실행</text>
 
-  <text x="1240" y="2880" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" fill="#9a8898">${BRAND}</text>
+  <text x="1240" y="2740" text-anchor="middle" font-family="Apple SD Gothic Neo, AppleGothic, sans-serif" font-size="42" fill="#9a8898">${BRAND}</text>
 </svg>`,
 });
 
