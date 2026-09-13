@@ -44,7 +44,7 @@ export function timerBrandName(_venueId?: string | null): string {
 
 /** 직원 리모컨 카톡 공유 상단 브랜드 */
 export function kakaoShareBrandName(venueId: string | null | undefined): string {
-  if (venueId === MISA_VENUE_ID) return "미드나잇 HOLDEM";
+  if (venueId === MISA_VENUE_ID) return "미드나잇 홀덤";
   return "MNF HOLDEM";
 }
 
