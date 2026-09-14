@@ -12,6 +12,7 @@ import { getCounterRedirectPath } from "@/lib/auth/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseAdminConfigured } from "@/lib/supabase/env";
+import { getActiveVenueId } from "@/lib/venue/active";
 
 async function resolveSignInEmails(loginInput: string): Promise<string[]> {
   const candidates = getSignInEmailCandidates(loginInput);
@@ -83,7 +84,8 @@ export async function signIn(formData: FormData) {
       if (user) await ensureProfileLoginId(user.id, loginInput);
       const role = user ? await getProfileRole(user.id) : null;
       const ua = (await headers()).get("user-agent");
-      redirect(getCounterRedirectPath(role, ua));
+      const venueId = role === "manager" ? await getActiveVenueId() : null;
+      redirect(getCounterRedirectPath(role, ua, venueId));
     }
     lastError = error.message;
   }

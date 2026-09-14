@@ -1,4 +1,4 @@
-import { isScreenRole } from "@/lib/auth/roles";
+import { isScreenRole, getManagerHomePath } from "@/lib/auth/roles";
 import type { UserRole } from "@/lib/types";
 
 /** 태블릿·iPad 등 접수대 단말로 보이는 UA */
@@ -11,7 +11,10 @@ export function isTabletUserAgent(userAgent: string | null | undefined): boolean
   return false;
 }
 
-export function getHomePath(role: UserRole | string | undefined | null): string {
+export function getHomePath(
+  role: UserRole | string | undefined | null,
+  venueId?: string | null,
+): string {
   switch (role) {
     case "screen":
     case "counter":
@@ -21,7 +24,7 @@ export function getHomePath(role: UserRole | string | undefined | null): string 
     case "staff":
       return "/staff";
     case "manager":
-      return "/admin/scores";
+      return getManagerHomePath(venueId);
     case "admin":
       return "/admin/dashboard";
     default:
@@ -33,8 +36,9 @@ export function getHomePath(role: UserRole | string | undefined | null): string 
 export function getCounterRedirectPath(
   role: UserRole | string | undefined | null,
   userAgent: string | null | undefined,
+  venueId?: string | null,
 ): string {
-  if (!isScreenRole(role)) return getHomePath(role);
+  if (!isScreenRole(role)) return getHomePath(role, venueId);
   return "/tv";
 }
 

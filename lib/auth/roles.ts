@@ -1,5 +1,5 @@
 import type { UserRole } from "@/lib/types";
-import { KNOWN_VENUE_IDS } from "@/lib/venue/constants";
+import { KNOWN_VENUE_IDS, MISA_VENUE_ID } from "@/lib/venue/constants";
 
 export const PROFILE_ROLES: UserRole[] = [
   "admin",
@@ -107,10 +107,20 @@ export function getAdminNavAccess(role: string | null | undefined): AdminNavAcce
   };
 }
 
+/** 미사점 매니저는 포인트 관리, 그 외 매니저는 스코어 */
+export function getManagerHomePath(venueId?: string | null): string {
+  if (venueId === MISA_VENUE_ID) return "/admin/guests/points";
+  return "/admin/scores";
+}
+
 /** 역할별 관리자 홈 (메뉴에 있는 첫 화면) */
-export function getAdminHomePath(role: string | null | undefined): string {
+export function getAdminHomePath(
+  role: string | null | undefined,
+  venueId?: string | null,
+): string {
   if (isAdminRole(role)) return "/admin/dashboard";
-  if (role === "manager" || role === "staff") return "/admin/scores";
+  if (role === "manager") return getManagerHomePath(venueId);
+  if (role === "staff") return "/admin/scores";
   return "/login";
 }
 

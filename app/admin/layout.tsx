@@ -13,11 +13,11 @@ export default async function AdminLayout({
   const viewerRole = await getCurrentUserRole();
   const navAccess = getAdminNavAccess(viewerRole);
   const showAccountLink = canManageAccounts(viewerRole);
-  const homeHref = getAdminHomePath(viewerRole);
   const [venues, activeVenueId] = await Promise.all([
     listAccessibleVenues(),
     getActiveVenueId(),
   ]);
+  const homeHref = getAdminHomePath(viewerRole, activeVenueId);
   return (
     <AdminShell
       showAccountLink={showAccountLink}

@@ -9,6 +9,10 @@ import {
 } from "@/lib/auth/roles";
 import { getCounterRedirectPath, getHomePath } from "@/lib/auth/routes";
 import { getSupabaseAnonKey, getSupabaseUrl, isSupabaseConfigured } from "@/lib/supabase/env";
+import {
+  VENUE_COOKIE,
+  isKnownVenueId,
+} from "@/lib/venue/constants";
 
 const ADMIN_PREFIX = "/admin";
 const STAFF_PREFIX = "/staff";
@@ -72,6 +76,35 @@ async function getRole(
   return typeof role === "string" ? role : null;
 }
 
+/** 미들웨어용 활성 지점 힌트 (쿠키 → profile_venues → profiles.venue_id) */
+async function getVenueHint(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string,
+  request: NextRequest,
+): Promise<string | null> {
+  const cookie = request.cookies.get(VENUE_COOKIE)?.value;
+  if (cookie && isKnownVenueId(cookie)) return cookie;
+
+  const venuesResult = await withTimeout<
+    Awaited<ReturnType<ReturnType<typeof supabase.from>["select"]>> | null
+  >(supabase.from("profile_venues").select("venue_id").eq("profile_id", userId), null);
+  const venueRows = venuesResult?.data;
+  if (Array.isArray(venueRows) && venueRows.length > 0) {
+    for (const row of venueRows) {
+      const id = typeof row?.venue_id === "string" ? row.venue_id : null;
+      if (id && isKnownVenueId(id)) return id;
+    }
+  }
+
+  const profileResult = await withTimeout<
+    Awaited<ReturnType<ReturnType<typeof supabase.from>["select"]>> | null
+  >(supabase.from("profiles").select("venue_id").eq("id", userId).maybeSingle(), null);
+  const profileVenue = profileResult?.data?.venue_id;
+  if (typeof profileVenue === "string" && isKnownVenueId(profileVenue)) return profileVenue;
+
+  return null;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const userAgent = request.headers.get("user-agent");
@@ -126,9 +159,11 @@ export async function middleware(request: NextRequest) {
 
   if (user) {
     const role = await getRole(supabase, user.id);
+    const venueId =
+      role === "manager" ? await getVenueHint(supabase, user.id, request) : null;
 
     if (isScreenRole(role)) {
-      const screenHome = getCounterRedirectPath(role, userAgent);
+      const screenHome = getCounterRedirectPath(role, userAgent, venueId);
       const allowed =
         pathname.startsWith("/tv") ||
         pathname === "/login" ||
@@ -151,20 +186,26 @@ export async function middleware(request: NextRequest) {
 
     if (pathname === "/login") {
       const url = request.nextUrl.clone();
-      url.pathname = getHomePath(role);
+      url.pathname = getHomePath(role, venueId);
       return NextResponse.redirect(url);
     }
 
     if (pathname.startsWith(ADMIN_PREFIX)) {
       if (!canAccessAdminArea(role)) {
         const url = request.nextUrl.clone();
-        url.pathname = getHomePath(role);
+        url.pathname = getHomePath(role, venueId);
+        return NextResponse.redirect(url);
+      }
+
+      if (pathname === "/admin" || pathname === "/admin/") {
+        const url = request.nextUrl.clone();
+        url.pathname = getAdminHomePath(role, venueId);
         return NextResponse.redirect(url);
       }
 
       if (!canAccessAdminPath(role, pathname)) {
         const url = request.nextUrl.clone();
-        url.pathname = getAdminHomePath(role);
+        url.pathname = getAdminHomePath(role, venueId);
         return NextResponse.redirect(url);
       }
     }
@@ -177,7 +218,7 @@ export async function middleware(request: NextRequest) {
       }
       if (isManagerOrAdmin(role) || role === "admin") {
         const url = request.nextUrl.clone();
-        url.pathname = getAdminHomePath(role);
+        url.pathname = getAdminHomePath(role, venueId);
         return NextResponse.redirect(url);
       }
     }
@@ -200,7 +241,7 @@ export async function middleware(request: NextRequest) {
 
     if (pathname === "/") {
       const url = request.nextUrl.clone();
-      url.pathname = getHomePath(role);
+      url.pathname = getHomePath(role, venueId);
       return NextResponse.redirect(url);
     }
   }
