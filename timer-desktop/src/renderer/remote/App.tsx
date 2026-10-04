@@ -16,6 +16,7 @@ import {
   copyImageToClipboard,
   copyToClipboard,
   formatKakaoGameStatusFromOrigins,
+  prepareClipboardPng,
   shareGameStatus,
 } from "./kakaoStatus";
 
@@ -182,6 +183,7 @@ export function App() {
   const [captureBusy, setCaptureBusy] = useState(false);
   const [capturePickOpen, setCapturePickOpen] = useState(false);
   const [captureSheet, setCaptureSheet] = useState<{ blob: Blob; previewUrl: string } | null>(null);
+  const capturePreviewRef = useRef<HTMLImageElement | null>(null);
   const [, setTick] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const pinOkRef = useRef(false);
@@ -450,11 +452,13 @@ export function App() {
         setError(result.error);
         return;
       }
+      // 클릭 시 await 변환으로 제스처가 끊기지 않게 PNG를 미리 준비
+      const png = await prepareClipboardPng(result.blob).catch(() => result.blob);
       setCaptureSheet((prev) => {
         if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
         return {
-          blob: result.blob,
-          previewUrl: URL.createObjectURL(result.blob),
+          blob: png,
+          previewUrl: URL.createObjectURL(png),
         };
       });
     } finally {
@@ -506,7 +510,7 @@ export function App() {
 
   async function copyCaptureSheet() {
     if (!captureSheet) return;
-    const ok = await copyImageToClipboard(captureSheet.blob);
+    const ok = await copyImageToClipboard(captureSheet.blob, capturePreviewRef.current);
     if (!ok) {
       setError("클립보드 복사에 실패했습니다. 다시 눌러 주세요.");
       return;
@@ -518,11 +522,15 @@ export function App() {
 
   async function openKakaoFromCaptureSheet() {
     if (!captureSheet) return;
-    const ok = await copyImageToClipboard(captureSheet.blob);
-    closeCaptureSheet();
-    if (ok) flashShare("copied");
-    else setError("클립보드 복사에 실패했습니다. 다시 눌러 주세요.");
-    window.location.assign("kakaotalk://");
+    const ok = await copyImageToClipboard(captureSheet.blob, capturePreviewRef.current);
+    if (ok) {
+      closeCaptureSheet();
+      setError(null);
+      flashShare("copied");
+      window.location.assign("kakaotalk://");
+      return;
+    }
+    setError("클립보드 복사에 실패했습니다. 다시 눌러 주세요.");
   }
 
   function logout() {
@@ -776,7 +784,12 @@ export function App() {
               화면 복사
             </p>
             <p className="share-sheet__hint">카카오톡으로 보내거나, 복사해서 붙여넣을 수 있습니다.</p>
-            <img className="share-sheet__preview" src={captureSheet.previewUrl} alt="캡처 미리보기" />
+            <img
+              ref={capturePreviewRef}
+              className="share-sheet__preview"
+              src={captureSheet.previewUrl}
+              alt="캡처 미리보기"
+            />
             <button type="button" className="share-sheet__kakao" onClick={() => void openKakaoFromCaptureSheet()}>
               카카오톡
             </button>

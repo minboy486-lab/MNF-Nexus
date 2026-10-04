@@ -165,8 +165,11 @@ export async function shareGameStatus(text: string): Promise<ShareStatusResult> 
   return "sheet";
 }
 
-async function blobToPng(image: Blob): Promise<Blob> {
-  if (image.type === "image/png") return image;
+/** 캡처 JPEG 등을 클립보드용 PNG로 미리 변환 (버튼 클릭 전에 끝낸다). */
+export async function prepareClipboardPng(image: Blob): Promise<Blob> {
+  if (image.type === "image/png") {
+    return image.slice(0, image.size, "image/png");
+  }
   const url = URL.createObjectURL(image);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -189,49 +192,54 @@ async function blobToPng(image: Blob): Promise<Blob> {
   }
 }
 
-/** 화면 이미지를 클립보드에 복사 (저장/다운로드 없음). */
-export async function copyImageToClipboard(image: Blob): Promise<boolean> {
-  const png = await blobToPng(image).catch(() => image);
+/**
+ * 화면 이미지를 클립보드에 복사.
+ * 주의: 클릭 핸들러에서 PNG 변환 await 없이 바로 호출해야 사용자 제스처가 유지된다.
+ * (변환은 prepareClipboardPng로 미리 해둘 것)
+ */
+export async function copyImageToClipboard(image: Blob, previewImg?: HTMLImageElement | null): Promise<boolean> {
+  const png =
+    image.type === "image/png" ? image.slice(0, image.size, "image/png") : image;
 
+  // ClipboardItem은 클릭 동기 구간에서 만들고, Blob은 Promise로 넘겨 activation을 유지한다.
   try {
     if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          [png.type || "image/png"]: png,
-        }),
-      ]);
+      const item = new ClipboardItem({
+        "image/png": Promise.resolve(png),
+      });
+      await navigator.clipboard.write([item]);
       return true;
     }
   } catch {
-    /* HTTP LAN / 권한 등 → fallback */
+    /* fallback */
   }
 
-  // contenteditable + 이미지 선택 복사 (일부 모바일 브라우저)
+  // 이미 로드된 미리보기 이미지가 있으면 그걸 바로 선택 복사 (추가 await 없음)
   try {
-    const url = URL.createObjectURL(png);
-    const wrap = document.createElement("div");
-    wrap.contentEditable = "true";
-    wrap.style.position = "fixed";
-    wrap.style.left = "-9999px";
-    wrap.style.opacity = "0";
+    const host = document.createElement("div");
+    host.contentEditable = "true";
+    host.style.position = "fixed";
+    host.style.left = "-9999px";
+    host.style.opacity = "0";
     const img = document.createElement("img");
-    img.src = url;
-    wrap.appendChild(img);
-    document.body.appendChild(wrap);
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("img"));
-      if (img.complete) resolve();
-    });
+    if (previewImg?.src) {
+      img.src = previewImg.src;
+    } else {
+      img.src = URL.createObjectURL(png);
+    }
+    host.appendChild(img);
+    document.body.appendChild(host);
     const selection = window.getSelection();
     const range = document.createRange();
-    range.selectNodeContents(wrap);
+    range.selectNode(img);
     selection?.removeAllRanges();
     selection?.addRange(range);
+    host.focus();
     const ok = document.execCommand("copy");
     selection?.removeAllRanges();
-    document.body.removeChild(wrap);
-    URL.revokeObjectURL(url);
+    const createdUrl = previewImg?.src ? null : img.src;
+    document.body.removeChild(host);
+    if (createdUrl?.startsWith("blob:")) URL.revokeObjectURL(createdUrl);
     if (ok) return true;
   } catch {
     /* ignore */
