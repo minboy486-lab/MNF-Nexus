@@ -182,10 +182,18 @@ export function App() {
   const [shareSheetText, setShareSheetText] = useState<string | null>(null);
   const [captureBusy, setCaptureBusy] = useState(false);
   const [capturePickOpen, setCapturePickOpen] = useState(false);
-  const [captureSheet, setCaptureSheet] = useState<{ blob: Blob; previewUrl: string } | null>(null);
+  const [captureSheet, setCaptureSheet] = useState<{
+    shareBlob: Blob;
+    clipboardBlob: Blob;
+    previewUrl: string;
+  } | null>(null);
   const [captureManualHint, setCaptureManualHint] = useState(false);
   const capturePreviewRef = useRef<HTMLImageElement | null>(null);
-  const captureSheetRef = useRef<{ blob: Blob; previewUrl: string } | null>(null);
+  const captureSheetRef = useRef<{
+    shareBlob: Blob;
+    clipboardBlob: Blob;
+    previewUrl: string;
+  } | null>(null);
   const [, setTick] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const pinOkRef = useRef(false);
@@ -457,13 +465,15 @@ export function App() {
         setError(result.error);
         return;
       }
-      // 클릭 시 await 변환으로 제스처가 끊기지 않게 PNG를 미리 준비
-      const png = await prepareClipboardPng(result.blob).catch(() => result.blob);
+      // 공유는 원본 JPEG, 클립보드는 PNG. 미리 변환해 클릭 제스처를 유지한다.
+      const png = await prepareClipboardPng(result.blob).catch(() => null);
+      const clipboardBlob = png ?? result.blob;
       setCaptureSheet((prev) => {
         if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
         const next = {
-          blob: png,
-          previewUrl: URL.createObjectURL(png),
+          shareBlob: result.blob,
+          clipboardBlob,
+          previewUrl: URL.createObjectURL(clipboardBlob),
         };
         captureSheetRef.current = next;
         return next;
@@ -519,8 +529,10 @@ export function App() {
     const sheet = captureSheetRef.current ?? captureSheet;
     if (!sheet) return;
     setError(null);
-    const result = await handoffImage(sheet.blob, {
-      preferShare: false,
+    // 폰은 공유창이 본체. execCommand 이미지 복사는 공백만 넣는 거짓 성공이 나서 쓰지 않음.
+    const result = await handoffImage(sheet.shareBlob, {
+      preferShare: true,
+      filename: "blind-screen.jpg",
       previewImg: capturePreviewRef.current,
     });
     if (result === "cancelled") return;
@@ -530,16 +542,17 @@ export function App() {
       return;
     }
     setCaptureManualHint(true);
-    setError("자동 복사가 막혀 있습니다. 위 사진을 길게 눌러 복사·공유하세요.");
+    setError("자동 복사가 안 됩니다. 위 사진을 길게 눌러 복사·공유하세요.");
   }
 
   async function openKakaoFromCaptureSheet() {
     const sheet = captureSheetRef.current ?? captureSheet;
     if (!sheet) return;
     setError(null);
-    // 카톡은 시스템 공유창에서 선택하는 게 가장 안정적 (클립보드+앱 실행보다 우선)
-    const result = await handoffImage(sheet.blob, {
+    // 카톡은 시스템 공유창에서 사진을 고르는 방식이 안정적. 클립보드+앱실행은 쓰지 않음.
+    const result = await handoffImage(sheet.shareBlob, {
       preferShare: true,
+      filename: "blind-screen.jpg",
       previewImg: capturePreviewRef.current,
     });
     if (result === "cancelled") return;
@@ -551,11 +564,10 @@ export function App() {
     if (result === "copied") {
       closeCaptureSheet();
       flashShare("copied");
-      window.location.assign("kakaotalk://");
       return;
     }
     setCaptureManualHint(true);
-    setError("공유가 막혀 있습니다. 위 사진을 길게 눌러 카카오톡으로 보내세요.");
+    setError("공유창이 안 열립니다. 위 사진을 길게 눌러 카카오톡으로 보내세요.");
   }
 
   function logout() {
@@ -811,7 +823,7 @@ export function App() {
             <p className="share-sheet__hint">
               {captureManualHint
                 ? "사진을 길게 누르면 저장·복사·카톡 공유가 가능합니다."
-                : "카카오톡으로 보내거나, 복사해서 붙여넣을 수 있습니다."}
+                : "카카오톡 → 공유창에서 카톡 선택. 안 되면 위 사진을 길게 누르세요."}
             </p>
             <img
               ref={capturePreviewRef}

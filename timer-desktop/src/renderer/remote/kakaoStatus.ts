@@ -165,9 +165,13 @@ export async function shareGameStatus(text: string): Promise<ShareStatusResult> 
   return "sheet";
 }
 
-/** 캡처 JPEG 등을 클립보드/공유용 PNG로 미리 변환 (버튼 클릭 전에 끝낸다). */
+function isMobileUa(): boolean {
+  return typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+/** 캡처 JPEG 등을 클립보드용 PNG로 미리 변환 (버튼 클릭 전에 끝낸다). */
 export async function prepareClipboardPng(image: Blob): Promise<Blob> {
-  if (image.type === "image/png") {
+  if (image.type === "image/png" && image.size > 0) {
     return image.slice(0, image.size, "image/png");
   }
   const url = URL.createObjectURL(image);
@@ -181,31 +185,36 @@ export async function prepareClipboardPng(image: Blob): Promise<Blob> {
     const canvas = document.createElement("canvas");
     canvas.width = img.naturalWidth || img.width;
     canvas.height = img.naturalHeight || img.height;
+    if (canvas.width < 1 || canvas.height < 1) throw new Error("empty image");
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("canvas unsupported");
     ctx.drawImage(img, 0, 0);
     const png = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
-    if (!png) throw new Error("png encode failed");
+    if (!png || png.size < 32) throw new Error("png encode failed");
     return png;
   } finally {
     URL.revokeObjectURL(url);
   }
 }
 
-function asPngFile(image: Blob, filename: string): File {
-  const blob = image.type === "image/png" ? image : new Blob([image], { type: "image/png" });
-  return new File([blob], filename, { type: "image/png" });
+function asShareFile(image: Blob, filename: string): File {
+  const type = image.type && image.type.startsWith("image/") ? image.type : "image/jpeg";
+  const name =
+    filename ||
+    (type === "image/png" ? "blind-screen.png" : "blind-screen.jpg");
+  return new File([image], name, { type });
 }
 
-/** 시스템 공유창으로 이미지 전송 (카톡 선택 가능). HTTP/모바일에서 클립보드보다 안정적. */
+/** 시스템 공유창으로 이미지 전송 (카톡 선택). 폰에서는 클립보드보다 이게 본체. */
 export async function shareImageFile(
   image: Blob,
-  filename = "blind-screen.png",
+  filename = "blind-screen.jpg",
 ): Promise<"shared" | "cancelled" | "unsupported"> {
   if (typeof navigator === "undefined" || typeof navigator.share !== "function") {
     return "unsupported";
   }
-  const file = asPngFile(image, filename);
+  if (!image || image.size < 32) return "unsupported";
+  const file = asShareFile(image, filename);
   try {
     if (typeof navigator.canShare === "function" && !navigator.canShare({ files: [file] })) {
       return "unsupported";
@@ -225,71 +234,49 @@ export async function shareImageFile(
 
 /**
  * 화면 이미지를 클립보드에 복사.
- * PNG는 미리 prepareClipboardPng로 만들어 두고, 클릭 핸들러에서 바로 호출할 것.
+ * ClipboardItem만 사용한다. execCommand 폴백은 폰에서 공백만 복사되는 거짓 성공을 낸다.
  */
-export async function copyImageToClipboard(image: Blob, previewImg?: HTMLImageElement | null): Promise<boolean> {
-  const png =
-    image.type === "image/png" ? image.slice(0, image.size, "image/png") : new Blob([image], { type: "image/png" });
+export async function copyImageToClipboard(image: Blob, _previewImg?: HTMLImageElement | null): Promise<boolean> {
+  if (!image || image.size < 32) return false;
+  if (!window.isSecureContext) return false;
+  if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) return false;
 
-  // 1) Clipboard API (HTTPS 등 secure context에서만 동작)
-  if (window.isSecureContext && typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+  // JPEG를 image/png로 속이지 않는다 — 실제 PNG만 png 타입으로 쓴다
+  let png: Blob;
+  try {
+    png = image.type === "image/png" ? image : await prepareClipboardPng(image);
+  } catch {
+    return false;
+  }
+  if (png.size < 32) return false;
+
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+    return true;
+  } catch {
     try {
-      const item = new ClipboardItem({ "image/png": Promise.resolve(png) });
-      await navigator.clipboard.write([item]);
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": Promise.resolve(png) })]);
       return true;
     } catch {
-      try {
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
-        return true;
-      } catch {
-        /* fallback */
-      }
+      return false;
     }
   }
-
-  // 2) 미리보기/임시 이미지 선택 복사
-  try {
-    const host = document.createElement("div");
-    host.contentEditable = "true";
-    host.style.position = "fixed";
-    host.style.left = "-9999px";
-    host.style.opacity = "0";
-    const img = document.createElement("img");
-    let createdUrl: string | null = null;
-    if (previewImg?.complete && previewImg.src) {
-      img.src = previewImg.src;
-    } else {
-      createdUrl = URL.createObjectURL(png);
-      img.src = createdUrl;
-    }
-    host.appendChild(img);
-    document.body.appendChild(host);
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNode(img);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    host.focus();
-    const ok = document.execCommand("copy");
-    selection?.removeAllRanges();
-    document.body.removeChild(host);
-    if (createdUrl) URL.revokeObjectURL(createdUrl);
-    if (ok) return true;
-  } catch {
-    /* ignore */
-  }
-  return false;
 }
 
 export type ImageHandoffResult = "shared" | "copied" | "cancelled" | "manual";
 
-/** 카톡/복사 버튼용: 공유 → 클립보드 → 수동(길게 누르기) 순. */
+/**
+ * 카톡/복사 버튼용.
+ * 폰은 공유창이 본체. 클립보드는 ClipboardItem 성공일 때만 "copied".
+ * (execCommand 이미지 복사는 공백 한 칸만 들어가는 경우가 많아 쓰지 않음)
+ */
 export async function handoffImage(
   image: Blob,
   opts?: { preferShare?: boolean; filename?: string; previewImg?: HTMLImageElement | null },
 ): Promise<ImageHandoffResult> {
-  const filename = opts?.filename ?? "blind-screen.png";
-  const preferShare = opts?.preferShare !== false;
+  const filename =
+    opts?.filename ?? (image.type === "image/png" ? "blind-screen.png" : "blind-screen.jpg");
+  const preferShare = opts?.preferShare !== false || isMobileUa();
 
   if (preferShare) {
     const shared = await shareImageFile(image, filename);
