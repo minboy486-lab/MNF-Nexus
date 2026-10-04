@@ -90,6 +90,7 @@ export function normalizeGameSession(session: GameSession): GameSession {
     : [];
   return {
     ...session,
+    isChampionship: session.isChampionship === true,
     participants,
     dailyGameNo: typeof session.dailyGameNo === "number" && session.dailyGameNo > 0 ? session.dailyGameNo : 1,
     scoresSubmitted: session.scoresSubmitted ?? false,

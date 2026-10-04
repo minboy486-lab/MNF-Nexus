@@ -30,6 +30,8 @@ import { WindowManager } from "./windows/windowManager";
 import { setupAutoUpdater } from "./updater";
 import { RemoteServer } from "./remote/server";
 import { getConfiguredYeoksamRole } from "./supabase/venue";
+import { listBlindStructures } from "./supabase/blinds";
+import { saveLocalBlinds } from "./blinds/localBlinds";
 import {
   mergeSavedTimerThemes,
   shopTimerThemeEqual,
@@ -78,6 +80,7 @@ app.whenReady().then(async () => {
   remoteServer.setAppearance(
     () => windowManager.getTheme(),
     () => windowManager.getSoundVolume(),
+    () => windowManager.getTimerLook(),
   );
   remoteServer.setShopThemeSync({
     get: () => windowManager.getShopTimerTheme(),
@@ -134,6 +137,14 @@ app.whenReady().then(async () => {
     timerHub.pushSnapshotToControl();
     timerHub.pushAllMonitors();
   }
+
+  // 대회 프리셋 플래그를 서버에서 다시 받아 진행 중 세션 MTT 표기를 보정
+  void listBlindStructures()
+    .then((opts) => {
+      saveLocalBlinds(opts);
+      timerHub.setChampionshipStructureIds(opts.filter((o) => o.isChampionship).map((o) => o.id));
+    })
+    .catch((e) => console.warn("[blinds] 시작 시 대회 플래그 갱신 실패", e));
 
   // 시작 시에는 테마 목록만 공유 (현재 디자인으로 다른 PC를 덮지 않음)
   remoteServer.broadcastShopTimerTheme("library");

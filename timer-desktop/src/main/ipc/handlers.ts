@@ -1,12 +1,15 @@
 import { ipcMain, app } from "electron";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { resolve } from "node:path";
 import { loadConfig, parseConfigInput, saveConfig } from "../config/configStore";
 import { getConfiguredVenueId, verifyVenueControlPin } from "../supabase/venue";
 import { YEOKSAM_VENUE_ID, isKnownVenueId } from "@mnf/venue";
 import { getAllDisplaysInfo } from "../screen/displayMapper";
 import { clearDisplayIdentify, flashDisplayIdentify } from "../screen/displayIdentify";
 import { listBlindStructures } from "../supabase/blinds";
+import {
+  championshipStructureIds,
+  loadLocalBlinds,
+  saveLocalBlinds,
+} from "../blinds/localBlinds";
 import type { TimerHub } from "../timer/timerHub";
 import type { GameSession, MonitorSlot, TableSlot, AppConfig } from "../../shared/types";
 import { isThemeSurface, normalizeSoundVolume, normalizeUiTheme } from "../../shared/types";
@@ -59,27 +62,14 @@ async function forwardToHubOrLocal(
   return { ok: false, error: CONTROL_UNREACHABLE };
 }
 
-function localBlindsPath(venueId: string) {
-  const dir = app.getPath("userData");
-  mkdirSync(dir, { recursive: true });
-  const safe = venueId.replace(/[^a-zA-Z0-9_-]/g, "_");
-  return resolve(dir, `local-blinds-${safe}.json`);
-}
-
-function loadLocalBlinds(venueId?: string): BlindStructureOption[] {
-  const id = venueId ?? getConfiguredVenueId();
-  try {
-    const p = localBlindsPath(id);
-    if (!existsSync(p)) return [];
-    return JSON.parse(readFileSync(p, "utf-8")) as BlindStructureOption[];
-  } catch {
-    return [];
+function applyChampionshipIds(hub: TimerHub, options?: BlindStructureOption[]): void {
+  if (options && options.length > 0) {
+    hub.setChampionshipStructureIds(
+      options.filter((o) => o.isChampionship).map((o) => o.id),
+    );
+    return;
   }
-}
-
-function saveLocalBlinds(data: BlindStructureOption[], venueId?: string): void {
-  const id = venueId ?? getConfiguredVenueId();
-  writeFileSync(localBlindsPath(id), JSON.stringify(data, null, 2), "utf-8");
+  hub.setChampionshipStructureIds(championshipStructureIds());
 }
 
 function isMonitorSlot(v: unknown): v is MonitorSlot {
@@ -203,6 +193,7 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
     const win = wm.getControlWindow();
     if (win && !win.isDestroyed()) win.webContents.send("lan:view-state", state);
   });
+  applyChampionshipIds(hub);
   // ── 디스플레이 & 설정 ──────────────────────────────────────
   ipcMain.handle("displays:get", () => getAllDisplaysInfo());
   ipcMain.handle("displays:identify", () => {
@@ -496,17 +487,21 @@ export function registerIpcHandlers(wm: WindowManager, hub: TimerHub, remote: Re
       try {
         saveLocalBlinds(remote, venueId);
       } catch {}
+      applyChampionshipIds(hub, remote);
       return remote;
     }
     // 원격 실패/타임아웃 → 현재 지점 로컬 캐시만
     const local = loadLocalBlinds(venueId);
     console.log("[ipc] blinds:list 로컬 fallback:", local.length, "개 · venue", venueId);
+    applyChampionshipIds(hub, local);
     return local;
   });
   ipcMain.handle("blinds:local:list", () => loadLocalBlinds(getConfiguredVenueId()));
   ipcMain.handle("blinds:local:save", (_e, data: unknown) => {
     if (!Array.isArray(data)) return { ok: false as const };
-    saveLocalBlinds(data as BlindStructureOption[], getConfiguredVenueId());
+    const list = data as BlindStructureOption[];
+    saveLocalBlinds(list, getConfiguredVenueId());
+    applyChampionshipIds(hub, list);
     return { ok: true as const };
   });
   ipcMain.handle("venue:get", () => getConfiguredVenueId());

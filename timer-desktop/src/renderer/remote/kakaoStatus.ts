@@ -57,8 +57,9 @@ function gameBlock(
   venueId?: string | null,
 ): string {
   const slots = tablesForGame(snapshot, session);
-  // 블라인드 대회(championship)는 MTT여도 기존 구조 이름 유지
-  const mtt = isMttShare(session, slots) && !session.isChampionship;
+  // 대회 프리셋은 테이블 수와 관계없이 구조 이름 유지 (MTT게임 표기 안 함)
+  const championship = session.isChampionship === true;
+  const mtt = !championship && isMttShare(session, slots);
   const name = gameNameForShare(session.structureName || "게임");
   const gameTitle = mtt ? "MTT게임" : `${name} 게임`;
   const tables = tableLabel(venueId, slots);

@@ -37,6 +37,8 @@ export class TimerHub {
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
   /** 역삼 출력 PC: 컨트롤 PC 스냅샷. 있으면 UI·송출은 이 값을 쓴다. */
   private follow: { snapshot: AppSnapshot; timers: TableTimerState[] } | null = null;
+  /** 대회(프리셋) structureId 집합 — 기존 세션 isChampionship 보정용 */
+  private championshipIds = new Set<string>();
 
   constructor(deps: {
     getDisplayWindowsForSlot: (slot: MonitorSlot) => BrowserWindow[];
@@ -45,6 +47,21 @@ export class TimerHub {
     this.getDisplayWindowsForSlot = deps.getDisplayWindowsForSlot;
     this.getControlWindow = deps.getControlWindow;
     this.startAutoAdvance();
+  }
+
+  setChampionshipStructureIds(ids: Iterable<string>): void {
+    this.championshipIds = new Set(ids);
+    let changed = false;
+    for (const session of this.sessions.values()) {
+      if (!session.isChampionship && this.championshipIds.has(session.structureId)) {
+        session.isChampionship = true;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.pushSnapshotToControl();
+      this.schedulePersist();
+    }
   }
 
   /** 앱 시작 시 디스크에서 게임·타이머·배정을 복원한다. */
@@ -60,6 +77,11 @@ export class TimerHub {
     this.timers = maps.timers;
     this.monitorAssignments = maps.monitorAssignments;
     this.tableAssignments = maps.tableAssignments;
+    for (const session of this.sessions.values()) {
+      if (!session.isChampionship && this.championshipIds.has(session.structureId)) {
+        session.isChampionship = true;
+      }
+    }
     return this.sessions.size > 0;
   }
 
@@ -489,7 +511,12 @@ export class TimerHub {
   }
 
   getSnapshot(): AppSnapshot {
-    if (this.follow) return this.follow.snapshot;
+    if (this.follow) {
+      return {
+        ...this.follow.snapshot,
+        sessions: this.follow.snapshot.sessions.map((s) => this.enrichChampionship(s)),
+      };
+    }
     return this.ownedSnapshot();
   }
 
@@ -500,7 +527,7 @@ export class TimerHub {
 
   /** 이 PC 허브만. 역삼 출력 follow는 빼서 LAN 게임 목록이 중복되지 않게 한다. */
   ownedSnapshot(): AppSnapshot {
-    const sessions = Array.from(this.sessions.values()).map(normalizeGameSession);
+    const sessions = Array.from(this.sessions.values()).map((s) => this.enrichChampionship(s));
     const monitorAssignments: Record<number, number | null> = {};
     for (const slot of MONITOR_SLOTS) {
       monitorAssignments[slot] = this.monitorAssignments.get(slot) ?? null;
@@ -516,36 +543,25 @@ export class TimerHub {
     return Array.from(this.timers.values());
   }
 
-  /** 게임이 송출 중인 첫 모니터 화면을 JPEG base64로 캡처 */
-  async captureDisplayForGame(
-    gameId: number,
-  ): Promise<{ mime: "image/jpeg"; base64: string } | null> {
-    if (!Number.isInteger(gameId) || gameId < 1) return null;
-    const wins: BrowserWindow[] = [];
+  getSession(gameId: number): GameSession | null {
     if (this.follow) {
-      for (const slot of MONITOR_SLOTS) {
-        if (yeoksamOutputGameId(this.follow.snapshot, slot) === gameId) {
-          wins.push(...this.getDisplayWindowsForSlot(slot));
-        }
-      }
-    } else {
-      for (const [slot, gid] of this.monitorAssignments.entries()) {
-        if (gid === gameId) wins.push(...this.getDisplayWindowsForSlot(slot));
+      const session = this.follow.snapshot.sessions.find((s) => s.gameId === gameId) ?? null;
+      return session ? this.enrichChampionship(session) : null;
+    }
+    const session = this.sessions.get(gameId) ?? null;
+    return session ? this.enrichChampionship(session) : null;
+  }
+
+  private enrichChampionship(session: GameSession): GameSession {
+    const next = normalizeGameSession(session);
+    if (!next.isChampionship && this.championshipIds.has(next.structureId)) {
+      next.isChampionship = true;
+      if (!this.follow) {
+        const live = this.sessions.get(next.gameId);
+        if (live) live.isChampionship = true;
       }
     }
-    for (const win of wins) {
-      if (win.isDestroyed()) continue;
-      try {
-        const img = await win.webContents.capturePage();
-        const buf = img.toJPEG(85);
-        if (buf.length > 0) {
-          return { mime: "image/jpeg", base64: buf.toString("base64") };
-        }
-      } catch {
-        /* try next window */
-      }
-    }
-    return null;
+    return next;
   }
 
   setFollow(snapshot: AppSnapshot, timers: TableTimerState[]): void {

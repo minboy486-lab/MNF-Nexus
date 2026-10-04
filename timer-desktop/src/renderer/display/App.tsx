@@ -11,6 +11,7 @@ import { BroadcastStage } from "../shared/BroadcastStage";
 import { useTimerAnnounce, setTimerSoundVolume } from "../shared/timerAnnounce";
 
 export function App() {
+  const captureMode = typeof window !== "undefined" && window.displayApi.isCaptureMode();
   const [monitorSlot, setMonitorSlot] = useState(1);
   const [theme, setTheme] = useState<UiThemeId>(DEFAULT_UI_THEME);
   const [look, setLook] = useState<TimerLook | null>(null);
@@ -20,6 +21,23 @@ export function App() {
   const [, setTick] = useState(0);
 
   useEffect(() => {
+    if (captureMode) {
+      return window.displayApi.onCapturePayload((payload) => {
+        const nextTheme = normalizeUiTheme(payload.theme);
+        setTheme(nextTheme);
+        applyDocumentTheme(nextTheme);
+        setLook(normalizeTimerLook(payload.look, nextTheme));
+        setSession(payload.session);
+        setState(payload.state);
+        setVenueId(isKnownVenueId(payload.venueId) ? payload.venueId : YEOKSAM_VENUE_ID);
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            window.displayApi.signalCaptureReady(payload.requestId);
+          });
+        });
+      });
+    }
+
     setMonitorSlot(window.displayApi.getMonitorSlot());
     const unsubTimer = window.displayApi.onTimerUpdate(setState);
     const unsubSession = window.displayApi.onSessionUpdate?.(setSession) ?? (() => {});
@@ -57,15 +75,16 @@ export function App() {
       unsubVolume();
       unsubVenue();
     };
-  }, []);
+  }, [captureMode]);
 
   useEffect(() => {
+    if (captureMode) return;
     const id = window.setInterval(() => setTick((t) => t + 1), 250);
     return () => window.clearInterval(id);
-  }, []);
+  }, [captureMode]);
 
   const remainingMs = state ? getDisplayRemainingMs(state) : 0;
-  useTimerAnnounce(state, remainingMs, { matchDisplayAudio: true });
+  useTimerAnnounce(captureMode ? null : state, remainingMs, { matchDisplayAudio: !captureMode });
 
   return (
     <div className="ds-shell">

@@ -72,6 +72,34 @@ contextBridge.exposeInMainWorld("displayApi", {
     ipcRenderer.on("session:update", h);
     return () => ipcRenderer.removeListener("session:update", h);
   },
+  isCaptureMode: () => new URLSearchParams(window.location.search).get("capture") === "1",
+  onCapturePayload: (
+    cb: (payload: {
+      requestId: string;
+      session: GameSession;
+      state: TableTimerState;
+      theme: UiThemeId;
+      look: TimerLook | null;
+      venueId: string;
+    }) => void,
+  ) => {
+    const h = (
+      _e: Electron.IpcRendererEvent,
+      payload: {
+        requestId: string;
+        session: GameSession;
+        state: TableTimerState;
+        theme: UiThemeId;
+        look: TimerLook | null;
+        venueId: string;
+      },
+    ) => cb(payload);
+    ipcRenderer.on("capture:payload", h);
+    return () => ipcRenderer.removeListener("capture:payload", h);
+  },
+  signalCaptureReady: (requestId: string) => {
+    ipcRenderer.send("capture:ready", requestId);
+  },
 });
 
 declare global {
@@ -89,6 +117,18 @@ declare global {
       onVenueUpdate: (cb: (venueId: string) => void) => () => void;
       onTimerUpdate: (cb: (state: TableTimerState) => void) => () => void;
       onSessionUpdate: (cb: (session: GameSession | null) => void) => () => void;
+      isCaptureMode: () => boolean;
+      onCapturePayload: (
+        cb: (payload: {
+          requestId: string;
+          session: GameSession;
+          state: TableTimerState;
+          theme: UiThemeId;
+          look: TimerLook | null;
+          venueId: string;
+        }) => void,
+      ) => () => void;
+      signalCaptureReady: (requestId: string) => void;
     };
   }
 }

@@ -43,6 +43,10 @@ import {
   type TableSlot,
 } from "../../shared/types";
 import type { BlindStructureOption, TableTimerState, TimerAction } from "@mnf/timer/types";
+import { renderGameScreenJpeg } from "../capture/renderGameScreen";
+import type { TimerLook } from "../../shared/timerLook";
+import type { UiThemeId } from "../../shared/types";
+import { DEFAULT_UI_THEME, normalizeUiTheme } from "../../shared/types";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -159,6 +163,7 @@ export class RemoteServer {
   private staffAuthEnabled = false;
   private getThemeId: () => string = () => "black-pink";
   private getVolume: () => number = () => 100;
+  private getTimerLook: () => TimerLook | null = () => null;
   private cluster: LanCluster | null = null;
   private applyingShopTheme = false;
   private presenceTimer: ReturnType<typeof setInterval> | null = null;
@@ -176,9 +181,14 @@ export class RemoteServer {
     }
   >();
 
-  setAppearance(getTheme: () => string, getVolume: () => number): void {
+  setAppearance(
+    getTheme: () => string,
+    getVolume: () => number,
+    getTimerLook?: () => TimerLook | null,
+  ): void {
     this.getThemeId = getTheme;
     this.getVolume = getVolume;
+    if (getTimerLook) this.getTimerLook = getTimerLook;
   }
 
   setShopThemeSync(sync: {
@@ -328,6 +338,22 @@ export class RemoteServer {
     });
   }
 
+  private async captureGameScreen(gameId: number): Promise<{ mime: "image/jpeg"; base64: string } | null> {
+    const hub = this.hub;
+    if (!hub) return null;
+    const state = hub.getTimer(gameId);
+    const session = hub.getSession(gameId);
+    if (!state || !session) return null;
+    const theme = normalizeUiTheme(this.getThemeId()) as UiThemeId;
+    return renderGameScreenJpeg({
+      session,
+      state,
+      theme: theme || DEFAULT_UI_THEME,
+      look: this.getTimerLook(),
+      venueId: getConfiguredVenueId(),
+    });
+  }
+
   private async captureLocalOrFail(
     ws: WebSocket,
     requestId: string,
@@ -338,8 +364,18 @@ export class RemoteServer {
       sendJson(ws, { type: "capture_fail", requestId, error: "컨트롤러가 준비되지 않았습니다." });
       return true;
     }
-    const shot = await hub.captureDisplayForGame(gameId);
-    if (!shot) return false;
+    if (!hub.getTimer(gameId) || !hub.getSession(gameId)) {
+      return false;
+    }
+    const shot = await this.captureGameScreen(gameId);
+    if (!shot) {
+      sendJson(ws, {
+        type: "capture_fail",
+        requestId,
+        error: "타이머 화면 캡처에 실패했습니다. 다시 시도해 주세요.",
+      });
+      return true;
+    }
     sendJson(ws, {
       type: "capture_ok",
       requestId,
@@ -385,15 +421,19 @@ export class RemoteServer {
       return;
     }
 
-    if (await this.captureLocalOrFail(ws, msg.requestId, msg.gameId)) return;
+    // 로컬에 게임이 있으면 모니터 연결 없이 타이머 화면을 그려 캡처
+    if (this.hub?.getTimer(msg.gameId) && this.hub.getSession(msg.gameId)) {
+      await this.captureLocalOrFail(ws, msg.requestId, msg.gameId);
+      return;
+    }
 
-    // 역삼 컨트롤 PC 등 로컬에 송출 창이 없으면 피어(출력 PC)에 요청
+    // 다른 PC 게임이면 피어에 캡처 요청
     const peers = this.cluster?.peers() ?? [];
     if (peers.length === 0) {
       sendJson(ws, {
         type: "capture_fail",
         requestId: msg.requestId,
-        error: "송출 모니터가 없거나 게임이 화면에 연결되어 있지 않습니다.",
+        error: "진행 중인 게임을 찾을 수 없습니다.",
       });
       return;
     }
@@ -412,7 +452,7 @@ export class RemoteServer {
     }
     if (!forwarded) {
       this.resolvePendingCapture(
-        { requestId: msg.requestId, error: "송출 PC에 연결할 수 없습니다." },
+        { requestId: msg.requestId, error: "다른 컴퓨터의 게임에 연결할 수 없습니다." },
         { forceFail: true },
       );
     }
@@ -925,7 +965,7 @@ export class RemoteServer {
 
     if (msg.type === "peer_captureDisplay") {
       void (async () => {
-        const shot = await hub.captureDisplayForGame(msg.gameId);
+        const shot = await this.captureGameScreen(msg.gameId);
         const reply: RemoteClientMsg = shot
           ? {
               type: "peer_capture_result",
@@ -936,7 +976,7 @@ export class RemoteServer {
           : {
               type: "peer_capture_result",
               requestId: msg.requestId,
-              error: "송출 모니터가 없거나 게임이 화면에 연결되어 있지 않습니다.",
+              error: "타이머 화면 캡처에 실패했습니다.",
             };
         if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(reply));
       })();
