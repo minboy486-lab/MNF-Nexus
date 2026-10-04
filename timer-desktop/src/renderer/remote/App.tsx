@@ -181,6 +181,7 @@ export function App() {
   const [shareSheetText, setShareSheetText] = useState<string | null>(null);
   const [captureBusy, setCaptureBusy] = useState(false);
   const [capturePickOpen, setCapturePickOpen] = useState(false);
+  const [captureSheet, setCaptureSheet] = useState<{ blob: Blob; previewUrl: string } | null>(null);
   const [, setTick] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const pinOkRef = useRef(false);
@@ -432,6 +433,13 @@ export function App() {
     });
   }
 
+  function closeCaptureSheet() {
+    setCaptureSheet((prev) => {
+      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+  }
+
   async function runScreenCopy(game: ListedGame) {
     setCapturePickOpen(false);
     setCaptureBusy(true);
@@ -442,12 +450,13 @@ export function App() {
         setError(result.error);
         return;
       }
-      const ok = await copyImageToClipboard(result.blob);
-      if (!ok) {
-        setError("클립보드 복사에 실패했습니다. HTTPS 또는 최신 브라우저에서 다시 시도해 주세요.");
-        return;
-      }
-      flashShare("copied");
+      setCaptureSheet((prev) => {
+        if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+        return {
+          blob: result.blob,
+          previewUrl: URL.createObjectURL(result.blob),
+        };
+      });
     } finally {
       setCaptureBusy(false);
     }
@@ -492,6 +501,27 @@ export function App() {
     const ok = await copyToClipboard(shareSheetText);
     setShareSheetText(null);
     if (ok) flashShare("copied");
+    window.location.assign("kakaotalk://");
+  }
+
+  async function copyCaptureSheet() {
+    if (!captureSheet) return;
+    const ok = await copyImageToClipboard(captureSheet.blob);
+    if (!ok) {
+      setError("클립보드 복사에 실패했습니다. 다시 눌러 주세요.");
+      return;
+    }
+    closeCaptureSheet();
+    setError(null);
+    flashShare("copied");
+  }
+
+  async function openKakaoFromCaptureSheet() {
+    if (!captureSheet) return;
+    const ok = await copyImageToClipboard(captureSheet.blob);
+    closeCaptureSheet();
+    if (ok) flashShare("copied");
+    else setError("클립보드 복사에 실패했습니다. 다시 눌러 주세요.");
     window.location.assign("kakaotalk://");
   }
 
@@ -709,7 +739,7 @@ export function App() {
             <p id="capture-pick-title" className="share-sheet__title">
               화면 복사할 게임
             </p>
-            <p className="share-sheet__hint">송출 중인 블라인드 화면을 캡처합니다.</p>
+            <p className="share-sheet__hint">게임을 선택하면 타이머 화면을 캡처합니다.</p>
             {games.map((g) => (
               <button
                 key={`cap-${g.host}:${g.session.gameId}`}
@@ -723,6 +753,37 @@ export function App() {
               </button>
             ))}
             <button type="button" className="share-sheet__cancel" onClick={() => setCapturePickOpen(false)}>
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      {captureSheet != null && (
+        <div
+          className="share-sheet-backdrop"
+          role="presentation"
+          onClick={() => closeCaptureSheet()}
+        >
+          <div
+            className="share-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="capture-sheet-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p id="capture-sheet-title" className="share-sheet__title">
+              화면 복사
+            </p>
+            <p className="share-sheet__hint">카카오톡으로 보내거나, 복사해서 붙여넣을 수 있습니다.</p>
+            <img className="share-sheet__preview" src={captureSheet.previewUrl} alt="캡처 미리보기" />
+            <button type="button" className="share-sheet__kakao" onClick={() => void openKakaoFromCaptureSheet()}>
+              카카오톡
+            </button>
+            <button type="button" className="share-sheet__copy" onClick={() => void copyCaptureSheet()}>
+              복사
+            </button>
+            <button type="button" className="share-sheet__cancel" onClick={() => closeCaptureSheet()}>
               취소
             </button>
           </div>
