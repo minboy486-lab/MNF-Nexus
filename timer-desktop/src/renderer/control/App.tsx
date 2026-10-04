@@ -1580,9 +1580,6 @@ export function App() {
                 {Math.max(0, Math.ceil((remoteInfo.expiresAt - Date.now()) / 1000))}초 후 만료
               </p>
             )}
-            <p className="qr-popup__ttl" style={{ opacity: 0.75 }}>
-              처음 접속 시 보안 경고가 뜨면 고급 → 계속(또는 방문)을 눌러 주세요. 화면복사에 필요합니다.
-            </p>
             <div className="qr-popup__actions">
               <button type="button" className="settings-popup__btn" onClick={() => void openRemoteQr()}>
                 QR 새로고침
