@@ -287,6 +287,11 @@ button.ds-timer:hover {
   white-space: nowrap;
 }
 .ds-blinds__sep { color: var(--muted-strong, rgba(196, 176, 196, 0.5)); margin: 0 6px; }
+.ds-blinds__ante {
+  color: var(--muted-strong, rgba(196, 176, 196, 0.55));
+  font-size: 0.88em;
+  font-weight: 600;
+}
 .ds-blinds__val--break {
   font-size: calc(clamp(1.8rem, 4cqw, 4rem) * var(--blinds-scale));
   font-weight: 700;
@@ -424,7 +429,8 @@ button.ds-timer:hover {
   background: inherit;
 }
 .ds-overlay--color.ds-overlay--blinds .ds-blinds__val,
-.ds-overlay--color.ds-overlay--blinds .ds-blinds__sep {
+.ds-overlay--color.ds-overlay--blinds .ds-blinds__sep,
+.ds-overlay--color.ds-overlay--blinds .ds-blinds__ante {
   color: var(--item-color);
 }
 .ds-overlay--label.ds-overlay--blinds .ds-blinds__label {

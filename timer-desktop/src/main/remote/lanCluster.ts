@@ -91,12 +91,22 @@ export class LanCluster {
       getShopTimerTheme: () => ShopTimerThemePayload | null;
       onPeersChange: () => void;
       onPeerShopTheme: (raw: unknown) => void;
+      onPeerCaptureResult?: (msg: {
+        requestId: string;
+        mime?: "image/jpeg";
+        pngBase64?: string;
+        error?: string;
+      }) => void;
     },
   ) {}
 
   ingestPeerLanMessage(host: string, msg: RemoteClientMsg | RemoteServerMsg): void {
     if (msg.type === "peer_timer_theme") {
       this.opts.onPeerShopTheme(msg);
+      return;
+    }
+    if (msg.type === "peer_capture_result") {
+      this.opts.onPeerCaptureResult?.(msg);
       return;
     }
     if (msg.type === "peer_snapshot" || msg.type === "snapshot") {

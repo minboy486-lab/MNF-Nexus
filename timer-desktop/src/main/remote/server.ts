@@ -166,6 +166,15 @@ export class RemoteServer {
     get: () => ShopTimerThemePayload | null;
     apply: (pack: ShopTimerThemePayload, mode: ShopThemeSyncMode) => boolean;
   } | null = null;
+  private pendingCaptures = new Map<
+    string,
+    {
+      ws: WebSocket;
+      gameId: number;
+      timer: ReturnType<typeof setTimeout>;
+      failOnPeerError: boolean;
+    }
+  >();
 
   setAppearance(getTheme: () => string, getVolume: () => number): void {
     this.getThemeId = getTheme;
@@ -203,6 +212,9 @@ export class RemoteServer {
       },
       onPeerShopTheme: (raw) => {
         this.applyIncomingShopTheme(raw);
+      },
+      onPeerCaptureResult: (msg) => {
+        this.resolvePendingCapture(msg);
       },
     });
     this.rotatePunchToken();
@@ -243,6 +255,10 @@ export class RemoteServer {
     this.cluster = null;
     this.unsubHub?.();
     this.unsubHub = null;
+    for (const pending of this.pendingCaptures.values()) {
+      clearTimeout(pending.timer);
+    }
+    this.pendingCaptures.clear();
     for (const ws of this.clients.keys()) {
       try {
         ws.close();
@@ -256,6 +272,150 @@ export class RemoteServer {
     this.wss = null;
     this.http?.close();
     this.http = null;
+  }
+
+  private resolvePendingCapture(
+    msg: {
+      requestId: string;
+      mime?: "image/jpeg";
+      pngBase64?: string;
+      error?: string;
+    },
+    opts?: { forceFail?: boolean },
+  ): void {
+    const pending = this.pendingCaptures.get(msg.requestId);
+    if (!pending) return;
+    if (msg.pngBase64 && msg.pngBase64.length > 0) {
+      clearTimeout(pending.timer);
+      this.pendingCaptures.delete(msg.requestId);
+      sendJson(pending.ws, {
+        type: "capture_ok",
+        requestId: msg.requestId,
+        gameId: pending.gameId,
+        mime: msg.mime ?? "image/jpeg",
+        pngBase64: msg.pngBase64,
+      });
+      return;
+    }
+    // 여러 피어에 물렸을 때는 실패 응답을 무시하고, 타임아웃/강제실패만 보낸다
+    if (!opts?.forceFail && !pending.failOnPeerError) return;
+    clearTimeout(pending.timer);
+    this.pendingCaptures.delete(msg.requestId);
+    sendJson(pending.ws, {
+      type: "capture_fail",
+      requestId: msg.requestId,
+      error: msg.error || "화면을 캡처할 수 없습니다.",
+    });
+  }
+
+  private trackCaptureWait(
+    ws: WebSocket,
+    requestId: string,
+    gameId: number,
+    opts?: { failOnPeerError?: boolean },
+  ): void {
+    const prev = this.pendingCaptures.get(requestId);
+    if (prev) clearTimeout(prev.timer);
+    const timer = setTimeout(() => {
+      this.pendingCaptures.delete(requestId);
+      sendJson(ws, { type: "capture_fail", requestId, error: "화면 캡처 시간이 초과되었습니다." });
+    }, 12_000);
+    this.pendingCaptures.set(requestId, {
+      ws,
+      gameId,
+      timer,
+      failOnPeerError: opts?.failOnPeerError === true,
+    });
+  }
+
+  private async captureLocalOrFail(
+    ws: WebSocket,
+    requestId: string,
+    gameId: number,
+  ): Promise<boolean> {
+    const hub = this.hub;
+    if (!hub) {
+      sendJson(ws, { type: "capture_fail", requestId, error: "컨트롤러가 준비되지 않았습니다." });
+      return true;
+    }
+    const shot = await hub.captureDisplayForGame(gameId);
+    if (!shot) return false;
+    sendJson(ws, {
+      type: "capture_ok",
+      requestId,
+      gameId,
+      mime: shot.mime,
+      pngBase64: shot.base64,
+    });
+    return true;
+  }
+
+  private async handleCaptureDisplay(
+    ws: WebSocket,
+    state: SockState,
+    msg: Extract<RemoteClientMsg, { type: "captureDisplay" }>,
+  ): Promise<void> {
+    if (!this.canOperate(state)) {
+      sendJson(ws, {
+        type: "capture_fail",
+        requestId: msg.requestId,
+        error: this.staffAuthEnabled ? "출근 연결이 필요합니다." : "PIN이 필요합니다.",
+      });
+      return;
+    }
+    if (!Number.isInteger(msg.gameId) || msg.gameId < 1 || typeof msg.requestId !== "string" || !msg.requestId) {
+      sendJson(ws, { type: "capture_fail", requestId: msg.requestId || "", error: "유효하지 않은 게임입니다." });
+      return;
+    }
+
+    const target = typeof msg.host === "string" ? msg.host : "";
+    if (target && this.cluster && !this.cluster.isOwnHost(target)) {
+      this.trackCaptureWait(ws, msg.requestId, msg.gameId, { failOnPeerError: true });
+      const ok = this.cluster.forward(target, {
+        type: "peer_captureDisplay",
+        gameId: msg.gameId,
+        requestId: msg.requestId,
+      });
+      if (!ok) {
+        this.resolvePendingCapture(
+          { requestId: msg.requestId, error: "다른 컴퓨터의 화면에 연결할 수 없습니다." },
+          { forceFail: true },
+        );
+      }
+      return;
+    }
+
+    if (await this.captureLocalOrFail(ws, msg.requestId, msg.gameId)) return;
+
+    // 역삼 컨트롤 PC 등 로컬에 송출 창이 없으면 피어(출력 PC)에 요청
+    const peers = this.cluster?.peers() ?? [];
+    if (peers.length === 0) {
+      sendJson(ws, {
+        type: "capture_fail",
+        requestId: msg.requestId,
+        error: "송출 모니터가 없거나 게임이 화면에 연결되어 있지 않습니다.",
+      });
+      return;
+    }
+    this.trackCaptureWait(ws, msg.requestId, msg.gameId);
+    let forwarded = false;
+    for (const peer of peers) {
+      if (
+        this.cluster?.forward(peer.host, {
+          type: "peer_captureDisplay",
+          gameId: msg.gameId,
+          requestId: msg.requestId,
+        })
+      ) {
+        forwarded = true;
+      }
+    }
+    if (!forwarded) {
+      this.resolvePendingCapture(
+        { requestId: msg.requestId, error: "송출 PC에 연결할 수 없습니다." },
+        { forceFail: true },
+      );
+    }
   }
 
   getInfo(): RemotePairingInfo {
@@ -736,6 +896,11 @@ export class RemoteServer {
       return;
     }
 
+    if (msg.type === "captureDisplay") {
+      await this.handleCaptureDisplay(ws, state, msg);
+      return;
+    }
+
     if (state.peer) {
       this.handlePeerMessage(ws, state, msg);
       return;
@@ -750,6 +915,31 @@ export class RemoteServer {
 
     if (msg.type === "peer_snapshot") {
       this.cluster?.ingestPeerLanMessage(state.remoteHost, msg);
+      return;
+    }
+
+    if (msg.type === "peer_capture_result") {
+      this.resolvePendingCapture(msg);
+      return;
+    }
+
+    if (msg.type === "peer_captureDisplay") {
+      void (async () => {
+        const shot = await hub.captureDisplayForGame(msg.gameId);
+        const reply: RemoteClientMsg = shot
+          ? {
+              type: "peer_capture_result",
+              requestId: msg.requestId,
+              mime: shot.mime,
+              pngBase64: shot.base64,
+            }
+          : {
+              type: "peer_capture_result",
+              requestId: msg.requestId,
+              error: "송출 모니터가 없거나 게임이 화면에 연결되어 있지 않습니다.",
+            };
+        if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(reply));
+      })();
       return;
     }
 

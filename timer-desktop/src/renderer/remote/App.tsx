@@ -12,7 +12,14 @@ import type {
   RemoteTimerAction,
 } from "../../shared/remote";
 import logoUrl from "./mnf-logo.png";
-import { copyToClipboard, formatKakaoGameStatusFromOrigins, shareGameStatus } from "./kakaoStatus";
+import {
+  copyToClipboard,
+  downloadBlob,
+  formatKakaoGameStatusForGame,
+  formatKakaoGameStatusFromOrigins,
+  shareGameStatus,
+  shareGameStatusWithImage,
+} from "./kakaoStatus";
 
 const LS_LOGIN = "mnf-remote-login-id";
 const LS_SESSION = "mnf-remote-session";
@@ -174,11 +181,18 @@ export function App() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [shareFlash, setShareFlash] = useState<"shared" | "copied" | null>(null);
   const [shareSheetText, setShareSheetText] = useState<string | null>(null);
+  const [captureBusy, setCaptureBusy] = useState(false);
+  const [capturePickOpen, setCapturePickOpen] = useState(false);
   const [, setTick] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const pinOkRef = useRef(false);
   const clockOffsetRef = useRef(0);
   const offsetsRef = useRef<Record<string, number>>({ "": 0 });
+  const captureWaitRef = useRef<{
+    requestId: string;
+    text: string;
+    resolve: (v: { ok: true; blob: Blob } | { ok: false; error: string }) => void;
+  } | null>(null);
 
   function applyServerNow(serverNow: number) {
     clockOffsetRef.current = serverNow - Date.now();
@@ -257,6 +271,23 @@ export function App() {
         setHostname(msg.hostname ?? "");
         if (typeof msg.venueId === "string") setVenueId(msg.venueId);
         setPeers(msg.peers ?? []);
+        return;
+      }
+      if (msg.type === "capture_ok") {
+        const wait = captureWaitRef.current;
+        if (!wait || wait.requestId !== msg.requestId) return;
+        captureWaitRef.current = null;
+        const bin = atob(msg.pngBase64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        wait.resolve({ ok: true, blob: new Blob([bytes], { type: msg.mime || "image/jpeg" }) });
+        return;
+      }
+      if (msg.type === "capture_fail") {
+        const wait = captureWaitRef.current;
+        if (!wait || wait.requestId !== msg.requestId) return;
+        captureWaitRef.current = null;
+        wait.resolve({ ok: false, error: msg.error || "화면 캡처에 실패했습니다." });
         return;
       }
       if (msg.type === "error") {
@@ -375,6 +406,90 @@ export function App() {
     flashShare("shared");
   }
 
+  function originForGame(game: ListedGame): { snapshot: AppSnapshot; timers: TableTimerState[] } {
+    if (!game.host) return { snapshot, timers };
+    const peer = peers.find((p) => p.host === game.host);
+    return {
+      snapshot: peer?.snapshot ?? snapshot,
+      timers: peer?.timers ?? timers,
+    };
+  }
+
+  function requestCapture(game: ListedGame): Promise<{ ok: true; blob: Blob } | { ok: false; error: string }> {
+    const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    return new Promise((resolve) => {
+      const prev = captureWaitRef.current;
+      if (prev) prev.resolve({ ok: false, error: "다른 캡처가 진행 중입니다." });
+      const timer = window.setTimeout(() => {
+        if (captureWaitRef.current?.requestId === requestId) {
+          captureWaitRef.current = null;
+          resolve({ ok: false, error: "화면 캡처 시간이 초과되었습니다." });
+        }
+      }, 14_000);
+      captureWaitRef.current = {
+        requestId,
+        text: "",
+        resolve: (v) => {
+          window.clearTimeout(timer);
+          resolve(v);
+        },
+      };
+      send({
+        type: "captureDisplay",
+        gameId: game.session.gameId,
+        requestId,
+        ...(game.host ? { host: game.host } : {}),
+      });
+    });
+  }
+
+  async function runScreenCopy(game: ListedGame) {
+    setCapturePickOpen(false);
+    setCaptureBusy(true);
+    setError(null);
+    try {
+      const origin = originForGame(game);
+      const text = formatKakaoGameStatusForGame(game.session, origin.snapshot, origin.timers, venueId);
+      const result = await requestCapture(game);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      const shareResult = await shareGameStatusWithImage(text, result.blob, `g${game.session.gameId}-blind.jpg`);
+      if (shareResult === "cancelled") return;
+      if (shareResult === "sheet") {
+        downloadBlob(result.blob, `g${game.session.gameId}-blind.jpg`);
+        setShareSheetText(text);
+        return;
+      }
+      flashShare("shared");
+    } finally {
+      setCaptureBusy(false);
+    }
+  }
+
+  function startScreenCopy() {
+    const list = listedGames(snapshot, timers, hostname, peers);
+    if (list.length === 0) {
+      setError("진행 중인 게임이 없습니다.");
+      return;
+    }
+    if (list.length === 1) {
+      void runScreenCopy(list[0]!);
+      return;
+    }
+    if (selected) {
+      const current = list.find(
+        (g) => g.host === selected.host && g.session.gameId === selected.session.gameId,
+      );
+      if (current) {
+        void runScreenCopy(current);
+        return;
+      }
+    }
+    setCapturePickOpen(true);
+  }
+
   async function copyShareSheet() {
     if (!shareSheetText) return;
     const ok = await copyToClipboard(shareSheetText);
@@ -462,9 +577,19 @@ export function App() {
           </button>
         )}
         {ready && (
-          <button type="button" className="kakao-share-btn" onClick={() => void shareKakaoStatus()}>
-            {shareFlash === "shared" ? "공유됨" : shareFlash === "copied" ? "복사됨" : "카톡 공유"}
-          </button>
+          <div className="header-share-actions">
+            <button
+              type="button"
+              className="screen-copy-btn"
+              disabled={captureBusy}
+              onClick={() => startScreenCopy()}
+            >
+              {captureBusy ? "캡처중…" : "화면복사"}
+            </button>
+            <button type="button" className="kakao-share-btn" onClick={() => void shareKakaoStatus()}>
+              {shareFlash === "shared" ? "공유됨" : shareFlash === "copied" ? "복사됨" : "카톡 공유"}
+            </button>
+          </div>
         )}
       </header>
 
@@ -583,6 +708,42 @@ export function App() {
         />
       )}
 
+      {capturePickOpen && (
+        <div
+          className="share-sheet-backdrop"
+          role="presentation"
+          onClick={() => setCapturePickOpen(false)}
+        >
+          <div
+            className="share-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="capture-pick-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p id="capture-pick-title" className="share-sheet__title">
+              화면 복사할 게임
+            </p>
+            <p className="share-sheet__hint">송출 중인 블라인드 화면을 캡처합니다.</p>
+            {games.map((g) => (
+              <button
+                key={`cap-${g.host}:${g.session.gameId}`}
+                type="button"
+                className="share-sheet__copy"
+                disabled={captureBusy}
+                onClick={() => void runScreenCopy(g)}
+              >
+                G{g.session.gameId} {g.session.structureName}
+                {showHosts && g.hostname ? ` · ${g.hostname}` : ""}
+              </button>
+            ))}
+            <button type="button" className="share-sheet__cancel" onClick={() => setCapturePickOpen(false)}>
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
       {shareSheetText != null && (
         <div
           className="share-sheet-backdrop"
@@ -666,7 +827,11 @@ function GamePad({
         </div>
         <p className="muted">
           {statusLabel(timer?.status)} · {formatTimerLevelShort(timer, "레벨")}
-          {timer && !pauseKind ? ` · ${timer.smallBlind}/${timer.bigBlind}` : ""}
+          {timer && !pauseKind
+            ? ` · ${timer.smallBlind}/${timer.bigBlind}${
+                (timer.ante ?? 0) > 0 ? `/${timer.ante}` : ""
+              }`
+            : ""}
         </p>
       </div>
 

@@ -41,7 +41,9 @@ function blindParen(timer: TableTimerState | undefined): string {
   if (pause === "reg-close") return "레지마감";
   if (pause === "break") return "BREAK";
   if (hasReachedRegClose(timer)) return "레지마감";
-  return `${timer.smallBlind}/${timer.bigBlind}`;
+  const ante = Math.max(0, Math.floor(timer.ante ?? 0));
+  const base = `${timer.smallBlind}/${timer.bigBlind}`;
+  return ante > 0 ? `${base}/${ante}` : base;
 }
 
 function isMttShare(session: GameSession, slots: number[]): boolean {
@@ -55,7 +57,8 @@ function gameBlock(
   venueId?: string | null,
 ): string {
   const slots = tablesForGame(snapshot, session);
-  const mtt = isMttShare(session, slots);
+  // 블라인드 대회(championship)는 MTT여도 기존 구조 이름 유지
+  const mtt = isMttShare(session, slots) && !session.isChampionship;
   const name = gameNameForShare(session.structureName || "게임");
   const gameTitle = mtt ? "MTT게임" : `${name} 게임`;
   const tables = tableLabel(venueId, slots);
@@ -100,6 +103,24 @@ export function formatKakaoGameStatus(
   return formatKakaoGameStatusFromOrigins([{ snapshot, timers, venueId }]);
 }
 
+/** 화면복사 등 단일 게임용 카톡 문구 */
+export function formatKakaoGameStatusForGame(
+  session: GameSession,
+  snapshot: AppSnapshot,
+  timers: TableTimerState[],
+  venueId?: string | null,
+): string {
+  const brand = kakaoShareBrandName(venueId);
+  const block = gameBlock(session, snapshot, timers, venueId);
+  return `☪️ ${brand} ☪️
+
+ ✨ ${brand} 진행현황 ✨
+
+${block}
+
+${SHARE_FOOTER}`;
+}
+
 export type ShareStatusResult = "shared" | "cancelled" | "sheet";
 
 function isAndroid(): boolean {
@@ -141,6 +162,60 @@ export async function shareGameStatus(text: string): Promise<ShareStatusResult> 
     return "shared";
   }
   return "sheet";
+}
+
+function canShareFiles(files: File[], text: string): boolean {
+  if (typeof navigator === "undefined" || typeof navigator.share !== "function") return false;
+  if (typeof navigator.canShare !== "function") return true;
+  try {
+    return navigator.canShare({ files, text });
+  } catch {
+    return false;
+  }
+}
+
+/** 화면 이미지 + 카톡 문구 공유. 파일 공유 불가 시 sheet. */
+export async function shareGameStatusWithImage(
+  text: string,
+  image: Blob,
+  filename = "blind-screen.jpg",
+): Promise<ShareStatusResult> {
+  const file = new File([image], filename, { type: image.type || "image/jpeg" });
+  if (canShareFiles([file], text)) {
+    try {
+      await navigator.share({ files: [file], text });
+      return "shared";
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return "cancelled";
+      if (err instanceof Error && err.name === "AbortError") return "cancelled";
+    }
+  }
+  if (canUseWebShare(text)) {
+    try {
+      await navigator.share({ text });
+      return "shared";
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return "cancelled";
+      if (err instanceof Error && err.name === "AbortError") return "cancelled";
+    }
+  }
+  if (isAndroid()) {
+    window.location.assign(androidSendIntent(text));
+    return "shared";
+  }
+  return "sheet";
+}
+
+export function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
 export async function copyToClipboard(text: string): Promise<boolean> {

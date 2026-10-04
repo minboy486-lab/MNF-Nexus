@@ -44,11 +44,20 @@ export type RemoteClientMsg =
   | { type: "command"; gameId: number; action: RemoteTimerAction; sec?: number; host?: string }
   | { type: "counters"; gameId: number; op: RemoteCounterOp; rebuyIndex?: number; host?: string }
   | { type: "deleteGame"; gameId: number; host?: string }
+  | { type: "captureDisplay"; gameId: number; requestId: string; host?: string }
   | { type: "view"; gameId: number }
   | { type: "peer_hello"; pin: string; venueId?: string; yeoksamRole?: YeoksamRole; hostname?: string }
   | { type: "peer_command"; gameId: number; action: RemoteTimerAction; sec?: number }
   | { type: "peer_counters"; gameId: number; op: RemoteCounterOp; rebuyIndex?: number }
   | { type: "peer_deleteGame"; gameId: number }
+  | { type: "peer_captureDisplay"; gameId: number; requestId: string }
+  | {
+      type: "peer_capture_result";
+      requestId: string;
+      mime?: "image/jpeg";
+      pngBase64?: string;
+      error?: string;
+    }
   | {
       type: "peer_timer";
       gameId: number;
@@ -117,6 +126,14 @@ export type RemoteServerMsg =
       timerTheme?: ShopTimerThemePayload;
     }
   | { type: "view_ok"; gameId: number; theme: string; soundVolume: number; serverNow: number }
+  | {
+      type: "capture_ok";
+      requestId: string;
+      gameId: number;
+      mime: "image/jpeg";
+      pngBase64: string;
+    }
+  | { type: "capture_fail"; requestId: string; error: string }
   | { type: "error"; error: string };
 
 export type RemotePairingInfo = {

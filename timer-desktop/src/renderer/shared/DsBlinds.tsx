@@ -12,7 +12,7 @@ function overflows(el: HTMLElement): boolean {
   return el.scrollWidth > el.clientWidth + 1;
 }
 
-/** 블라인드 한 줄 유지. 넘치면 엔티를 아래로, 그래도 넘치면 글자만 같이 축소. */
+/** 블라인드 한 줄: SB / BB · Ante X. 넘치면 글자만 축소. */
 export function DsBlinds({ isBreak, pauseLabel = "BREAK TIME", small, big, ante }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -24,8 +24,6 @@ export function DsBlinds({ isBreak, pauseLabel = "BREAK TIME", small, big, ante 
       el.classList.remove("ds-blinds--stacked");
       el.style.setProperty("--blinds-scale", "1");
       if (isBreak) return;
-
-      if (overflows(el)) el.classList.add("ds-blinds--stacked");
       if (!overflows(el)) return;
 
       let lo = 0.42;
@@ -67,14 +65,11 @@ export function DsBlinds({ isBreak, pauseLabel = "BREAK TIME", small, big, ante 
           <span className="ds-blinds__label">BLINDS</span>
           <span className="ds-blinds__val">
             {small.toLocaleString()} / {big.toLocaleString()}
+            {hasAnte && (
+              <span className="ds-blinds__ante"> · Ante {ante.toLocaleString()}</span>
+            )}
           </span>
         </div>
-        {hasAnte && (
-          <div className="ds-blinds__row ds-blinds__row--ante">
-            <span className="ds-blinds__label">ANTE</span>
-            <span className="ds-blinds__val">{ante.toLocaleString()}</span>
-          </div>
-        )}
       </div>
     </div>
   );

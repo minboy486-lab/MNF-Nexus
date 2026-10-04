@@ -516,6 +516,38 @@ export class TimerHub {
     return Array.from(this.timers.values());
   }
 
+  /** 게임이 송출 중인 첫 모니터 화면을 JPEG base64로 캡처 */
+  async captureDisplayForGame(
+    gameId: number,
+  ): Promise<{ mime: "image/jpeg"; base64: string } | null> {
+    if (!Number.isInteger(gameId) || gameId < 1) return null;
+    const wins: BrowserWindow[] = [];
+    if (this.follow) {
+      for (const slot of MONITOR_SLOTS) {
+        if (yeoksamOutputGameId(this.follow.snapshot, slot) === gameId) {
+          wins.push(...this.getDisplayWindowsForSlot(slot));
+        }
+      }
+    } else {
+      for (const [slot, gid] of this.monitorAssignments.entries()) {
+        if (gid === gameId) wins.push(...this.getDisplayWindowsForSlot(slot));
+      }
+    }
+    for (const win of wins) {
+      if (win.isDestroyed()) continue;
+      try {
+        const img = await win.webContents.capturePage();
+        const buf = img.toJPEG(85);
+        if (buf.length > 0) {
+          return { mime: "image/jpeg", base64: buf.toString("base64") };
+        }
+      } catch {
+        /* try next window */
+      }
+    }
+    return null;
+  }
+
   setFollow(snapshot: AppSnapshot, timers: TableTimerState[]): void {
     this.follow = {
       snapshot: {
