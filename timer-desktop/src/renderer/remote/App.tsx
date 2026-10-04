@@ -13,9 +13,9 @@ import type {
 } from "../../shared/remote";
 import logoUrl from "./mnf-logo.png";
 import {
-  copyImageToClipboard,
   copyToClipboard,
   formatKakaoGameStatusFromOrigins,
+  handoffImage,
   prepareClipboardPng,
   shareGameStatus,
 } from "./kakaoStatus";
@@ -183,7 +183,9 @@ export function App() {
   const [captureBusy, setCaptureBusy] = useState(false);
   const [capturePickOpen, setCapturePickOpen] = useState(false);
   const [captureSheet, setCaptureSheet] = useState<{ blob: Blob; previewUrl: string } | null>(null);
+  const [captureManualHint, setCaptureManualHint] = useState(false);
   const capturePreviewRef = useRef<HTMLImageElement | null>(null);
+  const captureSheetRef = useRef<{ blob: Blob; previewUrl: string } | null>(null);
   const [, setTick] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const pinOkRef = useRef(false);
@@ -436,8 +438,10 @@ export function App() {
   }
 
   function closeCaptureSheet() {
+    setCaptureManualHint(false);
     setCaptureSheet((prev) => {
       if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      captureSheetRef.current = null;
       return null;
     });
   }
@@ -446,6 +450,7 @@ export function App() {
     setCapturePickOpen(false);
     setCaptureBusy(true);
     setError(null);
+    setCaptureManualHint(false);
     try {
       const result = await requestCapture(game);
       if (!result.ok) {
@@ -456,10 +461,12 @@ export function App() {
       const png = await prepareClipboardPng(result.blob).catch(() => result.blob);
       setCaptureSheet((prev) => {
         if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
-        return {
+        const next = {
           blob: png,
           previewUrl: URL.createObjectURL(png),
         };
+        captureSheetRef.current = next;
+        return next;
       });
     } finally {
       setCaptureBusy(false);
@@ -509,28 +516,46 @@ export function App() {
   }
 
   async function copyCaptureSheet() {
-    if (!captureSheet) return;
-    const ok = await copyImageToClipboard(captureSheet.blob, capturePreviewRef.current);
-    if (!ok) {
-      setError("클립보드 복사에 실패했습니다. 다시 눌러 주세요.");
+    const sheet = captureSheetRef.current ?? captureSheet;
+    if (!sheet) return;
+    setError(null);
+    const result = await handoffImage(sheet.blob, {
+      preferShare: false,
+      previewImg: capturePreviewRef.current,
+    });
+    if (result === "cancelled") return;
+    if (result === "shared" || result === "copied") {
+      closeCaptureSheet();
+      flashShare(result === "shared" ? "shared" : "copied");
       return;
     }
-    closeCaptureSheet();
-    setError(null);
-    flashShare("copied");
+    setCaptureManualHint(true);
+    setError("자동 복사가 막혀 있습니다. 위 사진을 길게 눌러 복사·공유하세요.");
   }
 
   async function openKakaoFromCaptureSheet() {
-    if (!captureSheet) return;
-    const ok = await copyImageToClipboard(captureSheet.blob, capturePreviewRef.current);
-    if (ok) {
+    const sheet = captureSheetRef.current ?? captureSheet;
+    if (!sheet) return;
+    setError(null);
+    // 카톡은 시스템 공유창에서 선택하는 게 가장 안정적 (클립보드+앱 실행보다 우선)
+    const result = await handoffImage(sheet.blob, {
+      preferShare: true,
+      previewImg: capturePreviewRef.current,
+    });
+    if (result === "cancelled") return;
+    if (result === "shared") {
       closeCaptureSheet();
-      setError(null);
+      flashShare("shared");
+      return;
+    }
+    if (result === "copied") {
+      closeCaptureSheet();
       flashShare("copied");
       window.location.assign("kakaotalk://");
       return;
     }
-    setError("클립보드 복사에 실패했습니다. 다시 눌러 주세요.");
+    setCaptureManualHint(true);
+    setError("공유가 막혀 있습니다. 위 사진을 길게 눌러 카카오톡으로 보내세요.");
   }
 
   function logout() {
@@ -783,12 +808,16 @@ export function App() {
             <p id="capture-sheet-title" className="share-sheet__title">
               화면 복사
             </p>
-            <p className="share-sheet__hint">카카오톡으로 보내거나, 복사해서 붙여넣을 수 있습니다.</p>
+            <p className="share-sheet__hint">
+              {captureManualHint
+                ? "사진을 길게 누르면 저장·복사·카톡 공유가 가능합니다."
+                : "카카오톡으로 보내거나, 복사해서 붙여넣을 수 있습니다."}
+            </p>
             <img
               ref={capturePreviewRef}
-              className="share-sheet__preview"
+              className={`share-sheet__preview${captureManualHint ? " share-sheet__preview--hint" : ""}`}
               src={captureSheet.previewUrl}
-              alt="캡처 미리보기"
+              alt="캡처 미리보기 — 길게 눌러 공유"
             />
             <button type="button" className="share-sheet__kakao" onClick={() => void openKakaoFromCaptureSheet()}>
               카카오톡

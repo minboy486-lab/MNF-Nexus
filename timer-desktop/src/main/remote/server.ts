@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
+import { createServer as createHttpsServer, type Server as HttpsServer } from "node:https";
 import { randomBytes } from "node:crypto";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { extname, join, resolve, sep } from "node:path";
@@ -11,6 +12,7 @@ import {
   LAN_CLUSTER_PATH,
   LAN_PING_PATH,
   PUNCH_TOKEN_TTL_MS,
+  REMOTE_HTTPS_PORT,
   REMOTE_PORT,
   type RemoteClientMsg,
   type RemotePairingInfo,
@@ -18,6 +20,7 @@ import {
   type RemoteServerMsg,
   type RemoteStaffState,
 } from "../../shared/remote";
+import { loadOrCreateRemoteTls } from "./tlsCert";
 import type { TimerHub } from "../timer/timerHub";
 import { clockInStaff, clockOutStaff, claimStaffByLoginId, loginStaff, rejoinStaffByLoginId, refreshStaffClock, type StaffAuthOk } from "../supabase/staffAuth";
 import { getSupabase } from "../supabase/client";
@@ -151,7 +154,9 @@ function toStaffState(session: RemoteSession): RemoteStaffState {
 export class RemoteServer {
   pin = "";
   readonly port = REMOTE_PORT;
+  readonly httpsPort = REMOTE_HTTPS_PORT;
   private http: HttpServer | null = null;
+  private https: HttpsServer | null = null;
   private wss: WebSocketServer | null = null;
   private clients = new Map<WebSocket, SockState>();
   private sessions = new Map<string, RemoteSession>();
@@ -233,11 +238,7 @@ export class RemoteServer {
     this.wss = wss;
     wss.on("connection", (ws, req) => this.onSocket(ws, req));
 
-    const http = createServer((req, res) => {
-      void this.handleHttp(req, res);
-    });
-    this.http = http;
-    http.on("upgrade", (req, socket, head) => {
+    const onUpgrade = (req: IncomingMessage, socket: import("node:stream").Duplex, head: Buffer) => {
       const path = (req.url ?? "/").split("?")[0];
       if (path !== "/ws") {
         socket.destroy();
@@ -246,17 +247,34 @@ export class RemoteServer {
       wss.handleUpgrade(req, socket, head, (ws) => {
         wss.emit("connection", ws, req);
       });
+    };
+
+    const http = createServer((req, res) => {
+      void this.handleHttp(req, res);
     });
+    this.http = http;
+    http.on("upgrade", onUpgrade);
+
+    const tls = await loadOrCreateRemoteTls();
+    const https = createHttpsServer({ key: tls.key, cert: tls.cert }, (req, res) => {
+      void this.handleHttp(req, res);
+    });
+    this.https = https;
+    https.on("upgrade", onUpgrade);
 
     await new Promise<void>((resolve, reject) => {
       http.once("error", reject);
       http.listen(this.port, "0.0.0.0", () => resolve());
     });
+    await new Promise<void>((resolve, reject) => {
+      https.once("error", reject);
+      https.listen(this.httpsPort, "0.0.0.0", () => resolve());
+    });
     this.infoCache = await this.buildInfo();
     this.cluster.start();
     this.syncYeoksamFollow();
     this.startPresenceHeartbeat();
-    console.log(`[remote] LAN http://0.0.0.0:${this.port} PIN ${this.pin}`);
+    console.log(`[remote] LAN http://0.0.0.0:${this.port} https://0.0.0.0:${this.httpsPort} PIN ${this.pin}`);
   }
 
   stop(): void {
@@ -282,6 +300,8 @@ export class RemoteServer {
     this.wss = null;
     this.http?.close();
     this.http = null;
+    this.https?.close();
+    this.https = null;
   }
 
   private resolvePendingCapture(
@@ -507,8 +527,10 @@ export class RemoteServer {
     const ips = await listLanIPv4();
     const hosts = ips.length > 0 ? ips : ["127.0.0.1"];
     const ipsParam = encodeURIComponent(hosts.join(","));
+    // 폰은 HTTPS로 접속해야 화면 이미지 클립보드/공유가 동작한다
     const urls = hosts.map(
-      (ip) => `http://${ip}:${this.port}/remote/?pin=${this.pin}&tok=${this.punchToken}&ips=${ipsParam}`,
+      (ip) =>
+        `https://${ip}:${this.httpsPort}/remote/?pin=${this.pin}&tok=${this.punchToken}&ips=${ipsParam}`,
     );
     void this.publishPresence();
     return {

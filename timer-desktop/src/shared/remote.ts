@@ -4,6 +4,8 @@ import type { GameParticipant } from "./participants";
 import type { TableTimerState, TimerAction, BlindStructureOption } from "@mnf/timer/types";
 
 export const REMOTE_PORT = 17890;
+/** 폰 리모컨용 HTTPS (이미지 클립보드/공유 API용). HTTP는 LAN 피어용으로 유지. */
+export const REMOTE_HTTPS_PORT = 17891;
 export const LAN_CLUSTER_PATH = "/lan/cluster";
 export const LAN_CLAIM_PATH = "/lan/claim";
 export const LAN_PING_PATH = "/lan/ping";

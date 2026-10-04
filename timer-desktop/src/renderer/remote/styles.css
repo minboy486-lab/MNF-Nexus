@@ -142,6 +142,14 @@ body {
   border-radius: 12px;
   background: #0a0b10;
   border: 1px solid rgba(255, 255, 255, 0.08);
+  -webkit-touch-callout: default;
+  user-select: auto;
+  -webkit-user-select: auto;
+  touch-action: manipulation;
+}
+.share-sheet__preview--hint {
+  outline: 2px solid #fee500;
+  outline-offset: 2px;
 }
 .share-sheet__kakao,
 .share-sheet__copy,

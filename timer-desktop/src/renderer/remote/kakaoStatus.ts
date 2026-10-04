@@ -165,7 +165,7 @@ export async function shareGameStatus(text: string): Promise<ShareStatusResult> 
   return "sheet";
 }
 
-/** 캡처 JPEG 등을 클립보드용 PNG로 미리 변환 (버튼 클릭 전에 끝낸다). */
+/** 캡처 JPEG 등을 클립보드/공유용 PNG로 미리 변환 (버튼 클릭 전에 끝낸다). */
 export async function prepareClipboardPng(image: Blob): Promise<Blob> {
   if (image.type === "image/png") {
     return image.slice(0, image.size, "image/png");
@@ -192,29 +192,62 @@ export async function prepareClipboardPng(image: Blob): Promise<Blob> {
   }
 }
 
+function asPngFile(image: Blob, filename: string): File {
+  const blob = image.type === "image/png" ? image : new Blob([image], { type: "image/png" });
+  return new File([blob], filename, { type: "image/png" });
+}
+
+/** 시스템 공유창으로 이미지 전송 (카톡 선택 가능). HTTP/모바일에서 클립보드보다 안정적. */
+export async function shareImageFile(
+  image: Blob,
+  filename = "blind-screen.png",
+): Promise<"shared" | "cancelled" | "unsupported"> {
+  if (typeof navigator === "undefined" || typeof navigator.share !== "function") {
+    return "unsupported";
+  }
+  const file = asPngFile(image, filename);
+  try {
+    if (typeof navigator.canShare === "function" && !navigator.canShare({ files: [file] })) {
+      return "unsupported";
+    }
+  } catch {
+    return "unsupported";
+  }
+  try {
+    await navigator.share({ files: [file], title: "블라인드 화면" });
+    return "shared";
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") return "cancelled";
+    if (err instanceof Error && err.name === "AbortError") return "cancelled";
+    return "unsupported";
+  }
+}
+
 /**
  * 화면 이미지를 클립보드에 복사.
- * 주의: 클릭 핸들러에서 PNG 변환 await 없이 바로 호출해야 사용자 제스처가 유지된다.
- * (변환은 prepareClipboardPng로 미리 해둘 것)
+ * PNG는 미리 prepareClipboardPng로 만들어 두고, 클릭 핸들러에서 바로 호출할 것.
  */
 export async function copyImageToClipboard(image: Blob, previewImg?: HTMLImageElement | null): Promise<boolean> {
   const png =
-    image.type === "image/png" ? image.slice(0, image.size, "image/png") : image;
+    image.type === "image/png" ? image.slice(0, image.size, "image/png") : new Blob([image], { type: "image/png" });
 
-  // ClipboardItem은 클릭 동기 구간에서 만들고, Blob은 Promise로 넘겨 activation을 유지한다.
-  try {
-    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-      const item = new ClipboardItem({
-        "image/png": Promise.resolve(png),
-      });
+  // 1) Clipboard API (HTTPS 등 secure context에서만 동작)
+  if (window.isSecureContext && typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+    try {
+      const item = new ClipboardItem({ "image/png": Promise.resolve(png) });
       await navigator.clipboard.write([item]);
       return true;
+    } catch {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+        return true;
+      } catch {
+        /* fallback */
+      }
     }
-  } catch {
-    /* fallback */
   }
 
-  // 이미 로드된 미리보기 이미지가 있으면 그걸 바로 선택 복사 (추가 await 없음)
+  // 2) 미리보기/임시 이미지 선택 복사
   try {
     const host = document.createElement("div");
     host.contentEditable = "true";
@@ -222,10 +255,12 @@ export async function copyImageToClipboard(image: Blob, previewImg?: HTMLImageEl
     host.style.left = "-9999px";
     host.style.opacity = "0";
     const img = document.createElement("img");
-    if (previewImg?.src) {
+    let createdUrl: string | null = null;
+    if (previewImg?.complete && previewImg.src) {
       img.src = previewImg.src;
     } else {
-      img.src = URL.createObjectURL(png);
+      createdUrl = URL.createObjectURL(png);
+      img.src = createdUrl;
     }
     host.appendChild(img);
     document.body.appendChild(host);
@@ -237,14 +272,40 @@ export async function copyImageToClipboard(image: Blob, previewImg?: HTMLImageEl
     host.focus();
     const ok = document.execCommand("copy");
     selection?.removeAllRanges();
-    const createdUrl = previewImg?.src ? null : img.src;
     document.body.removeChild(host);
-    if (createdUrl?.startsWith("blob:")) URL.revokeObjectURL(createdUrl);
+    if (createdUrl) URL.revokeObjectURL(createdUrl);
     if (ok) return true;
   } catch {
     /* ignore */
   }
   return false;
+}
+
+export type ImageHandoffResult = "shared" | "copied" | "cancelled" | "manual";
+
+/** 카톡/복사 버튼용: 공유 → 클립보드 → 수동(길게 누르기) 순. */
+export async function handoffImage(
+  image: Blob,
+  opts?: { preferShare?: boolean; filename?: string; previewImg?: HTMLImageElement | null },
+): Promise<ImageHandoffResult> {
+  const filename = opts?.filename ?? "blind-screen.png";
+  const preferShare = opts?.preferShare !== false;
+
+  if (preferShare) {
+    const shared = await shareImageFile(image, filename);
+    if (shared === "shared") return "shared";
+    if (shared === "cancelled") return "cancelled";
+  }
+
+  if (await copyImageToClipboard(image, opts?.previewImg ?? null)) return "copied";
+
+  if (!preferShare) {
+    const shared = await shareImageFile(image, filename);
+    if (shared === "shared") return "shared";
+    if (shared === "cancelled") return "cancelled";
+  }
+
+  return "manual";
 }
 
 export async function copyToClipboard(text: string): Promise<boolean> {

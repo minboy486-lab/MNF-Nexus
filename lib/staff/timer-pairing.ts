@@ -1,5 +1,7 @@
 export const STAFF_TIMER_PAIRING_KEY = "mnf-staff-timer-pairing";
 export const CONTROLLER_REMOTE_PORT = 17890;
+/** 폰 리모컨 HTTPS (이미지 클립보드/공유). HTTP 17890은 LAN 피어용. */
+export const CONTROLLER_REMOTE_HTTPS_PORT = 17891;
 const PAIRING_COOKIE = "mnf-staff-timer-pairing";
 
 export type StaffTimerPairing = {
@@ -24,14 +26,31 @@ export function parseLanIpList(raw: string | null | undefined): string[] {
   return out;
 }
 
-function baseUrlFromIp(ip: string, port = CONTROLLER_REMOTE_PORT): string | null {
+function baseUrlFromIp(ip: string, _port?: number): string | null {
   try {
     const host = ip.trim();
     if (!host || !isPrivateLanHostname(host)) return null;
-    return `http://${host}:${port}`;
+    // 폰은 HTTPS여야 화면 이미지 클립보드/공유가 동작한다
+    return `https://${host}:${CONTROLLER_REMOTE_HTTPS_PORT}`;
   } catch {
     return null;
   }
+}
+
+/** 구버전 http://IP:17890 → https://IP:17891 */
+export function upgradeLanControllerUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const port = u.port ? Number(u.port) : u.protocol === "https:" ? 443 : 80;
+    if (u.protocol === "http:" && port === CONTROLLER_REMOTE_PORT && isPrivateLanHostname(u.hostname)) {
+      u.protocol = "https:";
+      u.port = String(CONTROLLER_REMOTE_HTTPS_PORT);
+      return u.toString();
+    }
+  } catch {
+    /* ignore */
+  }
+  return url;
 }
 
 export function baseUrlsFromPairing(pairing: Pick<StaffTimerPairing, "url" | "urls">): string[] {
@@ -40,7 +59,7 @@ export function baseUrlsFromPairing(pairing: Pick<StaffTimerPairing, "url" | "ur
   const push = (raw: string | null | undefined) => {
     if (!raw) return;
     try {
-      const u = new URL(raw);
+      const u = new URL(upgradeLanControllerUrl(raw));
       const base = `${u.protocol}//${u.host}`;
       if (seen.has(base)) return;
       seen.add(base);
@@ -68,14 +87,19 @@ export function isPrivateLanHostname(hostname: string): boolean {
   return false;
 }
 
-/** 컨트롤러 QR은 매장 PC의 LAN 주소(http://192.168.x.x:17890/...)만 인정한다. */
+/** 컨트롤러 QR은 매장 PC LAN 주소만 인정 (https:17891 또는 구버전 http:17890). */
 export function isLanControllerUrl(url: string): boolean {
   try {
     const u = new URL(url);
-    if (u.protocol !== "http:") return false;
-    const port = u.port ? Number(u.port) : 80;
-    if (port !== CONTROLLER_REMOTE_PORT) return false;
-    return isPrivateLanHostname(u.hostname);
+    const port = u.port ? Number(u.port) : u.protocol === "https:" ? 443 : 80;
+    if (u.protocol === "https:" && port === CONTROLLER_REMOTE_HTTPS_PORT) {
+      return isPrivateLanHostname(u.hostname);
+    }
+    // 구버전 HTTP QR 호환
+    if (u.protocol === "http:" && port === CONTROLLER_REMOTE_PORT) {
+      return isPrivateLanHostname(u.hostname);
+    }
+    return false;
   } catch {
     return false;
   }
@@ -178,7 +202,7 @@ export function timerRemoteHref(
   opts?: { baseUrl?: string; loginId?: string },
 ): string {
   try {
-    const base = opts?.baseUrl ?? pairing.url;
+    const base = upgradeLanControllerUrl(opts?.baseUrl ?? pairing.url);
     const u = new URL(base);
     u.searchParams.delete("tok");
     u.searchParams.delete("next");

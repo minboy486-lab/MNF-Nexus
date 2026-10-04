@@ -1,4 +1,4 @@
-import { CONTROLLER_REMOTE_PORT } from "@/lib/staff/timer-pairing";
+import { CONTROLLER_REMOTE_HTTPS_PORT, CONTROLLER_REMOTE_PORT } from "@/lib/staff/timer-pairing";
 
 export const VENUE_CONTROLLER_LAN_KEY = "controller_lan";
 
@@ -34,7 +34,8 @@ export function controllerLanBaseUrls(presence: VenueControllerLan): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   for (const ip of presence.ips) {
-    const base = `http://${ip}:${presence.port}`;
+    // 폰 리모컨은 HTTPS(17891). presence.port(HTTP 17890)와 무관.
+    const base = `https://${ip}:${CONTROLLER_REMOTE_HTTPS_PORT}`;
     if (seen.has(base)) continue;
     seen.add(base);
     out.push(base);
