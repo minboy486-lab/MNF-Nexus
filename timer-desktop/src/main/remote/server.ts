@@ -527,9 +527,10 @@ export class RemoteServer {
     const ips = await listLanIPv4();
     const hosts = ips.length > 0 ? ips : ["127.0.0.1"];
     const ipsParam = encodeURIComponent(hosts.join(","));
-    // HTTP로 연결한다. 자체서명 HTTPS는 폰마다 보안 경고가 떠서 컨트롤 UX가 깨진다.
+    // 폰은 HTTPS로 접속해야 화면 이미지 클립보드/공유가 동작한다
     const urls = hosts.map(
-      (ip) => `http://${ip}:${this.port}/remote/?pin=${this.pin}&tok=${this.punchToken}&ips=${ipsParam}`,
+      (ip) =>
+        `https://${ip}:${this.httpsPort}/remote/?pin=${this.pin}&tok=${this.punchToken}&ips=${ipsParam}`,
     );
     void this.publishPresence();
     return {

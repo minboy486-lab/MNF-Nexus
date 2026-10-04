@@ -828,7 +828,7 @@ export function App() {
             <p className="share-sheet__hint">
               {captureManualHint
                 ? "사진을 길게 누르면 저장·복사·카톡 공유가 가능합니다."
-                : "위 사진을 길게 눌러 카톡으로 보내세요. 카카오톡 버튼은 앱만 엽니다."}
+                : "카카오톡을 누르면 앱이 열립니다. 안 붙으면 위 사진을 길게 누르세요."}
             </p>
             <img
               ref={capturePreviewRef}
