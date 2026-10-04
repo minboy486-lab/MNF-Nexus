@@ -13,6 +13,7 @@ import type {
 } from "../../shared/remote";
 import logoUrl from "./mnf-logo.png";
 import {
+  copyImageToClipboard,
   copyToClipboard,
   formatKakaoGameStatusFromOrigins,
   handoffImage,
@@ -549,25 +550,29 @@ export function App() {
     const sheet = captureSheetRef.current ?? captureSheet;
     if (!sheet) return;
     setError(null);
-    // 카톡은 시스템 공유창에서 사진을 고르는 방식이 안정적. 클립보드+앱실행은 쓰지 않음.
-    const result = await handoffImage(sheet.shareBlob, {
+    // 텍스트 카톡 공유와 동일: 클립보드에 넣은 뒤 카톡 앱을 바로 연다
+    const ok = await copyImageToClipboard(sheet.clipboardBlob, capturePreviewRef.current);
+    if (ok) {
+      closeCaptureSheet();
+      flashShare("copied");
+      window.location.assign("kakaotalk://");
+      return;
+    }
+    // 이미지 클립보드가 막힌 기기: 공유창 → 그래도 안 되면 카톡만 실행 + 길게 누르기 안내
+    const shared = await handoffImage(sheet.shareBlob, {
       preferShare: true,
       filename: "blind-screen.jpg",
       previewImg: capturePreviewRef.current,
     });
-    if (result === "cancelled") return;
-    if (result === "shared") {
+    if (shared === "cancelled") return;
+    if (shared === "shared" || shared === "copied") {
       closeCaptureSheet();
-      flashShare("shared");
-      return;
-    }
-    if (result === "copied") {
-      closeCaptureSheet();
-      flashShare("copied");
+      flashShare(shared === "shared" ? "shared" : "copied");
       return;
     }
     setCaptureManualHint(true);
-    setError("공유창이 안 열립니다. 위 사진을 길게 눌러 카카오톡으로 보내세요.");
+    setError("사진 복사가 막혀 있습니다. 위 사진을 길게 눌러 카톡으로 보내세요.");
+    window.location.assign("kakaotalk://");
   }
 
   function logout() {
@@ -823,7 +828,7 @@ export function App() {
             <p className="share-sheet__hint">
               {captureManualHint
                 ? "사진을 길게 누르면 저장·복사·카톡 공유가 가능합니다."
-                : "카카오톡 → 공유창에서 카톡 선택. 안 되면 위 사진을 길게 누르세요."}
+                : "카카오톡을 누르면 앱이 열립니다. 안 붙으면 위 사진을 길게 누르세요."}
             </p>
             <img
               ref={capturePreviewRef}

@@ -22,6 +22,7 @@ export function App() {
 
   useEffect(() => {
     if (captureMode) {
+      document.documentElement.classList.add("capture-mode");
       return window.displayApi.onCapturePayload((payload) => {
         const nextTheme = normalizeUiTheme(payload.theme);
         setTheme(nextTheme);
@@ -32,7 +33,9 @@ export function App() {
         setVenueId(isKnownVenueId(payload.venueId) ? payload.venueId : YEOKSAM_VENUE_ID);
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            window.displayApi.signalCaptureReady(payload.requestId);
+            window.setTimeout(() => {
+              window.displayApi.signalCaptureReady(payload.requestId);
+            }, 80);
           });
         });
       });

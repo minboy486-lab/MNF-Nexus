@@ -40,3 +40,15 @@ html, body, #root {
 .ds-root .ds-stat__val {
   max-width: 100%;
 }
+
+/* 화면복사용 숨은 창 — 하단이 잘리지 않게 여백을 조금 줄인다 */
+html.capture-mode .ds-root .ds-title-bar {
+  padding-top: clamp(12px, 2vh, 28px);
+}
+html.capture-mode .ds-root .ds-center {
+  padding-bottom: 28px;
+}
+html.capture-mode .ds-root .ds-left,
+html.capture-mode .ds-root .ds-right {
+  padding-bottom: 28px;
+}
