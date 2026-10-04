@@ -165,58 +165,78 @@ export async function shareGameStatus(text: string): Promise<ShareStatusResult> 
   return "sheet";
 }
 
-function canShareFiles(files: File[], text: string): boolean {
-  if (typeof navigator === "undefined" || typeof navigator.share !== "function") return false;
-  if (typeof navigator.canShare !== "function") return true;
+async function blobToPng(image: Blob): Promise<Blob> {
+  if (image.type === "image/png") return image;
+  const url = URL.createObjectURL(image);
   try {
-    return navigator.canShare({ files, text });
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("image load failed"));
+      el.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("canvas unsupported");
+    ctx.drawImage(img, 0, 0);
+    const png = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!png) throw new Error("png encode failed");
+    return png;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** 화면 이미지를 클립보드에 복사 (저장/다운로드 없음). */
+export async function copyImageToClipboard(image: Blob): Promise<boolean> {
+  const png = await blobToPng(image).catch(() => image);
+
+  try {
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          [png.type || "image/png"]: png,
+        }),
+      ]);
+      return true;
+    }
   } catch {
-    return false;
+    /* HTTP LAN / 권한 등 → fallback */
   }
-}
 
-/** 화면 이미지 + 카톡 문구 공유. 파일 공유 불가 시 sheet. */
-export async function shareGameStatusWithImage(
-  text: string,
-  image: Blob,
-  filename = "blind-screen.jpg",
-): Promise<ShareStatusResult> {
-  const file = new File([image], filename, { type: image.type || "image/jpeg" });
-  if (canShareFiles([file], text)) {
-    try {
-      await navigator.share({ files: [file], text });
-      return "shared";
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return "cancelled";
-      if (err instanceof Error && err.name === "AbortError") return "cancelled";
-    }
+  // contenteditable + 이미지 선택 복사 (일부 모바일 브라우저)
+  try {
+    const url = URL.createObjectURL(png);
+    const wrap = document.createElement("div");
+    wrap.contentEditable = "true";
+    wrap.style.position = "fixed";
+    wrap.style.left = "-9999px";
+    wrap.style.opacity = "0";
+    const img = document.createElement("img");
+    img.src = url;
+    wrap.appendChild(img);
+    document.body.appendChild(wrap);
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("img"));
+      if (img.complete) resolve();
+    });
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(wrap);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    const ok = document.execCommand("copy");
+    selection?.removeAllRanges();
+    document.body.removeChild(wrap);
+    URL.revokeObjectURL(url);
+    if (ok) return true;
+  } catch {
+    /* ignore */
   }
-  if (canUseWebShare(text)) {
-    try {
-      await navigator.share({ text });
-      return "shared";
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return "cancelled";
-      if (err instanceof Error && err.name === "AbortError") return "cancelled";
-    }
-  }
-  if (isAndroid()) {
-    window.location.assign(androidSendIntent(text));
-    return "shared";
-  }
-  return "sheet";
-}
-
-export function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  return false;
 }
 
 export async function copyToClipboard(text: string): Promise<boolean> {

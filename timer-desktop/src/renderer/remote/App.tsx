@@ -13,12 +13,10 @@ import type {
 } from "../../shared/remote";
 import logoUrl from "./mnf-logo.png";
 import {
+  copyImageToClipboard,
   copyToClipboard,
-  downloadBlob,
-  formatKakaoGameStatusForGame,
   formatKakaoGameStatusFromOrigins,
   shareGameStatus,
-  shareGameStatusWithImage,
 } from "./kakaoStatus";
 
 const LS_LOGIN = "mnf-remote-login-id";
@@ -406,15 +404,6 @@ export function App() {
     flashShare("shared");
   }
 
-  function originForGame(game: ListedGame): { snapshot: AppSnapshot; timers: TableTimerState[] } {
-    if (!game.host) return { snapshot, timers };
-    const peer = peers.find((p) => p.host === game.host);
-    return {
-      snapshot: peer?.snapshot ?? snapshot,
-      timers: peer?.timers ?? timers,
-    };
-  }
-
   function requestCapture(game: ListedGame): Promise<{ ok: true; blob: Blob } | { ok: false; error: string }> {
     const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     return new Promise((resolve) => {
@@ -448,21 +437,17 @@ export function App() {
     setCaptureBusy(true);
     setError(null);
     try {
-      const origin = originForGame(game);
-      const text = formatKakaoGameStatusForGame(game.session, origin.snapshot, origin.timers, venueId);
       const result = await requestCapture(game);
       if (!result.ok) {
         setError(result.error);
         return;
       }
-      const shareResult = await shareGameStatusWithImage(text, result.blob, `g${game.session.gameId}-blind.jpg`);
-      if (shareResult === "cancelled") return;
-      if (shareResult === "sheet") {
-        downloadBlob(result.blob, `g${game.session.gameId}-blind.jpg`);
-        setShareSheetText(text);
+      const ok = await copyImageToClipboard(result.blob);
+      if (!ok) {
+        setError("클립보드 복사에 실패했습니다. HTTPS 또는 최신 브라우저에서 다시 시도해 주세요.");
         return;
       }
-      flashShare("shared");
+      flashShare("copied");
     } finally {
       setCaptureBusy(false);
     }
