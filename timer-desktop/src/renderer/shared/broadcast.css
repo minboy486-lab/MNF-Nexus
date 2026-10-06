@@ -239,7 +239,7 @@ button.ds-timer:hover {
 }
 
 .ds-blinds {
-  --blinds-scale: 1.1;
+  --blinds-scale: 1;
   display: flex;
   justify-content: center;
   width: 100%;
@@ -254,23 +254,47 @@ button.ds-timer:hover {
   flex-wrap: nowrap;
   align-items: baseline;
   justify-content: center;
-  gap: 14px;
+  gap: 0.35em;
   max-width: 100%;
+  min-width: 0;
 }
+.ds-blinds__main {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 14px;
+  min-width: 0;
+  white-space: nowrap;
+}
+/* Ante를 숫자 아래로 — 가로는 줄이고 시선은 가운데 유지 */
+.ds-blinds--ante-wrap .ds-blinds__inner {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.12em;
+}
+.ds-blinds--ante-wrap .ds-blinds__ante-dot {
+  display: none;
+}
+.ds-blinds--ante-wrap .ds-blinds__ante {
+  font-size: calc(clamp(1.1rem, 2.4cqw, 2.4rem) * var(--blinds-scale));
+  letter-spacing: 0.04em;
+  opacity: 0.9;
+}
+/* 라벨을 위로 — 아주 좁은 화면/큰 자릿수 */
 .ds-blinds--stacked .ds-blinds__inner {
   flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+  align-items: center;
+  gap: 0.1em;
+}
+.ds-blinds--stacked .ds-blinds__main {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.08em;
 }
 .ds-blinds--stacked .ds-blinds__label {
-  min-width: 7.4em;
-}
-.ds-blinds__row {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  white-space: nowrap;
-  flex-shrink: 0;
+  letter-spacing: 0.2em;
 }
 .ds-blinds__label {
   font-size: calc(clamp(1rem, 1.8cqw, 1.8rem) * var(--blinds-scale));
@@ -280,7 +304,7 @@ button.ds-timer:hover {
   white-space: nowrap;
 }
 .ds-blinds__val {
-  font-size: calc(clamp(2.2rem, 5cqw, 5.5rem) * var(--blinds-scale));
+  font-size: calc(clamp(2rem, 4.6cqw, 5rem) * var(--blinds-scale));
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text, #e8e6ef);
@@ -290,6 +314,11 @@ button.ds-timer:hover {
 .ds-blinds__ante {
   color: var(--muted-strong, rgba(196, 176, 196, 0.55));
   font-size: 0.88em;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ds-blinds__ante-dot {
   font-weight: 600;
 }
 .ds-blinds__val--break {
