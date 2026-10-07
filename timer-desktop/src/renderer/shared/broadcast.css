@@ -257,6 +257,7 @@ button.ds-timer:hover {
   gap: 0.35em;
   max-width: 100%;
   min-width: 0;
+  transform-origin: center center;
 }
 .ds-blinds__main {
   display: flex;
@@ -333,11 +334,22 @@ button.ds-timer:hover {
 .ds-next {
   display: flex;
   align-items: baseline;
+  justify-content: center;
   gap: 16px;
   padding: 14px 32px;
   background: var(--surface-glass, rgba(255, 255, 255, 0.03));
   border: 1px solid var(--border, rgba(255, 255, 255, 0.07));
   border-radius: 14px;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: nowrap;
+  transform-origin: center center;
+}
+.ds-center > .ds-overlay--next {
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  justify-content: center;
 }
 .ds-next__label {
   font-size: calc(clamp(0.9rem, 1.5cqw, 1.6rem) * 1.1);
@@ -439,9 +451,19 @@ button.ds-timer:hover {
 .ds-overlay--size .ds-timer {
   font-size: inherit;
 }
+/* 테마 고정 font-size에도 --blinds-scale이 먹게 한다 (안 그러면 큰 화면에서도 잘림) */
 .ds-overlay--blinds.ds-overlay--size .ds-blinds__val,
 .ds-overlay--blinds.ds-overlay--size .ds-blinds__val--break {
-  font-size: 1em;
+  font-size: calc(1em * var(--blinds-scale, 1));
+}
+.ds-overlay--blinds.ds-overlay--size .ds-blinds__label {
+  font-size: calc(0.42em * var(--blinds-scale, 1));
+}
+.ds-overlay--blinds.ds-overlay--size .ds-blinds__ante {
+  font-size: calc(0.72em * var(--blinds-scale, 1));
+}
+.ds-overlay--blinds.ds-overlay--size .ds-blinds--ante-wrap .ds-blinds__ante {
+  font-size: calc(0.55em * var(--blinds-scale, 1));
 }
 .ds-overlay--size .ds-next__val {
   font-size: 1em;

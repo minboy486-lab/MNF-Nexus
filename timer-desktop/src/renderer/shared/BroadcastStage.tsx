@@ -22,7 +22,7 @@ import {
   type TimerLook,
   type TimerWidgetId,
 } from "../../shared/timerLook";
-import { DsBlinds } from "./DsBlinds";
+import { DsBlinds, FitToWidth } from "./DsBlinds";
 
 export type BroadcastEdit = {
   selected: TimerWidgetId | null;
@@ -223,7 +223,9 @@ export function BroadcastStage({
                 </OverlayWrap>
                 {nextBlock && (
                   <OverlayWrap id="next" look={activeLook} edit={edit}>
-                    <div className="ds-next">{nextBlock}</div>
+                    <FitToWidth className="ds-next" watch={nextLevel}>
+                      {nextBlock}
+                    </FitToWidth>
                   </OverlayWrap>
                 )}
               </main>
