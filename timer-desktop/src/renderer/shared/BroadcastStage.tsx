@@ -131,14 +131,24 @@ export function BroadcastStage({
         <span className="ds-next__label">NEXT</span>
         <span className="ds-next__val">{formatNextPauseVal(nextLevel)}</span>
       </>
+    ) : nextLevel.ante > 0 ? (
+      <div className="ds-next__stack">
+        <div className="ds-next__line">
+          <span className="ds-next__label">NEXT LV.{nextLevel.level}</span>
+          <span className="ds-next__val">
+            {nextLevel.small.toLocaleString()} / {nextLevel.big.toLocaleString()}
+          </span>
+        </div>
+        <div className="ds-next__line">
+          <span className="ds-next__label">ANTE</span>
+          <span className="ds-next__val">{nextLevel.ante.toLocaleString()}</span>
+        </div>
+      </div>
     ) : (
       <>
         <span className="ds-next__label">NEXT LV.{nextLevel.level}</span>
         <span className="ds-next__val">
           {nextLevel.small.toLocaleString()} / {nextLevel.big.toLocaleString()}
-          {nextLevel.ante > 0 && (
-            <span className="ds-next__ante"> · Ante {nextLevel.ante.toLocaleString()}</span>
-          )}
         </span>
       </>
     )

@@ -49,7 +49,6 @@ export function FitToWidth({
 }
 
 function contentWidth(el: HTMLElement): number {
-  // zoom/transform 영향을 피하고 실제 글자 폭을 본다
   const inner = el.querySelector(".ds-blinds__inner") as HTMLElement | null;
   if (!inner) return el.scrollWidth;
   const prevZoom = inner.style.zoom;
@@ -74,7 +73,6 @@ function setZoom(el: HTMLElement, zoom: number) {
   else inner.style.zoom = String(zoom);
 }
 
-/** --blinds-scale 이진 탐색 (테마 고정 font-size에도 calc로 곱해짐). */
 function fitScale(el: HTMLElement, minScale: number): void {
   setZoom(el, 1);
   setScale(el, 1);
@@ -92,9 +90,10 @@ function fitScale(el: HTMLElement, minScale: number): void {
 }
 
 /**
- * 블라인드: SB / BB · Ante.
- * 큰 화면+테마 고정 글자크기에서도 잘리지 않게
- * 한 줄 축소 → Ante 아래 → 스택 → zoom 폴백.
+ * Ante 있는 게임: 무조건
+ *   BLINDS  SB / BB
+ *   ANTE    N
+ * 두 줄 (송출 화면 기준 레이아웃).
  */
 export function DsBlinds({ isBreak, pauseLabel = "BREAK TIME", small, big, ante }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -105,29 +104,13 @@ export function DsBlinds({ isBreak, pauseLabel = "BREAK TIME", small, big, ante 
     if (!el) return;
 
     const fit = () => {
-      el.classList.remove("ds-blinds--ante-wrap", "ds-blinds--stacked");
       setZoom(el, 1);
       setScale(el, 1);
       if (isBreak) return;
 
-      // 1) 한 줄 — 살짝만 줄인다 (크게 뭉개지 않음)
-      fitScale(el, 0.78);
+      fitScale(el, 0.45);
       if (!overflows(el)) return;
 
-      // 2) Ante를 아래로 (큰 자릿수·큰 모니터에서 가장 자연스러움)
-      if (hasAnte) {
-        el.classList.add("ds-blinds--ante-wrap");
-        fitScale(el, 0.5);
-        if (!overflows(el)) return;
-      }
-
-      // 3) BLINDS 라벨 위 + Ante 아래
-      el.classList.add("ds-blinds--stacked");
-      if (hasAnte) el.classList.add("ds-blinds--ante-wrap");
-      fitScale(el, 0.42);
-      if (!overflows(el)) return;
-
-      // 4) 마지막: 블록 전체를 가용 너비에 맞게 zoom (어떤 font-size여도 보장)
       const avail = Math.max(1, el.clientWidth - 4);
       const need = contentWidth(el);
       if (need > avail) {
@@ -136,10 +119,7 @@ export function DsBlinds({ isBreak, pauseLabel = "BREAK TIME", small, big, ante 
     };
 
     fit();
-    const ro = new ResizeObserver(() => {
-      // rAF로 레이아웃 확정 후 재측정 (테마 font-size 적용 이후)
-      requestAnimationFrame(fit);
-    });
+    const ro = new ResizeObserver(() => requestAnimationFrame(fit));
     ro.observe(el);
     const parent = el.parentElement;
     if (parent) ro.observe(parent);
@@ -154,23 +134,28 @@ export function DsBlinds({ isBreak, pauseLabel = "BREAK TIME", small, big, ante 
     );
   }
 
-  return (
-    <div className="ds-blinds" ref={rootRef}>
-      <div className="ds-blinds__inner">
-        <div className="ds-blinds__main">
+  if (hasAnte) {
+    return (
+      <div className="ds-blinds ds-blinds--with-ante" ref={rootRef}>
+        <div className="ds-blinds__inner">
           <span className="ds-blinds__label">BLINDS</span>
           <span className="ds-blinds__val">
             {small.toLocaleString()} / {big.toLocaleString()}
           </span>
+          <span className="ds-blinds__label">ANTE</span>
+          <span className="ds-blinds__val">{ante.toLocaleString()}</span>
         </div>
-        {hasAnte && (
-          <span className="ds-blinds__ante">
-            <span className="ds-blinds__ante-dot" aria-hidden>
-              {" · "}
-            </span>
-            Ante {ante.toLocaleString()}
-          </span>
-        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="ds-blinds" ref={rootRef}>
+      <div className="ds-blinds__inner">
+        <span className="ds-blinds__label">BLINDS</span>
+        <span className="ds-blinds__val">
+          {small.toLocaleString()} / {big.toLocaleString()}
+        </span>
       </div>
     </div>
   );

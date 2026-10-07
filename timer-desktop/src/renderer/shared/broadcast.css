@@ -254,48 +254,20 @@ button.ds-timer:hover {
   flex-wrap: nowrap;
   align-items: baseline;
   justify-content: center;
-  gap: 0.35em;
+  column-gap: 14px;
+  row-gap: 0.12em;
   max-width: 100%;
   min-width: 0;
   transform-origin: center center;
 }
-.ds-blinds__main {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: baseline;
+/* Ante 있는 게임: BLINDS / ANTE 두 줄 고정 (라벨·숫자 열 정렬) */
+.ds-blinds--with-ante .ds-blinds__inner {
+  display: grid;
+  grid-template-columns: auto auto;
   justify-content: center;
-  gap: 14px;
-  min-width: 0;
-  white-space: nowrap;
-}
-/* Ante를 숫자 아래로 — 가로는 줄이고 시선은 가운데 유지 */
-.ds-blinds--ante-wrap .ds-blinds__inner {
-  flex-direction: column;
-  align-items: center;
-  gap: 0.12em;
-}
-.ds-blinds--ante-wrap .ds-blinds__ante-dot {
-  display: none;
-}
-.ds-blinds--ante-wrap .ds-blinds__ante {
-  font-size: calc(clamp(1.1rem, 2.4cqw, 2.4rem) * var(--blinds-scale));
-  letter-spacing: 0.04em;
-  opacity: 0.9;
-}
-/* 라벨을 위로 — 아주 좁은 화면/큰 자릿수 */
-.ds-blinds--stacked .ds-blinds__inner {
-  flex-direction: column;
-  align-items: center;
-  gap: 0.1em;
-}
-.ds-blinds--stacked .ds-blinds__main {
-  flex-direction: column;
-  align-items: center;
-  gap: 0.08em;
-}
-.ds-blinds--stacked .ds-blinds__label {
-  letter-spacing: 0.2em;
+  align-items: baseline;
+  column-gap: 14px;
+  row-gap: 0.1em;
 }
 .ds-blinds__label {
   font-size: calc(clamp(1rem, 1.8cqw, 1.8rem) * var(--blinds-scale));
@@ -303,6 +275,7 @@ button.ds-timer:hover {
   letter-spacing: 0.16em;
   color: var(--muted-strong, rgba(196, 176, 196, 0.5));
   white-space: nowrap;
+  text-align: left;
 }
 .ds-blinds__val {
   font-size: calc(clamp(2rem, 4.6cqw, 5rem) * var(--blinds-scale));
@@ -310,18 +283,9 @@ button.ds-timer:hover {
   font-variant-numeric: tabular-nums;
   color: var(--text, #e8e6ef);
   white-space: nowrap;
+  text-align: left;
 }
 .ds-blinds__sep { color: var(--muted-strong, rgba(196, 176, 196, 0.5)); margin: 0 6px; }
-.ds-blinds__ante {
-  color: var(--muted-strong, rgba(196, 176, 196, 0.55));
-  font-size: 0.88em;
-  font-weight: 600;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.ds-blinds__ante-dot {
-  font-weight: 600;
-}
 .ds-blinds__val--break {
   font-size: calc(clamp(1.8rem, 4cqw, 4rem) * var(--blinds-scale));
   font-weight: 700;
@@ -351,6 +315,17 @@ button.ds-timer:hover {
   display: flex;
   justify-content: center;
 }
+.ds-next__stack {
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 14px;
+  row-gap: 0.15em;
+  align-items: baseline;
+  justify-content: center;
+}
+.ds-next__line {
+  display: contents;
+}
 .ds-next__label {
   font-size: calc(clamp(0.9rem, 1.5cqw, 1.6rem) * 1.1);
   font-weight: 700;
@@ -364,6 +339,7 @@ button.ds-timer:hover {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text-soft, rgba(232, 230, 239, 0.55));
+  white-space: nowrap;
 }
 .ds-next__ante {
   color: var(--muted-strong, rgba(196, 176, 196, 0.5));
@@ -451,19 +427,13 @@ button.ds-timer:hover {
 .ds-overlay--size .ds-timer {
   font-size: inherit;
 }
-/* 테마 고정 font-size에도 --blinds-scale이 먹게 한다 (안 그러면 큰 화면에서도 잘림) */
+/* 테마 고정 font-size에도 --blinds-scale이 먹게 한다 */
 .ds-overlay--blinds.ds-overlay--size .ds-blinds__val,
 .ds-overlay--blinds.ds-overlay--size .ds-blinds__val--break {
   font-size: calc(1em * var(--blinds-scale, 1));
 }
 .ds-overlay--blinds.ds-overlay--size .ds-blinds__label {
   font-size: calc(0.42em * var(--blinds-scale, 1));
-}
-.ds-overlay--blinds.ds-overlay--size .ds-blinds__ante {
-  font-size: calc(0.72em * var(--blinds-scale, 1));
-}
-.ds-overlay--blinds.ds-overlay--size .ds-blinds--ante-wrap .ds-blinds__ante {
-  font-size: calc(0.55em * var(--blinds-scale, 1));
 }
 .ds-overlay--size .ds-next__val {
   font-size: 1em;
@@ -480,8 +450,7 @@ button.ds-timer:hover {
   background: inherit;
 }
 .ds-overlay--color.ds-overlay--blinds .ds-blinds__val,
-.ds-overlay--color.ds-overlay--blinds .ds-blinds__sep,
-.ds-overlay--color.ds-overlay--blinds .ds-blinds__ante {
+.ds-overlay--color.ds-overlay--blinds .ds-blinds__sep {
   color: var(--item-color);
 }
 .ds-overlay--label.ds-overlay--blinds .ds-blinds__label {
