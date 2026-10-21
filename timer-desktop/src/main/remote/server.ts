@@ -20,7 +20,7 @@ import {
   type RemoteServerMsg,
   type RemoteStaffState,
 } from "../../shared/remote";
-import { loadOrCreateRemoteTls } from "./tlsCert";
+import { loadOrCreateRemoteTls, remoteTlsCertDer } from "./tlsCert";
 import type { TimerHub } from "../timer/timerHub";
 import { clockInStaff, clockOutStaff, claimStaffByLoginId, loginStaff, rejoinStaffByLoginId, refreshStaffClock, type StaffAuthOk } from "../supabase/staffAuth";
 import { getSupabase } from "../supabase/client";
@@ -255,7 +255,9 @@ export class RemoteServer {
     this.http = http;
     http.on("upgrade", onUpgrade);
 
-    const tls = await loadOrCreateRemoteTls();
+    // iOS Safari는 인증서 SAN에 실제 LAN IP가 있어야 "웹사이트 방문"이 통과된다
+    const lanIps = await listLanIPv4();
+    const tls = await loadOrCreateRemoteTls(lanIps);
     const https = createHttpsServer({ key: tls.key, cert: tls.cert }, (req, res) => {
       void this.handleHttp(req, res);
     });
@@ -274,7 +276,9 @@ export class RemoteServer {
     this.cluster.start();
     this.syncYeoksamFollow();
     this.startPresenceHeartbeat();
-    console.log(`[remote] LAN http://0.0.0.0:${this.port} https://0.0.0.0:${this.httpsPort} PIN ${this.pin}`);
+    console.log(
+      `[remote] LAN http://0.0.0.0:${this.port} https://0.0.0.0:${this.httpsPort} PIN ${this.pin} ips=${lanIps.join(",")}`,
+    );
   }
 
   stop(): void {
@@ -1261,6 +1265,14 @@ export class RemoteServer {
         this.serveLanPing(res);
         return;
       }
+      if (url.pathname === "/remote/ios-cert.cer" || url.pathname === "/lan/ios-cert.cer") {
+        this.serveIosCert(res);
+        return;
+      }
+      if (url.pathname === "/remote/ios-setup" || url.pathname === "/lan/ios-setup") {
+        this.serveIosSetup(res, host);
+        return;
+      }
       if (url.pathname === "/manifest.webmanifest") {
         this.serveManifest(res);
         return;
@@ -1286,6 +1298,66 @@ export class RemoteServer {
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     };
+  }
+
+  /** iOS Safari용 인증서(.cer) — HTTP로 받아 설정에 설치 */
+  private serveIosCert(res: ServerResponse): void {
+    const der = remoteTlsCertDer();
+    if (!der) {
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("certificate not ready");
+      return;
+    }
+    res.writeHead(200, {
+      "Content-Type": "application/x-x509-ca-cert",
+      "Content-Disposition": 'attachment; filename="mnf-timer-remote.cer"',
+      "Content-Length": String(der.length),
+      "Cache-Control": "no-store",
+    });
+    res.end(der);
+  }
+
+  /** 아이폰에서 HTTPS 경고가 안 넘어갈 때 HTTP로 여는 안내 페이지 */
+  private serveIosSetup(res: ServerResponse, hostHeader: string): void {
+    const hostname = hostHeader.split(":")[0] || "127.0.0.1";
+    const httpsUrl = `https://${hostname}:${this.httpsPort}/remote/`;
+    const certUrl = `http://${hostname}:${this.port}/remote/ios-cert.cer`;
+    const html = `<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>아이폰 리모컨 연결</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;margin:0;padding:24px;background:#111;color:#f2f2f2;line-height:1.5}
+    h1{font-size:20px;margin:0 0 12px}
+    p,li{font-size:15px;color:#cfcfcf}
+    a.btn{display:block;text-align:center;text-decoration:none;background:#fee500;color:#191919;font-weight:800;border-radius:12px;padding:14px 16px;margin:12px 0}
+    a.link{color:#7dd3fc}
+    .card{background:#1c1d26;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px;margin-top:16px}
+    ol{padding-left:1.2em}
+  </style>
+</head>
+<body>
+  <h1>아이폰 리모컨 연결</h1>
+  <p>Safari 보안 경고에서 “웹사이트 방문”이 안 되면, 아래 인증서를 한 번 설치해 주세요.</p>
+  <a class="btn" href="${certUrl}">인증서 다운로드·설치</a>
+  <div class="card">
+    <ol>
+      <li>위 버튼을 눌러 프로필을 받습니다.</li>
+      <li><b>설정 → 프로필이 다운로드됨</b>에서 설치합니다.</li>
+      <li><b>설정 → 일반 → 정보 → 인증서 신뢰 설정</b>에서 <b>MNF Timer Remote</b>를 켭니다.</li>
+      <li>다시 아래 링크로 접속합니다.</li>
+    </ol>
+    <p><a class="link" href="${httpsUrl}">${httpsUrl}</a></p>
+  </div>
+</body>
+</html>`;
+    res.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+    res.end(html);
   }
 
   private async serveLanClaim(req: IncomingMessage, res: ServerResponse): Promise<void> {

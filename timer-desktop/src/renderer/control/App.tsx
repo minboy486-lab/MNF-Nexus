@@ -1581,7 +1581,8 @@ export function App() {
               </p>
             )}
             <p className="qr-popup__ttl" style={{ opacity: 0.75 }}>
-              처음 접속 시 보안 경고가 뜨면 고급 → 계속(또는 방문)을 눌러 주세요. 화면복사에 필요합니다.
+              처음 접속 시 보안 경고 → 세부사항 → 웹사이트 방문을 눌러 주세요.
+              아이폰에서 안 넘어가면 같은 Wi-Fi로 http://(PC주소):17890/remote/ios-setup 을 열어 인증서를 설치하세요.
             </p>
             <div className="qr-popup__actions">
               <button type="button" className="settings-popup__btn" onClick={() => void openRemoteQr()}>
